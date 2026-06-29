@@ -1,0 +1,173 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/target"
+	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
+)
+
+var diffCmd = &cobra.Command{
+	Use:   "diff",
+	Short: "Show pending changes",
+	Long:  "Show full unified diff of pending changes",
+	RunE:  runDiff,
+}
+
+func init() {
+	rootCmd.AddCommand(diffCmd)
+}
+
+func runDiff(cmd *cobra.Command, args []string) error {
+	cfgPath, _ := cmd.Flags().GetString("config")
+
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	profileName, _ := cmd.Flags().GetString("profile")
+	if profileName == "" {
+		profileName = profile.Detect(cfg)
+	}
+
+	sources := profile.ResolveSources(cfg, profileName)
+	sourcePaths := cfg.ResolveSourcePaths(sources)
+
+	scanner := source.NewScanner(cfg.TargetBase)
+	tree, err := scanner.Scan(sourcePaths)
+	if err != nil {
+		return fmt.Errorf("scanning sources: %w", err)
+	}
+
+	if tree.HasConflicts() {
+		fmt.Fprintln(os.Stderr, "Error: conflicting targets detected")
+		for _, c := range tree.Conflicts {
+			fmt.Fprintf(os.Stderr, "  %s defined in:\n", util.ShortenPath(c.TargetPath))
+			for _, s := range c.Sources {
+				fmt.Fprintf(os.Stderr, "    - %s\n", util.ShortenPath(s))
+			}
+		}
+		return fmt.Errorf("resolve conflicts before diffing")
+	}
+
+	if profileName != "" {
+		tree = tree.FilterByProfile(profileName)
+	}
+
+	db, err := state.Open("")
+	if err != nil {
+		return fmt.Errorf("opening state database: %w", err)
+	}
+	defer db.Close()
+
+	var enc *encrypt.AgeEncryptor
+	if cfg.Age != nil {
+		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
+		if err != nil {
+			return fmt.Errorf("setting up encryption: %w", err)
+		}
+	}
+
+	changes, err := target.ComputeChanges(tree, db)
+	if err != nil {
+		return fmt.Errorf("computing changes: %w", err)
+	}
+
+	if len(changes) == 0 {
+		fmt.Println("No changes")
+		return nil
+	}
+
+	tmplCtx, err := template.NewContext(cfg, profileName)
+	if err != nil {
+		return fmt.Errorf("creating template context: %w", err)
+	}
+
+	for _, change := range changes {
+		if target.IsBinaryFile(change.Entry.SourcePath) {
+			fmt.Printf("Binary files differ: %s\n", util.ShortenPath(change.Entry.TargetPath))
+			continue
+		}
+
+		var diff string
+		if change.Entry.Attrs.Encrypted && enc != nil && enc.CanDecrypt() {
+			diff, err = generateDecryptedDiff(change.Entry, enc)
+		} else if change.Entry.Attrs.Template {
+			diff, err = generateTemplatedDiff(change.Entry, tmplCtx)
+		} else {
+			diff, err = target.GenerateDiff(change.Entry.SourcePath, change.Entry.TargetPath)
+		}
+		if err != nil {
+			return fmt.Errorf("generating diff for %s: %w", util.ShortenPath(change.Entry.TargetPath), err)
+		}
+
+		fmt.Printf("=== %s ===\n", util.ShortenPath(change.Entry.TargetPath))
+		if diff != "" {
+			fmt.Println(target.ColorizeDiff(diff))
+		} else {
+			fmt.Println("(no content difference, state mismatch only)")
+		}
+	}
+
+	return nil
+}
+
+func generateDecryptedDiff(entry *source.Entry, enc *encrypt.AgeEncryptor) (string, error) {
+	ciphertext, err := os.ReadFile(entry.SourcePath)
+	if err != nil {
+		return "", err
+	}
+
+	plaintext, err := enc.Decrypt(ciphertext)
+	if err != nil {
+		return "", fmt.Errorf("decrypting source: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp("", "mate-diff-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := tmpFile.Write(plaintext); err != nil {
+		return "", err
+	}
+	tmpFile.Close()
+
+	return target.GenerateDiff(tmpFile.Name(), entry.TargetPath)
+}
+
+func generateTemplatedDiff(entry *source.Entry, tmplCtx *template.Context) (string, error) {
+	rendered, err := template.RenderFile(entry.SourcePath, tmplCtx)
+	if err != nil {
+		return "", fmt.Errorf("rendering template: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp("", "mate-diff-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := tmpFile.Write(rendered); err != nil {
+		return "", err
+	}
+	tmpFile.Close()
+
+	return target.GenerateDiff(tmpFile.Name(), entry.TargetPath)
+}

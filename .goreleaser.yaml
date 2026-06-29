@@ -1,0 +1,62 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+    - make docs
+
+builds:
+  - id: mate
+    main: ./cmd/mate
+    binary: mate
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - CHANGELOG.md
+      - LICENSE*
+      - docs/man/*
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+
+brews:
+  - repository:
+      owner: subbeh
+      name: homebrew-tap
+    directory: Formula
+    homepage: https://github.com/subbeh/statemate
+    description: Declarative system configuration management
+    license: MIT
+    install: |
+      bin.install "mate"
+    test: |
+      system "#{bin}/mate", "version"

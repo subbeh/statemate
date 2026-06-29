@@ -1,0 +1,157 @@
+package source
+
+import (
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/subbeh/statemate/internal/config"
+)
+
+type Scanner struct {
+	targetBase string
+	dirConfigs map[string]*config.DirConfig
+}
+
+func NewScanner(targetBase string) *Scanner {
+	return &Scanner{
+		targetBase: targetBase,
+		dirConfigs: make(map[string]*config.DirConfig),
+	}
+}
+
+func (s *Scanner) Scan(sources []string) (*Tree, error) {
+	tree := &Tree{}
+
+	for _, source := range sources {
+		if err := s.scanSource(source, tree); err != nil {
+			return nil, err
+		}
+	}
+
+	tree.CheckConflicts()
+	return tree, nil
+}
+
+func (s *Scanner) scanSource(sourceDir string, tree *Tree) error {
+	dirCfg, _ := config.LoadDirConfig(sourceDir)
+	if dirCfg != nil {
+		s.dirConfigs[sourceDir] = dirCfg
+	}
+
+	return filepath.WalkDir(sourceDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relToSource, err := filepath.Rel(sourceDir, path)
+		if err != nil {
+			return err
+		}
+
+		if relToSource == "." {
+			return nil
+		}
+
+		if s.shouldSkip(d.Name()) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		entry := s.buildEntry(sourceDir, path, relToSource, info, dirCfg)
+		tree.AddEntry(entry)
+
+		return nil
+	})
+}
+
+func (s *Scanner) buildEntry(sourceDir, fullPath, relPath string, info os.FileInfo, dirCfg *config.DirConfig) *Entry {
+	name, attrs := ParseAttrs(filepath.Base(fullPath))
+
+	_, sourceDirAttrs := ParseAttrs(filepath.Base(sourceDir))
+	parentAttrs := s.getParentAttrs(filepath.Dir(relPath))
+	parentAttrs.Merge(sourceDirAttrs)
+	attrs.Merge(parentAttrs)
+
+	if dirCfg != nil && dirCfg.Profile != "" && attrs.Profile == "" {
+		attrs.Profile = dirCfg.Profile
+	}
+
+	targetPath := s.resolveTarget(relPath, name, dirCfg)
+
+	return &Entry{
+		SourcePath: fullPath,
+		TargetPath: targetPath,
+		RelPath:    relPath,
+		Name:       name,
+		Attrs:      attrs,
+		IsDir:      info.IsDir(),
+		Mode:       info.Mode(),
+	}
+}
+
+func (s *Scanner) resolveTarget(relPath, name string, dirCfg *config.DirConfig) string {
+	parts := strings.Split(relPath, string(filepath.Separator))
+	cleanParts := make([]string, 0, len(parts))
+
+	for _, p := range parts {
+		baseName, _ := ParseAttrs(p)
+		cleanParts = append(cleanParts, baseName)
+	}
+
+	if len(cleanParts) > 0 {
+		cleanParts[len(cleanParts)-1] = name
+	}
+
+	targetBase := s.targetBase
+	if dirCfg != nil && len(cleanParts) > 0 {
+		firstDir := cleanParts[0]
+		if override, ok := dirCfg.Targets[firstDir]; ok {
+			targetBase = override
+			cleanParts = cleanParts[1:]
+		}
+	}
+
+	return filepath.Join(targetBase, filepath.Join(cleanParts...))
+}
+
+func (s *Scanner) getParentAttrs(relDir string) Attrs {
+	var attrs Attrs
+	parts := strings.Split(relDir, string(filepath.Separator))
+	for _, p := range parts {
+		_, partAttrs := ParseAttrs(p)
+		if partAttrs.Profile != "" {
+			attrs.Profile = partAttrs.Profile
+		}
+		if partAttrs.Perm != 0 {
+			attrs.Perm = partAttrs.Perm
+		}
+		if partAttrs.Owner != "" {
+			attrs.Owner = partAttrs.Owner
+		}
+		if partAttrs.Group != "" {
+			attrs.Group = partAttrs.Group
+		}
+	}
+	return attrs
+}
+
+func (s *Scanner) shouldSkip(name string) bool {
+	switch name {
+	case ".git", ".mate.yaml", ".mate.yml", ".mate.toml", ".matescripts":
+		return true
+	}
+	return false
+}
+
+func (s *Scanner) DirConfig(sourceDir string) *config.DirConfig {
+	return s.dirConfigs[sourceDir]
+}

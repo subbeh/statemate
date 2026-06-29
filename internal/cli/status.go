@@ -1,0 +1,176 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/target"
+	"github.com/subbeh/statemate/internal/util"
+)
+
+var statusCmd = &cobra.Command{
+	Use:   "status [path]",
+	Short: "Show files that would change on apply",
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runStatus,
+}
+
+func init() {
+	rootCmd.AddCommand(statusCmd)
+}
+
+func runStatus(cmd *cobra.Command, args []string) error {
+	cfgPath, _ := cmd.Flags().GetString("config")
+
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+
+	profileName, _ := cmd.Flags().GetString("profile")
+	if profileName == "" {
+		profileName = profile.Detect(cfg)
+	}
+
+	sources := profile.ResolveSources(cfg, profileName)
+	sourcePaths := cfg.ResolveSourcePaths(sources)
+
+	scanner := source.NewScanner(cfg.TargetBase)
+	tree, err := scanner.Scan(sourcePaths)
+	if err != nil {
+		return fmt.Errorf("scanning sources: %w", err)
+	}
+
+	if tree.HasConflicts() {
+		fmt.Fprintln(os.Stderr, "Warning: conflicting targets detected")
+		for _, c := range tree.Conflicts {
+			fmt.Fprintf(os.Stderr, "  %s defined in:\n", util.ShortenPath(c.TargetPath))
+			for _, s := range c.Sources {
+				fmt.Fprintf(os.Stderr, "    - %s\n", util.ShortenPath(s))
+			}
+		}
+		fmt.Fprintln(os.Stderr)
+	}
+
+	if profileName != "" {
+		tree = tree.FilterByProfile(profileName)
+	}
+
+	db, err := state.Open("")
+	if err != nil {
+		return fmt.Errorf("opening state database: %w", err)
+	}
+	defer db.Close()
+
+	changes, err := target.ComputeChanges(tree, db)
+	if err != nil {
+		return fmt.Errorf("computing changes: %w", err)
+	}
+
+	orphans, err := findOrphans(db, tree)
+	if err != nil {
+		return fmt.Errorf("finding orphans: %w", err)
+	}
+
+	var filterPath string
+	if len(args) > 0 {
+		filterPath = args[0]
+	}
+
+	var filteredChanges []*target.Change
+	for _, c := range changes {
+		if filterPath != "" && !matchesPath(c.Entry, filterPath, cfg.SourceDir()) {
+			continue
+		}
+		filteredChanges = append(filteredChanges, c)
+	}
+
+	var filteredOrphans []string
+	for _, o := range orphans {
+		if filterPath != "" && !strings.Contains(o, filterPath) && !strings.HasSuffix(o, "/"+filterPath) {
+			continue
+		}
+		filteredOrphans = append(filteredOrphans, o)
+	}
+
+	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 {
+		fmt.Println("Everything is up to date")
+		return nil
+	}
+
+	for _, c := range filteredChanges {
+		var prefix string
+		switch c.Status {
+		case target.StatusNew:
+			prefix = "+"
+		case target.StatusModified:
+			prefix = "~"
+		case target.StatusConflict:
+			prefix = "!"
+		}
+		fmt.Printf("%s %s\n", prefix, util.ShortenPath(c.Entry.TargetPath))
+	}
+
+	if len(filteredOrphans) > 0 {
+		fmt.Fprintln(os.Stderr, "\nWarning: orphaned files (no longer in source):")
+		for _, o := range filteredOrphans {
+			fmt.Fprintf(os.Stderr, "  - %s\n", util.ShortenPath(o))
+		}
+		fmt.Fprintln(os.Stderr, "Run 'mate forget <path>' to remove from tracking, or delete the target file.")
+	}
+
+	return nil
+}
+
+func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {
+	srcDir := strings.TrimSuffix(entry.SourcePath, "/"+entry.RelPath)
+	relPath := filepath.Join(filepath.Base(srcDir), entry.RelPath)
+
+	if relPath == pattern || entry.SourcePath == pattern || entry.TargetPath == pattern {
+		return true
+	}
+	if strings.HasSuffix(relPath, "/"+pattern) ||
+		strings.HasSuffix(entry.SourcePath, "/"+pattern) ||
+		strings.HasSuffix(entry.TargetPath, "/"+pattern) {
+		return true
+	}
+	if strings.HasPrefix(relPath, pattern+"/") ||
+		strings.HasPrefix(entry.TargetPath, pattern+"/") {
+		return true
+	}
+	return false
+}
+
+func findOrphans(db *state.DB, tree *source.Tree) ([]string, error) {
+	managed, err := db.ListFiles()
+	if err != nil {
+		return nil, err
+	}
+
+	currentTargets := make(map[string]bool)
+	for _, e := range tree.Files() {
+		currentTargets[e.TargetPath] = true
+	}
+
+	var orphans []string
+	for _, m := range managed {
+		if !currentTargets[m.TargetPath] {
+			if _, err := os.Stat(m.TargetPath); err == nil {
+				orphans = append(orphans, m.TargetPath)
+			}
+		}
+	}
+
+	return orphans, nil
+}

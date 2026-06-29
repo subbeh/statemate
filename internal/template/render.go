@@ -1,0 +1,49 @@
+package template
+
+import (
+	"bytes"
+	"os"
+	"text/template"
+)
+
+func Render(content []byte, ctx *Context) ([]byte, error) {
+	tmpl, err := template.New("").Funcs(funcMap(ctx)).Parse(string(content))
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, ctx); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func RenderFile(path string, ctx *Context) ([]byte, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return Render(content, ctx)
+}
+
+func funcMap(ctx *Context) template.FuncMap {
+	return template.FuncMap{
+		"env": func(name string) string {
+			return ctx.Env[name]
+		},
+		"var": func(name string) any {
+			return ctx.Vars[name]
+		},
+		"cmd": func(cmd string) string {
+			return ctx.Cmd(cmd)
+		},
+		"default": func(def, val any) any {
+			if val == nil || val == "" {
+				return def
+			}
+			return val
+		},
+	}
+}

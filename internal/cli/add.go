@@ -1,0 +1,173 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/encrypt"
+)
+
+var addCmd = &cobra.Command{
+	Use:   "add <path>",
+	Short: "Add a file to source",
+	Long: `Add an existing file to the source directory.
+
+The file is copied from its current location to the appropriate source directory,
+following stow-style conventions. The original file remains in place.
+
+Examples:
+  mate add ~/.config/nvim/init.lua
+  mate add --profile work ~/.gitconfig
+  mate add --encrypt ~/.ssh/config`,
+	Args: cobra.ExactArgs(1),
+	RunE: runAdd,
+}
+
+var (
+	addProfile  string
+	addEncrypt  bool
+	addSource   string
+	addTemplate bool
+)
+
+func init() {
+	rootCmd.AddCommand(addCmd)
+	addCmd.Flags().StringVar(&addProfile, "profile", "", "add file with profile suffix")
+	addCmd.Flags().BoolVar(&addEncrypt, "encrypt", false, "encrypt file when adding")
+	addCmd.Flags().StringVar(&addSource, "source", "", "target source directory (default: first source)")
+	addCmd.Flags().BoolVar(&addTemplate, "template", false, "mark file as template")
+}
+
+func runAdd(cmd *cobra.Command, args []string) error {
+	cfgPath, _ := cmd.Flags().GetString("config")
+
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	absSources := cfg.AbsoluteSources()
+	if len(absSources) == 0 {
+		return fmt.Errorf("no sources configured")
+	}
+
+	targetPath, err := filepath.Abs(args[0])
+	if err != nil {
+		return fmt.Errorf("resolving path: %w", err)
+	}
+
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		return fmt.Errorf("file not found: %s", targetPath)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("cannot add directories directly, add files individually")
+	}
+
+	sourceDir := addSource
+	if sourceDir == "" {
+		sourceDir = absSources[0]
+	} else if !filepath.IsAbs(sourceDir) {
+		sourceDir = filepath.Join(cfg.SourceDir(), sourceDir)
+	}
+
+	found := false
+	for _, s := range absSources {
+		if s == sourceDir {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("source %q not in configured sources", sourceDir)
+	}
+
+	relPath, err := computeRelativePath(targetPath, cfg.TargetBase)
+	if err != nil {
+		return fmt.Errorf("computing relative path: %w", err)
+	}
+
+	destName := filepath.Base(relPath)
+	if addProfile != "" {
+		destName = destName + "#profile:" + addProfile
+	}
+	if addEncrypt {
+		destName = destName + "#encrypted"
+	}
+	if addTemplate {
+		destName = destName + "#template"
+	}
+
+	destPath := filepath.Join(sourceDir, filepath.Dir(relPath), destName)
+
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return fmt.Errorf("creating directories: %w", err)
+	}
+
+	content, err := os.ReadFile(targetPath)
+	if err != nil {
+		return fmt.Errorf("reading file: %w", err)
+	}
+
+	if addEncrypt {
+		if cfg.Age == nil || len(cfg.Age.Recipients) == 0 {
+			return fmt.Errorf("encryption requested but no age recipients configured")
+		}
+
+		enc, err := encrypt.NewAgeEncryptor("", "", cfg.Age.Recipients)
+		if err != nil {
+			return fmt.Errorf("creating encryptor: %w", err)
+		}
+
+		content, err = enc.Encrypt(content)
+		if err != nil {
+			return fmt.Errorf("encrypting: %w", err)
+		}
+	}
+
+	if err := os.WriteFile(destPath, content, info.Mode()); err != nil {
+		return fmt.Errorf("writing file: %w", err)
+	}
+
+	fmt.Printf("Added %s -> %s\n", targetPath, destPath)
+	return nil
+}
+
+func computeRelativePath(targetPath, targetBase string) (string, error) {
+	targetBase = expandPath(targetBase)
+	if targetBase == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		targetBase = home
+	}
+
+	absBase, err := filepath.Abs(targetBase)
+	if err != nil {
+		return "", err
+	}
+
+	if !strings.HasPrefix(targetPath, absBase) {
+		return "", fmt.Errorf("file %s is not under target base %s", targetPath, absBase)
+	}
+
+	rel, err := filepath.Rel(absBase, targetPath)
+	if err != nil {
+		return "", err
+	}
+
+	return rel, nil
+}
+
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~") {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, path[1:])
+	}
+	return path
+}

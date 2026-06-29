@@ -1,0 +1,117 @@
+package cli
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/util"
+	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/state"
+)
+
+var removeCmd = &cobra.Command{
+	Use:   "remove <path>",
+	Short: "Remove file from source and target",
+	Long: `Remove a file from both source and target.
+
+This deletes the source file and optionally the target file,
+and removes the tracking entry from the database.
+
+Example:
+  mate remove ~/.config/nvim/init.lua`,
+	Args: cobra.ExactArgs(1),
+	RunE: runRemove,
+}
+
+var (
+	removeForce      bool
+	removeKeepTarget bool
+)
+
+func init() {
+	rootCmd.AddCommand(removeCmd)
+	removeCmd.Flags().BoolVarP(&removeForce, "force", "f", false, "don't prompt for confirmation")
+	removeCmd.Flags().BoolVar(&removeKeepTarget, "keep-target", false, "keep the target file, only remove source")
+}
+
+func runRemove(cmd *cobra.Command, args []string) error {
+	cfgPath, _ := cmd.Flags().GetString("config")
+
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	targetPath := expandPath(args[0])
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return fmt.Errorf("resolving path: %w", err)
+	}
+
+	scanner := source.NewScanner(cfg.TargetBase)
+	tree, err := scanner.Scan(cfg.AbsoluteSources())
+	if err != nil {
+		return fmt.Errorf("scanning sources: %w", err)
+	}
+
+	var entry *source.Entry
+	for _, e := range tree.Files() {
+		if e.TargetPath == absTarget {
+			entry = e
+			break
+		}
+	}
+
+	if entry == nil {
+		return fmt.Errorf("file not found in sources: %s", targetPath)
+	}
+
+	if !removeForce {
+		fmt.Printf("Will remove:\n")
+		fmt.Printf("  Source: %s\n", util.ShortenPath(entry.SourcePath))
+		if !removeKeepTarget {
+			fmt.Printf("  Target: %s\n", util.ShortenPath(entry.TargetPath))
+		}
+		fmt.Print("Continue? [y/N] ")
+
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return err
+		}
+		input = strings.TrimSpace(strings.ToLower(input))
+		if input != "y" && input != "yes" {
+			fmt.Println("Aborted")
+			return nil
+		}
+	}
+
+	if err := os.Remove(entry.SourcePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing source: %w", err)
+	}
+	fmt.Printf("Removed source: %s\n", util.ShortenPath(entry.SourcePath))
+
+	if !removeKeepTarget {
+		if err := os.Remove(entry.TargetPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing target: %w", err)
+		}
+		fmt.Printf("Removed target: %s\n", util.ShortenPath(entry.TargetPath))
+	}
+
+	db, err := state.Open("")
+	if err != nil {
+		return fmt.Errorf("opening state database: %w", err)
+	}
+	defer db.Close()
+
+	if err := db.DeleteFile(entry.TargetPath); err != nil {
+		return fmt.Errorf("removing from database: %w", err)
+	}
+
+	return nil
+}

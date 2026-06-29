@@ -1,0 +1,133 @@
+package template
+
+import (
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
+
+	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/profile"
+)
+
+type Context struct {
+	Profile  string
+	Hostname string
+	OS       string
+	Arch     string
+	HomeDir  string
+	Username string
+	Vars     map[string]any
+	Env      map[string]string
+}
+
+func NewContext(cfg *config.Config, profileName string) (*Context, error) {
+	hostname, _ := os.Hostname()
+	home, _ := os.UserHomeDir()
+	username := os.Getenv("USER")
+	if username == "" {
+		username = os.Getenv("USERNAME")
+	}
+
+	ctx := &Context{
+		Profile:  profileName,
+		Hostname: hostname,
+		OS:       runtime.GOOS,
+		Arch:     runtime.GOARCH,
+		HomeDir:  home,
+		Username: username,
+		Vars:     make(map[string]any),
+		Env:      make(map[string]string),
+	}
+
+	for _, kv := range os.Environ() {
+		parts := strings.SplitN(kv, "=", 2)
+		if len(parts) == 2 {
+			ctx.Env[parts[0]] = parts[1]
+		}
+	}
+
+	for k, v := range cfg.Variables {
+		ctx.Vars[k] = v
+	}
+
+	for _, varFile := range cfg.VarFiles {
+		if err := ctx.loadVarFile(varFile); err != nil {
+			return nil, err
+		}
+	}
+
+	for name, cmd := range cfg.VarCmds {
+		val, err := runCommand(cmd)
+		if err != nil {
+			return nil, err
+		}
+		ctx.Vars[name] = strings.TrimSpace(val)
+	}
+
+	if profileName != "" {
+		resolved := profile.Resolve(cfg, profileName)
+		if resolved != nil {
+			for k, v := range resolved.Variables {
+				ctx.Vars[k] = v
+			}
+		}
+	}
+
+	return ctx, nil
+}
+
+func (c *Context) loadVarFile(path string) error {
+	if strings.HasPrefix(path, "~/") {
+		path = c.HomeDir + path[1:]
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	vars, err := parseVarFile(data, path)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range vars {
+		c.Vars[k] = v
+	}
+
+	return nil
+}
+
+func parseVarFile(data []byte, path string) (map[string]any, error) {
+	vars := make(map[string]any)
+
+	if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
+		return parseYAML(data)
+	}
+	if strings.HasSuffix(path, ".toml") {
+		return parseTOML(data)
+	}
+
+	return vars, nil
+}
+
+func runCommand(cmd string) (string, error) {
+	out, err := exec.Command("sh", "-c", cmd).Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+func (c *Context) Cmd(cmd string) string {
+	out, err := runCommand(cmd)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
