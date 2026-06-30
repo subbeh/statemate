@@ -57,7 +57,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	sources := profile.ResolveSources(cfg, profileName)
 	sourcePaths := cfg.ResolveSourcePaths(sources)
 
-	scanner := source.NewScanner(cfg.TargetBase)
+	scanner := source.NewScanner(cfg.TargetBase, cfg.SourceDir())
 	tree, err := scanner.Scan(sourcePaths)
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)

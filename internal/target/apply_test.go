@@ -30,7 +30,7 @@ func TestApplier_Apply(t *testing.T) {
 	}
 	defer db.Close()
 
-	scanner := source.NewScanner(targetDir)
+	scanner := source.NewScanner(targetDir, "")
 	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
 	if err != nil {
 		t.Fatalf("scanning: %v", err)
@@ -86,7 +86,7 @@ func TestApplier_DryRun(t *testing.T) {
 	}
 	defer db.Close()
 
-	scanner := source.NewScanner(targetDir)
+	scanner := source.NewScanner(targetDir, "")
 	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
 	if err != nil {
 		t.Fatalf("scanning: %v", err)
@@ -128,7 +128,7 @@ func TestComputeChanges(t *testing.T) {
 	}
 	defer db.Close()
 
-	scanner := source.NewScanner(targetDir)
+	scanner := source.NewScanner(targetDir, "")
 	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
 	if err != nil {
 		t.Fatalf("scanning: %v", err)

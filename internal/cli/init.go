@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -104,6 +105,34 @@ target_base = "~"
 # brew = ["ripgrep", "fd"]
 `
 
+const defaultReadme = `# Dotfiles
+
+Managed with [statemate](https://github.com/subbeh/statemate).
+
+## Setup on a new machine
+
+1. Install statemate:
+   ` + "```" + `sh
+   # macOS
+   brew install subbeh/tap/statemate
+
+   # Arch Linux
+   yay -S statemate
+   ` + "```" + `
+
+2. Clone this repository:
+   ` + "```" + `sh
+   git clone <your-repo-url> ~/.dotfiles
+   cd ~/.dotfiles
+   ` + "```" + `
+
+3. Register and apply:
+   ` + "```" + `sh
+   mate init    # Register this directory
+   mate apply   # Deploy configuration
+   ` + "```" + `
+`
+
 func runInit(cmd *cobra.Command, args []string) error {
 	reader := bufio.NewReader(os.Stdin)
 	format := initFormat
@@ -156,6 +185,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Created %s\n", filepath.Join(cwd, configPath))
+
+	if err := os.WriteFile("README.md", []byte(defaultReadme), 0644); err != nil {
+		return fmt.Errorf("writing README: %w", err)
+	}
+	fmt.Printf("Created %s\n", filepath.Join(cwd, "README.md"))
+
+	if err := initGitRepo(); err != nil {
+		return err
+	}
 
 	if err := registerSourceDir(reader, cwd); err != nil {
 		return err
@@ -228,4 +266,18 @@ func registerSourceDir(reader *bufio.Reader, cwd string) error {
 func localConfigExists() bool {
 	_, err := os.Stat(config.LocalConfigPath())
 	return err == nil
+}
+
+func initGitRepo() error {
+	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	if err := cmd.Run(); err == nil {
+		return nil
+	}
+
+	cmd = exec.Command("git", "init")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("initializing git repository: %w", err)
+	}
+	fmt.Println("Initialized git repository")
+	return nil
 }

@@ -53,7 +53,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolving path: %w", err)
 	}
 
-	scanner := source.NewScanner(cfg.TargetBase)
+	scanner := source.NewScanner(cfg.TargetBase, cfg.SourceDir())
 	tree, err := scanner.Scan(cfg.AbsoluteSources())
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)

@@ -68,7 +68,7 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 	allSources := profile.AllSources(cfg)
 	allSourcePaths := cfg.ResolveSourcePaths(allSources)
 
-	scanner := source.NewScanner(cfg.TargetBase)
+	scanner := source.NewScanner(cfg.TargetBase, cfg.SourceDir())
 	tree, err := scanner.Scan(allSourcePaths)
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)

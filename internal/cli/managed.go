@@ -53,7 +53,7 @@ func runManaged(cmd *cobra.Command, args []string) error {
 		activeSourceSet[s] = true
 	}
 
-	scanner := source.NewScanner(cfg.TargetBase)
+	scanner := source.NewScanner(cfg.TargetBase, cfg.SourceDir())
 	tree, err := scanner.Scan(allSourcePaths)
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)
@@ -82,11 +82,11 @@ func runManaged(cmd *cobra.Command, args []string) error {
 			status = "*"
 		}
 
-		data = append(data, []string{srcPath, destPath, status, attrs})
+		data = append(data, []string{destPath, srcPath, status, attrs})
 	}
 
 	table := tablewriter.NewTable(os.Stdout,
-		tablewriter.WithHeader([]string{"SOURCE", "DESTINATION", "ACTIVE", "ATTRIBUTES"}),
+		tablewriter.WithHeader([]string{"TARGET", "SOURCE", "ACTIVE", "ATTRIBUTES"}),
 		tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft, tw.AlignLeft, tw.AlignCenter, tw.AlignLeft}),
 		tablewriter.WithRendition(tw.Rendition{
 			Borders: tw.BorderNone,

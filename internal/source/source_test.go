@@ -92,7 +92,7 @@ func TestScannerBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner("/home/testuser")
+	scanner := NewScanner("/home/testuser", "")
 	tree, err := scanner.Scan([]string{filepath.Join(dir, "nvim")})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
@@ -125,7 +125,7 @@ func TestScannerWithProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner("/home/testuser")
+	scanner := NewScanner("/home/testuser", "")
 	tree, err := scanner.Scan([]string{filepath.Join(dir, "app")})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
@@ -168,7 +168,7 @@ func TestScannerConflictDetection(t *testing.T) {
 		}
 	}
 
-	scanner := NewScanner("/home/testuser")
+	scanner := NewScanner("/home/testuser", "")
 	tree, err := scanner.Scan([]string{
 		filepath.Join(dir, "app1"),
 		filepath.Join(dir, "app2"),
@@ -209,7 +209,7 @@ targets:
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner("/home/testuser")
+	scanner := NewScanner("/home/testuser", "")
 	tree, err := scanner.Scan([]string{filepath.Join(dir, "app")})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
@@ -248,7 +248,7 @@ func TestScannerSkipsSpecialDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner("/home/testuser")
+	scanner := NewScanner("/home/testuser", "")
 	tree, err := scanner.Scan([]string{filepath.Join(dir, "app")})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)
@@ -275,7 +275,7 @@ func TestScannerProfileInheritance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scanner := NewScanner("/home/testuser")
+	scanner := NewScanner("/home/testuser", "")
 	tree, err := scanner.Scan([]string{filepath.Join(dir, "nvim#profile:work")})
 	if err != nil {
 		t.Fatalf("Scan failed: %v", err)

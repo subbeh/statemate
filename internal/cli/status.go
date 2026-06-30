@@ -46,7 +46,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	sources := profile.ResolveSources(cfg, profileName)
 	sourcePaths := cfg.ResolveSourcePaths(sources)
 
-	scanner := source.NewScanner(cfg.TargetBase)
+	scanner := source.NewScanner(cfg.TargetBase, cfg.SourceDir())
 	tree, err := scanner.Scan(sourcePaths)
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)
@@ -109,17 +109,30 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	for _, c := range filteredChanges {
-		var prefix string
-		switch c.Status {
-		case target.StatusNew:
-			prefix = "+"
-		case target.StatusModified:
-			prefix = "~"
-		case target.StatusConflict:
-			prefix = "!"
+	if len(filteredChanges) > 0 {
+		maxTargetLen := 0
+		for _, c := range filteredChanges {
+			targetDisplay := util.ShortenPath(c.Entry.TargetPath)
+			if len(targetDisplay) > maxTargetLen {
+				maxTargetLen = len(targetDisplay)
+			}
 		}
-		fmt.Printf("%s %s\n", prefix, util.ShortenPath(c.Entry.TargetPath))
+
+		fmt.Printf("  %-*s  %s\n", maxTargetLen, "TARGET", "SOURCE")
+		for _, c := range filteredChanges {
+			var prefix string
+			switch c.Status {
+			case target.StatusNew:
+				prefix = "+"
+			case target.StatusModified:
+				prefix = "~"
+			case target.StatusConflict:
+				prefix = "!"
+			}
+			targetDisplay := util.ShortenPath(c.Entry.TargetPath)
+			sourceDir := extractSourceDir(c.Entry)
+			fmt.Printf("%s %-*s  %s\n", prefix, maxTargetLen, targetDisplay, sourceDir)
+		}
 	}
 
 	if len(filteredOrphans) > 0 {
@@ -131,6 +144,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func extractSourceDir(entry *source.Entry) string {
+	srcDir := strings.TrimSuffix(entry.SourcePath, "/"+entry.RelPath)
+	return filepath.Base(srcDir)
 }
 
 func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {

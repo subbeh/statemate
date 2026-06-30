@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `mate init` now creates a README.md with setup instructions for new machines
+- `mate init` now initializes a git repository if not already in one
+- `mate status` now shows source directory column with header
+- `.mateignore` file support for excluding files from management (gitignore syntax)
 - `mate profile` command to show active profile and detection source
 - `STATEMATE_DIR` environment variable to specify dotfiles location
 - Local machine config at `~/.config/statemate/mate.yaml` with same structure as repo config

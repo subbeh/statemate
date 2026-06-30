@@ -6,19 +6,28 @@ import (
 	"path/filepath"
 	"strings"
 
+	gitignore "github.com/sabhiram/go-gitignore"
 	"github.com/subbeh/statemate/internal/config"
 )
 
 type Scanner struct {
-	targetBase string
-	dirConfigs map[string]*config.DirConfig
+	targetBase  string
+	repoRoot    string
+	dirConfigs  map[string]*config.DirConfig
+	ignoreFiles map[string]*gitignore.GitIgnore
 }
 
-func NewScanner(targetBase string) *Scanner {
-	return &Scanner{
-		targetBase: targetBase,
-		dirConfigs: make(map[string]*config.DirConfig),
+func NewScanner(targetBase, repoRoot string) *Scanner {
+	s := &Scanner{
+		targetBase:  targetBase,
+		repoRoot:    repoRoot,
+		dirConfigs:  make(map[string]*config.DirConfig),
+		ignoreFiles: make(map[string]*gitignore.GitIgnore),
 	}
+	if repoRoot != "" {
+		s.loadIgnoreFile(repoRoot, repoRoot)
+	}
+	return s
 }
 
 func (s *Scanner) Scan(sources []string) (*Tree, error) {
@@ -51,10 +60,22 @@ func (s *Scanner) scanSource(sourceDir string, tree *Tree) error {
 		}
 
 		if relToSource == "." {
+			s.loadIgnoreFile(sourceDir, sourceDir)
 			return nil
 		}
 
 		if s.shouldSkip(d.Name()) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if d.IsDir() {
+			s.loadIgnoreFile(sourceDir, path)
+		}
+
+		if s.isIgnored(sourceDir, relToSource, d.IsDir()) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -146,9 +167,55 @@ func (s *Scanner) getParentAttrs(relDir string) Attrs {
 
 func (s *Scanner) shouldSkip(name string) bool {
 	switch name {
-	case ".git", ".mate.yaml", ".mate.yml", ".mate.toml", ".matescripts":
+	case ".git", ".mate.yaml", ".mate.yml", ".mate.toml", ".matescripts", ".mateignore":
 		return true
 	}
+	return false
+}
+
+func (s *Scanner) loadIgnoreFile(sourceDir, dir string) {
+	ignorePath := filepath.Join(dir, ".mateignore")
+	if _, err := os.Stat(ignorePath); err != nil {
+		return
+	}
+
+	gi, err := gitignore.CompileIgnoreFile(ignorePath)
+	if err != nil {
+		return
+	}
+
+	s.ignoreFiles[dir] = gi
+}
+
+func (s *Scanner) isIgnored(sourceDir, relPath string, isDir bool) bool {
+	fullPath := filepath.Join(sourceDir, relPath)
+
+	for dir, gi := range s.ignoreFiles {
+		if !strings.HasPrefix(fullPath+"/", dir+"/") && dir != s.repoRoot {
+			continue
+		}
+
+		var relToIgnoreDir string
+		var err error
+		if dir == s.repoRoot && s.repoRoot != "" {
+			relToIgnoreDir, err = filepath.Rel(s.repoRoot, fullPath)
+		} else {
+			relToIgnoreDir, err = filepath.Rel(dir, fullPath)
+		}
+		if err != nil {
+			continue
+		}
+
+		checkPath := relToIgnoreDir
+		if isDir {
+			checkPath = relToIgnoreDir + "/"
+		}
+
+		if gi.MatchesPath(checkPath) {
+			return true
+		}
+	}
+
 	return false
 }
 
