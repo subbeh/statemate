@@ -24,8 +24,9 @@ This renames the source file, the target file, and updates tracking.
 Examples:
   mate rename nvim/init.lua init.vim
   mate rename zsh/.zshrc .zshrc.bak`,
-	Args: cobra.ExactArgs(2),
-	RunE: runRename,
+	Args:              cobra.ExactArgs(2),
+	RunE:              runRename,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 func init() {

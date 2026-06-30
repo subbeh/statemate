@@ -24,8 +24,9 @@ and removes the tracking entry from the database.
 
 Example:
   mate delete ~/.config/nvim/init.lua`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDelete,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runDelete,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 var (

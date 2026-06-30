@@ -33,8 +33,9 @@ The editor is determined by (in order):
 Examples:
   mate edit nvim/init.lua
   mate edit secrets.yaml`,
-	Args: cobra.ExactArgs(1),
-	RunE: runEdit,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runEdit,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 func init() {

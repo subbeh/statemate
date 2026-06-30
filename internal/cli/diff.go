@@ -16,10 +16,11 @@ import (
 )
 
 var diffCmd = &cobra.Command{
-	Use:   "diff",
-	Short: "Show pending changes",
-	Long:  "Show full unified diff of pending changes",
-	RunE:  runDiff,
+	Use:               "diff [path]",
+	Short:             "Show pending changes",
+	Long:              "Show full unified diff of pending changes",
+	RunE:              runDiff,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 func init() {

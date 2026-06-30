@@ -30,8 +30,9 @@ The age identity must be configured in mate.yaml:
 Examples:
   mate decrypt nvim/secrets.yaml#encrypted
   mate decrypt secrets.yaml`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDecrypt,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runDecrypt,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 func init() {

@@ -8,8 +8,8 @@ import (
 )
 
 var forgetCmd = &cobra.Command{
-	Use:   "forget <path>",
-	Short: "Remove file from tracking",
+	Use:               "forget <path>",
+	Short:             "Remove file from tracking",
 	Long: `Remove a file from statemate's tracking database.
 
 The file at target remains untouched. Only the tracking entry is removed.
@@ -18,8 +18,9 @@ deleting it.
 
 Example:
   mate forget ~/.config/nvim/init.lua`,
-	Args: cobra.ExactArgs(1),
-	RunE: runForget,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runForget,
+	ValidArgsFunction: completeTrackedFiles,
 }
 
 func init() {

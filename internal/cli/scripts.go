@@ -28,11 +28,12 @@ var scriptsListCmd = &cobra.Command{
 }
 
 var runCmd = &cobra.Command{
-	Use:   "run <script>",
-	Short: "Run a script",
-	Long:  "Manually run a script by name or path",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runScript,
+	Use:               "run <script>",
+	Short:             "Run a script",
+	Long:              "Manually run a script by name or path",
+	Args:              cobra.ExactArgs(1),
+	RunE:              runScript,
+	ValidArgsFunction: completeScripts,
 }
 
 func init() {

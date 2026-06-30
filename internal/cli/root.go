@@ -48,4 +48,6 @@ func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in current directory)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
 	rootCmd.AddCommand(versionCmd)
+
+	rootCmd.RegisterFlagCompletionFunc("profile", completeProfiles)
 }

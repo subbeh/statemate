@@ -31,8 +31,9 @@ The age recipients must be configured in mate.yaml:
 Examples:
   mate encrypt nvim/secrets.yaml
   mate encrypt zsh/.zshrc`,
-	Args: cobra.ExactArgs(1),
-	RunE: runEncrypt,
+	Args:              cobra.ExactArgs(1),
+	RunE:              runEncrypt,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 func init() {

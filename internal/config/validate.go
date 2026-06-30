@@ -6,10 +6,6 @@ import (
 )
 
 func (c *Config) Validate() error {
-	if len(c.Sources) == 0 {
-		return fmt.Errorf("no sources defined")
-	}
-
 	for _, source := range c.AbsoluteSources() {
 		if _, err := os.Stat(source); os.IsNotExist(err) {
 			return fmt.Errorf("source directory does not exist: %s", source)

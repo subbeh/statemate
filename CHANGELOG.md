@@ -20,8 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `default_source` config option to set default source for `mate add`
 - `mate add` now checks if file is already managed before adding
 - `mate add` interactive source selection with fuzzy search (when no default/flag)
+- Tab completion for commands: forget, delete, diff, edit, encrypt, decrypt, rename, run
+- Tab completion for flags: `--source`, `--profile`
 
 ### Changed
+- Empty sources list is now valid (allows orphan detection with no active sources)
 - Script naming format changed from `run_<trigger>_<order>-<name>` to attribute-based format
 - `mate remove` renamed to `mate delete`
 - `mate profile` command to show active profile and detection source
