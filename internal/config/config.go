@@ -12,7 +12,7 @@ type Config struct {
 	Editor        string              `yaml:"editor" toml:"editor"`
 	Age           *AgeConfig          `yaml:"age" toml:"age"`
 	Variables     map[string]any      `yaml:"variables" toml:"variables"`
-	VarFiles      []string            `yaml:"variable_files" toml:"variable_files"`
+	VarFiles      []string            `yaml:"var_files" toml:"var_files"`
 	VarCmds       map[string]string   `yaml:"variable_commands" toml:"variable_commands"`
 	Packages      *PackageList        `yaml:"packages" toml:"packages"`
 	PackageFiles  []string            `yaml:"package_files" toml:"package_files"`

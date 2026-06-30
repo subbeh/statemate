@@ -11,14 +11,15 @@ import (
 )
 
 type Context struct {
-	Profile  string
-	Hostname string
-	OS       string
-	Arch     string
-	HomeDir  string
-	Username string
-	Vars     map[string]any
-	Env      map[string]string
+	Profile   string
+	Hostname  string
+	OS        string
+	Arch      string
+	HomeDir   string
+	Username  string
+	SourceDir string
+	Vars      map[string]any
+	Env       map[string]string
 }
 
 func NewContext(cfg *config.Config, profileName string) (*Context, error) {
@@ -30,14 +31,15 @@ func NewContext(cfg *config.Config, profileName string) (*Context, error) {
 	}
 
 	ctx := &Context{
-		Profile:  profileName,
-		Hostname: hostname,
-		OS:       runtime.GOOS,
-		Arch:     runtime.GOARCH,
-		HomeDir:  home,
-		Username: username,
-		Vars:     make(map[string]any),
-		Env:      make(map[string]string),
+		Profile:   profileName,
+		Hostname:  hostname,
+		OS:        runtime.GOOS,
+		Arch:      runtime.GOARCH,
+		HomeDir:   home,
+		Username:  username,
+		SourceDir: cfg.SourceDir(),
+		Vars:      make(map[string]any),
+		Env:       make(map[string]string),
 	}
 
 	for _, kv := range os.Environ() {
@@ -80,6 +82,9 @@ func NewContext(cfg *config.Config, profileName string) (*Context, error) {
 func (c *Context) loadVarFile(path string) error {
 	if strings.HasPrefix(path, "~/") {
 		path = c.HomeDir + path[1:]
+	} else if !strings.HasPrefix(path, "/") && c.SourceDir != "" {
+		// Resolve relative paths from source directory
+		path = c.SourceDir + "/" + path
 	}
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {

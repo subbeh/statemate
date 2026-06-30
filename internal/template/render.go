@@ -2,6 +2,7 @@ package template
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"text/template"
 )
@@ -44,6 +45,12 @@ func funcMap(ctx *Context) template.FuncMap {
 				return def
 			}
 			return val
+		},
+		"required": func(val any) (any, error) {
+			if val == nil || val == "" {
+				return nil, fmt.Errorf("required value is missing or empty")
+			}
+			return val, nil
 		},
 	}
 }

@@ -44,6 +44,7 @@ const (
 	StatusNew
 	StatusModified
 	StatusConflict
+	StatusStateOnly // content matches but state DB needs update
 )
 
 func (s ChangeStatus) String() string {
@@ -56,6 +57,8 @@ func (s ChangeStatus) String() string {
 		return "modified"
 	case StatusConflict:
 		return "conflict"
+	case StatusStateOnly:
+		return "state-only"
 	default:
 		return "unknown"
 	}
@@ -92,6 +95,16 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 
 		switch change.Status {
 		case StatusUnchanged:
+			result.Skipped++
+			continue
+
+		case StatusStateOnly:
+			// Content matches target, just need to update state DB
+			if !a.dryRun {
+				if err := a.recordState(entry, change.NewHash); err != nil {
+					return nil, fmt.Errorf("recording state for %s: %w", entry.SourcePath, err)
+				}
+			}
 			result.Skipped++
 			continue
 
@@ -159,11 +172,24 @@ func (a *Applier) checkChange(entry *source.Entry) (*FileChange, error) {
 			if err != nil {
 				return nil, err
 			}
-			if targetHash != sourceHash {
+			// For encrypted/template files, compare rendered content, not source hash
+			compareHash := sourceHash
+			if entry.Attrs.Encrypted || entry.Attrs.Template {
+				renderedHash, err := a.getRenderedHash(entry)
+				if err != nil {
+					// If we can't render, fall back to treating as conflict
+					change.Status = StatusConflict
+					change.OldHash = targetHash
+					return change, nil
+				}
+				compareHash = renderedHash
+			}
+			if targetHash != compareHash {
 				change.Status = StatusConflict
 				change.OldHash = targetHash
 			} else {
-				change.Status = StatusUnchanged
+				// Content matches but no state entry - need to record state
+				change.Status = StatusStateOnly
 			}
 		}
 		return change, nil
@@ -355,15 +381,27 @@ func readSingleChar() (byte, error) {
 }
 
 func (a *Applier) showConflictDiff(entry *source.Entry) error {
-	if entry.Attrs.Encrypted && a.enc != nil && a.enc.CanDecrypt() {
-		ciphertext, err := os.ReadFile(entry.SourcePath)
+	if entry.Attrs.Encrypted || entry.Attrs.Template {
+		content, err := os.ReadFile(entry.SourcePath)
 		if err != nil {
 			return err
 		}
 
-		plaintext, err := a.enc.Decrypt(ciphertext)
-		if err != nil {
-			return fmt.Errorf("decrypting source: %w", err)
+		if entry.Attrs.Encrypted {
+			if a.enc == nil || !a.enc.CanDecrypt() {
+				return fmt.Errorf("cannot show diff: file is encrypted and no decryption key available")
+			}
+			content, err = a.enc.Decrypt(content)
+			if err != nil {
+				return fmt.Errorf("decrypting source: %w", err)
+			}
+		}
+
+		if entry.Attrs.Template && a.tmplCtx != nil {
+			content, err = template.Render(content, a.tmplCtx)
+			if err != nil {
+				return fmt.Errorf("rendering template: %w", err)
+			}
 		}
 
 		tmpFile, err := os.CreateTemp("", "mate-diff-*")
@@ -372,28 +410,7 @@ func (a *Applier) showConflictDiff(entry *source.Entry) error {
 		}
 		defer os.Remove(tmpFile.Name())
 
-		if _, err := tmpFile.Write(plaintext); err != nil {
-			tmpFile.Close()
-			return err
-		}
-		tmpFile.Close()
-
-		return showDiff(tmpFile.Name(), entry.TargetPath)
-	}
-
-	if entry.Attrs.Template && a.tmplCtx != nil {
-		rendered, err := template.RenderFile(entry.SourcePath, a.tmplCtx)
-		if err != nil {
-			return fmt.Errorf("rendering template: %w", err)
-		}
-
-		tmpFile, err := os.CreateTemp("", "mate-diff-*")
-		if err != nil {
-			return err
-		}
-		defer os.Remove(tmpFile.Name())
-
-		if _, err := tmpFile.Write(rendered); err != nil {
+		if _, err := tmpFile.Write(content); err != nil {
 			tmpFile.Close()
 			return err
 		}
@@ -438,6 +455,49 @@ func (a *Applier) importFile(entry *source.Entry) error {
 		SourceHash:  sourceHash,
 		AppliedHash: targetHash,
 		Mode:        entry.Mode.Perm(),
+	})
+}
+
+func (a *Applier) getRenderedHash(entry *source.Entry) (string, error) {
+	content, err := os.ReadFile(entry.SourcePath)
+	if err != nil {
+		return "", err
+	}
+
+	if entry.Attrs.Encrypted && a.enc != nil {
+		content, err = a.enc.Decrypt(content)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if entry.Attrs.Template && a.tmplCtx != nil {
+		content, err = template.Render(content, a.tmplCtx)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return state.HashBytes(content), nil
+}
+
+func (a *Applier) recordState(entry *source.Entry, sourceHash string) error {
+	targetHash, err := state.HashFile(entry.TargetPath)
+	if err != nil {
+		return err
+	}
+
+	mode := entry.Mode.Perm()
+	if entry.Attrs.Perm != 0 {
+		mode = os.FileMode(entry.Attrs.Perm)
+	}
+
+	return a.db.SaveFile(&state.FileEntry{
+		SourcePath:  entry.SourcePath,
+		TargetPath:  entry.TargetPath,
+		SourceHash:  sourceHash,
+		AppliedHash: targetHash,
+		Mode:        mode,
 	})
 }
 

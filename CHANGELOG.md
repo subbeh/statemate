@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate add` interactive source selection with fuzzy search (when no default/flag)
 - Tab completion for commands: forget, delete, diff, edit, encrypt, decrypt, rename, run
 - Tab completion for flags: `--source`, `--profile`
+- `.SourceDir` template variable for accessing the dotfiles source directory
+- `required` template function to error on missing/empty values
+- `var_files` config option to load additional variable files (e.g., secrets)
 
 ### Changed
 - Empty sources list is now valid (allows orphan detection with no active sources)
@@ -63,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Package management: `yay` list renamed to `aur` (works with any AUR helper)
 - `brew` package list now uses `brew leaves --installed-on-request` (explicit packages only, not dependencies)
 - `mate packages status` message clarifies "No packages configured" vs "No package managers available"
+- Config and template context reloaded after before scripts run (allows scripts to generate var_files)
+- `var_files` paths resolved relative to source directory (not working directory)
 
 ### Fixed
 - `mate status` and `mate apply` no longer error when target file is missing
@@ -70,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Missing target files are now shown as modified (`~`) instead of conflict (`!`)
 - Profile detection no longer randomly selects between parent and child profiles
 - `mate profile` now shows detection reason correctly for all criteria
+- `mate apply` conflict detection now compares rendered content for encrypted/template files
+- `mate apply` now updates state DB for files where content matches but state was missing
+- `mate diff` now properly handles files that are both encrypted and templated
+- Diff shows "(no differences)" instead of empty output when files are identical
+- Encrypted files without decryption key now show clear error instead of diffing gibberish
 
 - Initial release
 - Stow-style multi-directory source management

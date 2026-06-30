@@ -115,6 +115,19 @@ func runApply(cmd *cobra.Command, args []string) error {
 		if _, err := executor.Execute(beforeScripts); err != nil {
 			return err
 		}
+
+		// Reload config and template context after before scripts
+		// (scripts may generate var_files like secrets)
+		if !dryRun {
+			cfg, err = config.Load(cfgPath)
+			if err != nil {
+				return fmt.Errorf("reloading config: %w", err)
+			}
+			tmplCtx, err = template.NewContext(cfg, profileName)
+			if err != nil {
+				return fmt.Errorf("reloading template context: %w", err)
+			}
+		}
 	}
 
 	applier := target.NewApplier(db, tmplCtx, enc, dryRun, force, verbose)

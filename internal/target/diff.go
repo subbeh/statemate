@@ -110,7 +110,12 @@ func showDiff(sourcePath, targetPath string) error {
 
 	cmd.Run()
 
-	fmt.Println(ColorizeDiff(out.String()))
+	diff := out.String()
+	if diff == "" {
+		fmt.Println("  (no differences)")
+	} else {
+		fmt.Println(ColorizeDiff(diff))
+	}
 	return nil
 }
 
