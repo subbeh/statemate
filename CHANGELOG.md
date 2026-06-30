@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate init` now initializes a git repository if not already in one
 - `mate status` now shows source directory column with header
 - `.mateignore` file support for excluding files from management (gitignore syntax)
+- New script naming format: `<order>-<name>#<freq>#<timing>[#template].<ext>`
+  - Example: `01-setup#once#before.sh`, `02-cleanup#always#after#template.sh`
+  - Frequency: `once`, `onchange`, `always` (omit for manual scripts)
+  - Timing: `before`, `after` (defaults to `before`)
+  - `#template` attribute for scripts that need template rendering
+- `default_source` config option to set default source for `mate add`
+- `mate add` now checks if file is already managed before adding
+- `mate add` interactive source selection with fuzzy search (when no default/flag)
+
+### Changed
+- Script naming format changed from `run_<trigger>_<order>-<name>` to attribute-based format
+- `mate remove` renamed to `mate delete`
 - `mate profile` command to show active profile and detection source
 - `STATEMATE_DIR` environment variable to specify dotfiles location
 - Local machine config at `~/.config/statemate/mate.yaml` with same structure as repo config
@@ -65,6 +77,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Declarative package management (brew, pacman, yay)
 - Lifecycle scripts (run_once, run_before, run_after, run_always, run_onchange)
 - File attributes via `#` suffixes (profile, perm, owner, group, encrypted, template, symlink)
-- Commands: init, apply, status, diff, check, add, forget, remove, rename, encrypt, decrypt, managed, profile, packages, scripts, run, doctor, version
+- Commands: init, apply, status, diff, check, add, forget, delete, rename, encrypt, decrypt, managed, profile, packages, scripts, run, doctor, version
 - Shell completions (bash, zsh, fish, powershell)
 - Man page and markdown documentation generation

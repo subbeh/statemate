@@ -14,32 +14,32 @@ import (
 	"github.com/subbeh/statemate/internal/state"
 )
 
-var removeCmd = &cobra.Command{
-	Use:   "remove <path>",
-	Short: "Remove file from source and target",
-	Long: `Remove a file from both source and target.
+var deleteCmd = &cobra.Command{
+	Use:   "delete <path>",
+	Short: "Delete file from source and target",
+	Long: `Delete a file from both source and target.
 
 This deletes the source file and optionally the target file,
 and removes the tracking entry from the database.
 
 Example:
-  mate remove ~/.config/nvim/init.lua`,
+  mate delete ~/.config/nvim/init.lua`,
 	Args: cobra.ExactArgs(1),
-	RunE: runRemove,
+	RunE: runDelete,
 }
 
 var (
-	removeForce      bool
-	removeKeepTarget bool
+	deleteForce      bool
+	deleteKeepTarget bool
 )
 
 func init() {
-	rootCmd.AddCommand(removeCmd)
-	removeCmd.Flags().BoolVarP(&removeForce, "force", "f", false, "don't prompt for confirmation")
-	removeCmd.Flags().BoolVar(&removeKeepTarget, "keep-target", false, "keep the target file, only remove source")
+	rootCmd.AddCommand(deleteCmd)
+	deleteCmd.Flags().BoolVarP(&deleteForce, "force", "f", false, "don't prompt for confirmation")
+	deleteCmd.Flags().BoolVar(&deleteKeepTarget, "keep-target", false, "keep the target file, only delete source")
 }
 
-func runRemove(cmd *cobra.Command, args []string) error {
+func runDelete(cmd *cobra.Command, args []string) error {
 	cfgPath, _ := cmd.Flags().GetString("config")
 
 	cfg, err := config.Load(cfgPath)
@@ -71,10 +71,10 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("file not found in sources: %s", targetPath)
 	}
 
-	if !removeForce {
+	if !deleteForce {
 		fmt.Printf("Will remove:\n")
 		fmt.Printf("  Source: %s\n", util.ShortenPath(entry.SourcePath))
-		if !removeKeepTarget {
+		if !deleteKeepTarget {
 			fmt.Printf("  Target: %s\n", util.ShortenPath(entry.TargetPath))
 		}
 		fmt.Print("Continue? [y/N] ")
@@ -96,7 +96,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Removed source: %s\n", util.ShortenPath(entry.SourcePath))
 
-	if !removeKeepTarget {
+	if !deleteKeepTarget {
 		if err := os.Remove(entry.TargetPath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing target: %w", err)
 		}

@@ -8,8 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/template"
 )
 
 var scriptsCmd = &cobra.Command{
@@ -67,17 +69,17 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 
-	fmt.Printf("%-10s %-6s %-30s %s\n", "TRIGGER", "ORDER", "NAME", "PATH")
-	fmt.Println(strings.Repeat("-", 80))
+	fmt.Printf("%-10s %-8s %-6s %-30s %s\n", "FREQUENCY", "TIMING", "ORDER", "NAME", "PATH")
+	fmt.Println(strings.Repeat("-", 90))
 
 	for _, script := range allScripts {
 		status := ""
-		if script.Trigger == scripts.TriggerOnce {
+		if script.Frequency == scripts.FreqOnce {
 			hasRun, _ := db.HasScriptRun(script.Path)
 			if hasRun {
 				status = " (ran)"
 			}
-		} else if script.Trigger == scripts.TriggerOnchange {
+		} else if script.Frequency == scripts.FreqOnchange {
 			hasRunWithHash, _ := db.HasScriptRunWithHash(script.Path, script.ContentHash)
 			if hasRunWithHash {
 				status = " (unchanged)"
@@ -94,11 +96,18 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			relPath = script.Path
 		}
 
-		fmt.Printf("%-10s %-6d %-30s %s%s\n",
-			script.Trigger,
+		tmpl := ""
+		if script.Template {
+			tmpl = " [T]"
+		}
+
+		fmt.Printf("%-10s %-8s %-6d %-30s %s%s%s\n",
+			script.Frequency,
+			script.Timing,
 			script.Order,
 			script.Name,
 			relPath,
+			tmpl,
 			status,
 		)
 	}
@@ -138,11 +147,13 @@ func runScript(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				return fmt.Errorf("hashing script: %w", err)
 			}
-			trigger, order, name := scripts.ParseScriptName(filepath.Base(scriptArg))
+			name, freq, timing, tmpl, order := scripts.ParseScriptName(filepath.Base(scriptArg))
 			script = &scripts.Script{
 				Path:        scriptArg,
 				Name:        name,
-				Trigger:     trigger,
+				Frequency:   freq,
+				Timing:      timing,
+				Template:    tmpl,
 				Order:       order,
 				ContentHash: contentHash,
 			}
@@ -159,7 +170,20 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close()
 
-	executor := scripts.NewExecutor(db, dryRun, verbose)
+	profileName, _ := cmd.Flags().GetString("profile")
+	if profileName == "" {
+		profileName = profile.Detect(cfg)
+	}
+
+	var tmplCtx *template.Context
+	if script.Template {
+		tmplCtx, err = template.NewContext(cfg, profileName)
+		if err != nil {
+			return fmt.Errorf("creating template context: %w", err)
+		}
+	}
+
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose)
 	if err := executor.ExecuteOne(script); err != nil {
 		return fmt.Errorf("running script: %w", err)
 	}

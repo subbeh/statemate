@@ -103,23 +103,16 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
 
-	executor := scripts.NewExecutor(db, dryRun, verbose > 0)
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0)
 
-	beforeScripts := append(allScripts.ByTrigger(scripts.TriggerBefore), allScripts.ByTrigger(scripts.TriggerOnce)...)
-	beforeScripts = append(beforeScripts, allScripts.ByTrigger(scripts.TriggerOnchange)...)
-	beforeScripts = append(beforeScripts, allScripts.ByTrigger(scripts.TriggerAlways)...)
+	beforeScripts := allScripts.Automatic().ByTiming(scripts.TimingBefore)
+	beforeScripts.Sort()
 
 	if len(beforeScripts) > 0 {
 		if verbose > 0 || dryRun {
 			fmt.Println("Running before scripts...")
 		}
-		if _, err := executor.Execute(beforeScripts.ByTrigger(scripts.TriggerBefore)); err != nil {
-			return err
-		}
-		if _, err := executor.Execute(allScripts.ByTrigger(scripts.TriggerOnce)); err != nil {
-			return err
-		}
-		if _, err := executor.Execute(allScripts.ByTrigger(scripts.TriggerOnchange)); err != nil {
+		if _, err := executor.Execute(beforeScripts); err != nil {
 			return err
 		}
 	}
@@ -130,16 +123,14 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	afterScripts := allScripts.ByTrigger(scripts.TriggerAfter)
-	afterScripts = append(afterScripts, allScripts.ByTrigger(scripts.TriggerAlways)...)
+	afterScripts := allScripts.Automatic().ByTiming(scripts.TimingAfter)
+	afterScripts.Sort()
+
 	if len(afterScripts) > 0 {
 		if verbose > 0 || dryRun {
 			fmt.Println("Running after scripts...")
 		}
-		if _, err := executor.Execute(allScripts.ByTrigger(scripts.TriggerAfter)); err != nil {
-			return err
-		}
-		if _, err := executor.Execute(allScripts.ByTrigger(scripts.TriggerAlways)); err != nil {
+		if _, err := executor.Execute(afterScripts); err != nil {
 			return err
 		}
 	}

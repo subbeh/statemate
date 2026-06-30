@@ -35,6 +35,9 @@ const defaultConfigYAML = `# Statemate configuration
 # Example: sources: [nvim, zsh, git] will look for nvim/, zsh/, git/ in this directory
 sources: []
 
+# Default source for 'mate add' (optional)
+# default_source: ""
+
 # Default target for deployed files (default: $HOME)
 target_base: "~"
 
@@ -75,6 +78,9 @@ const defaultConfigTOML = `# Statemate configuration
 # Each directory's contents are deployed relative to target_base
 # Example: sources = ["nvim", "zsh", "git"] will look for nvim/, zsh/, git/ in this directory
 sources = []
+
+# Default source for 'mate add' (optional)
+# default_source = ""
 
 # Default target for deployed files (default: $HOME)
 target_base = "~"

@@ -7,17 +7,20 @@ import (
 	"path/filepath"
 
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/template"
 )
 
 type Executor struct {
 	db      *state.DB
+	tmplCtx *template.Context
 	dryRun  bool
 	verbose bool
 }
 
-func NewExecutor(db *state.DB, dryRun, verbose bool) *Executor {
+func NewExecutor(db *state.DB, tmplCtx *template.Context, dryRun, verbose bool) *Executor {
 	return &Executor{
 		db:      db,
+		tmplCtx: tmplCtx,
 		dryRun:  dryRun,
 		verbose: verbose,
 	}
@@ -90,11 +93,11 @@ func (e *Executor) ExecuteOne(script *Script) error {
 }
 
 func (e *Executor) shouldRun(script *Script) (bool, string, error) {
-	switch script.Trigger {
-	case TriggerManual:
+	switch script.Frequency {
+	case FreqManual:
 		return false, "manual only", nil
 
-	case TriggerOnce:
+	case FreqOnce:
 		hasRun, err := e.db.HasScriptRun(script.Path)
 		if err != nil {
 			return false, "", err
@@ -104,7 +107,7 @@ func (e *Executor) shouldRun(script *Script) (bool, string, error) {
 		}
 		return true, "", nil
 
-	case TriggerOnchange:
+	case FreqOnchange:
 		hasRunWithHash, err := e.db.HasScriptRunWithHash(script.Path, script.ContentHash)
 		if err != nil {
 			return false, "", err
@@ -114,20 +117,51 @@ func (e *Executor) shouldRun(script *Script) (bool, string, error) {
 		}
 		return true, "", nil
 
-	case TriggerBefore, TriggerAfter, TriggerAlways:
+	case FreqAlways:
 		return true, "", nil
 
 	default:
-		return false, "unknown trigger", nil
+		return false, "unknown frequency", nil
 	}
 }
 
 func (e *Executor) run(script *Script) error {
-	if !script.IsExecutable() {
-		return fmt.Errorf("script is not executable: %s", script.Path)
+	scriptPath := script.Path
+
+	if script.Template {
+		if e.tmplCtx == nil {
+			return fmt.Errorf("template script %s requires template context", script.Name)
+		}
+
+		rendered, err := template.RenderFile(script.Path, e.tmplCtx)
+		if err != nil {
+			return fmt.Errorf("rendering template: %w", err)
+		}
+
+		tmpFile, err := os.CreateTemp("", "mate-script-*")
+		if err != nil {
+			return fmt.Errorf("creating temp file: %w", err)
+		}
+		defer os.Remove(tmpFile.Name())
+
+		if _, err := tmpFile.Write(rendered); err != nil {
+			tmpFile.Close()
+			return fmt.Errorf("writing temp file: %w", err)
+		}
+		tmpFile.Close()
+
+		if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
+			return fmt.Errorf("setting temp file permissions: %w", err)
+		}
+
+		scriptPath = tmpFile.Name()
+	} else {
+		if !script.IsExecutable() {
+			return fmt.Errorf("script is not executable: %s", script.Path)
+		}
 	}
 
-	cmd := exec.Command(script.Path)
+	cmd := exec.Command(scriptPath)
 	cmd.Dir = filepath.Dir(script.Path)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -136,7 +170,8 @@ func (e *Executor) run(script *Script) error {
 	cmd.Env = append(os.Environ(),
 		"STATEMATE_SCRIPT="+script.Path,
 		"STATEMATE_SCRIPT_NAME="+script.Name,
-		"STATEMATE_SCRIPT_TRIGGER="+script.Trigger.String(),
+		"STATEMATE_SCRIPT_FREQUENCY="+script.Frequency.String(),
+		"STATEMATE_SCRIPT_TIMING="+script.Timing.String(),
 	)
 
 	if script.SourceDir != "" {
@@ -150,7 +185,7 @@ func (e *Executor) recordRun(script *Script) error {
 	if e.dryRun {
 		return nil
 	}
-	if script.Trigger == TriggerOnce || script.Trigger == TriggerOnchange {
+	if script.Frequency == FreqOnce || script.Frequency == FreqOnchange {
 		return e.db.RecordScriptRun(script.Path, script.ContentHash)
 	}
 	return nil

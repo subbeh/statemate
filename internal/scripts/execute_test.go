@@ -13,7 +13,7 @@ func TestExecutor_RunOnce(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "state.db")
 	markerFile := filepath.Join(tmpDir, "marker")
 
-	scriptPath := filepath.Join(tmpDir, "run_once_10-test.sh")
+	scriptPath := filepath.Join(tmpDir, "01-test#once#before.sh")
 	scriptContent := "#!/bin/bash\ntouch " + markerFile + "\n"
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
 		t.Fatal(err)
@@ -29,12 +29,13 @@ func TestExecutor_RunOnce(t *testing.T) {
 	script := &Script{
 		Path:        scriptPath,
 		Name:        "test",
-		Trigger:     TriggerOnce,
-		Order:       10,
+		Frequency:   FreqOnce,
+		Timing:      TimingBefore,
+		Order:       1,
 		ContentHash: contentHash,
 	}
 
-	executor := NewExecutor(db, false, false)
+	executor := NewExecutor(db, nil, false, false)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -70,7 +71,7 @@ func TestExecutor_RunOnchange(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "state.db")
 	markerFile := filepath.Join(tmpDir, "marker")
 
-	scriptPath := filepath.Join(tmpDir, "run_onchange_10-test.sh")
+	scriptPath := filepath.Join(tmpDir, "01-test#onchange#before.sh")
 	scriptContent := "#!/bin/bash\ntouch " + markerFile + "\n"
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
 		t.Fatal(err)
@@ -86,12 +87,13 @@ func TestExecutor_RunOnchange(t *testing.T) {
 	script := &Script{
 		Path:        scriptPath,
 		Name:        "test",
-		Trigger:     TriggerOnchange,
-		Order:       10,
+		Frequency:   FreqOnchange,
+		Timing:      TimingBefore,
+		Order:       1,
 		ContentHash: contentHash,
 	}
 
-	executor := NewExecutor(db, false, false)
+	executor := NewExecutor(db, nil, false, false)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -132,7 +134,7 @@ func TestExecutor_DryRun(t *testing.T) {
 	dbPath := filepath.Join(tmpDir, "state.db")
 	markerFile := filepath.Join(tmpDir, "marker")
 
-	scriptPath := filepath.Join(tmpDir, "run_always_10-test.sh")
+	scriptPath := filepath.Join(tmpDir, "01-test#always#before.sh")
 	scriptContent := "#!/bin/bash\ntouch " + markerFile + "\n"
 	if err := os.WriteFile(scriptPath, []byte(scriptContent), 0755); err != nil {
 		t.Fatal(err)
@@ -148,12 +150,13 @@ func TestExecutor_DryRun(t *testing.T) {
 	script := &Script{
 		Path:        scriptPath,
 		Name:        "test",
-		Trigger:     TriggerAlways,
-		Order:       10,
+		Frequency:   FreqAlways,
+		Timing:      TimingBefore,
+		Order:       1,
 		ContentHash: contentHash,
 	}
 
-	executor := NewExecutor(db, true, false)
+	executor := NewExecutor(db, nil, true, false)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -185,12 +188,12 @@ func TestExecutor_ManualScript(t *testing.T) {
 	defer db.Close()
 
 	script := &Script{
-		Path:    scriptPath,
-		Name:    "manual-script",
-		Trigger: TriggerManual,
+		Path:      scriptPath,
+		Name:      "manual-script",
+		Frequency: FreqManual,
 	}
 
-	executor := NewExecutor(db, false, false)
+	executor := NewExecutor(db, nil, false, false)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {

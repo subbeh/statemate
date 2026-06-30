@@ -5,6 +5,7 @@ import "path/filepath"
 type Config struct {
 	SourceDirPath string              `yaml:"source_dir" toml:"source_dir"`
 	Sources       []string            `yaml:"sources" toml:"sources"`
+	DefaultSource string              `yaml:"default_source" toml:"default_source"`
 	TargetBase    string              `yaml:"target_base" toml:"target_base"`
 	Profiles      map[string]*Profile `yaml:"profiles" toml:"profiles"`
 	Profile       string              `yaml:"profile" toml:"profile"`
@@ -26,6 +27,9 @@ func (c *Config) ApplyOverrides(override *Config) {
 	}
 	if len(override.Sources) > 0 {
 		c.Sources = override.Sources
+	}
+	if override.DefaultSource != "" {
+		c.DefaultSource = override.DefaultSource
 	}
 	if override.TargetBase != "" {
 		c.TargetBase = override.TargetBase

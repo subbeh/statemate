@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/source"
 )
 
 var addCmd = &cobra.Command{
@@ -38,7 +40,7 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().StringVar(&addProfile, "profile", "", "add file with profile suffix")
 	addCmd.Flags().BoolVar(&addEncrypt, "encrypt", false, "encrypt file when adding")
-	addCmd.Flags().StringVar(&addSource, "source", "", "target source directory (default: first source)")
+	addCmd.Flags().StringVarP(&addSource, "source", "s", "", "target source directory")
 	addCmd.Flags().BoolVar(&addTemplate, "template", false, "mark file as template")
 }
 
@@ -68,22 +70,46 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot add directories directly, add files individually")
 	}
 
-	sourceDir := addSource
-	if sourceDir == "" {
-		sourceDir = absSources[0]
-	} else if !filepath.IsAbs(sourceDir) {
-		sourceDir = filepath.Join(cfg.SourceDir(), sourceDir)
+	scanner := source.NewScanner(cfg.TargetBase, cfg.SourceDir())
+	tree, err := scanner.Scan(absSources)
+	if err != nil {
+		return fmt.Errorf("scanning sources: %w", err)
 	}
 
-	found := false
-	for _, s := range absSources {
-		if s == sourceDir {
-			found = true
-			break
+	for _, entry := range tree.Files() {
+		if entry.TargetPath == targetPath {
+			return fmt.Errorf("file already managed: %s (in %s)", targetPath, filepath.Base(filepath.Dir(entry.SourcePath)))
 		}
 	}
-	if !found {
-		return fmt.Errorf("source %q not in configured sources", sourceDir)
+
+	var sourceDir string
+	sourceName := addSource
+	if sourceName == "" {
+		sourceName = cfg.DefaultSource
+	}
+
+	if sourceName != "" {
+		if filepath.IsAbs(sourceName) {
+			sourceDir = sourceName
+		} else {
+			sourceDir = filepath.Join(cfg.SourceDir(), sourceName)
+		}
+		found := false
+		for _, s := range absSources {
+			if s == sourceDir {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("source %q not in configured sources", sourceName)
+		}
+	} else {
+		idx, err := promptSourceSelection(cfg.Sources)
+		if err != nil {
+			return err
+		}
+		sourceDir = absSources[idx]
 	}
 
 	relPath, err := computeRelativePath(targetPath, cfg.TargetBase)
@@ -170,4 +196,21 @@ func expandPath(path string) string {
 		return filepath.Join(home, path[1:])
 	}
 	return path
+}
+
+func promptSourceSelection(sources []string) (int, error) {
+	prompt := promptui.Select{
+		Label: "Select source",
+		Items: sources,
+		Size:  10,
+		Searcher: func(input string, index int) bool {
+			return strings.Contains(strings.ToLower(sources[index]), strings.ToLower(input))
+		},
+	}
+
+	idx, _, err := prompt.Run()
+	if err != nil {
+		return 0, err
+	}
+	return idx, nil
 }

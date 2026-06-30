@@ -9,31 +9,43 @@ import (
 	"strings"
 )
 
-type Trigger int
+type Frequency int
 
 const (
-	TriggerOnce     Trigger = iota // run_once: run once ever
-	TriggerOnchange                // run_onchange: run when content changes
-	TriggerBefore                  // run_before: run before apply
-	TriggerAfter                   // run_after: run after apply
-	TriggerAlways                  // run_always: run on every apply
-	TriggerManual                  // no prefix: manual only
+	FreqOnce     Frequency = iota // run once ever
+	FreqOnchange                  // run when content changes
+	FreqAlways                    // run on every apply
+	FreqManual                    // manual only
 )
 
-func (t Trigger) String() string {
-	switch t {
-	case TriggerOnce:
+func (f Frequency) String() string {
+	switch f {
+	case FreqOnce:
 		return "once"
-	case TriggerOnchange:
+	case FreqOnchange:
 		return "onchange"
-	case TriggerBefore:
-		return "before"
-	case TriggerAfter:
-		return "after"
-	case TriggerAlways:
+	case FreqAlways:
 		return "always"
-	case TriggerManual:
+	case FreqManual:
 		return "manual"
+	default:
+		return "unknown"
+	}
+}
+
+type Timing int
+
+const (
+	TimingBefore Timing = iota // run before apply
+	TimingAfter                // run after apply
+)
+
+func (t Timing) String() string {
+	switch t {
+	case TimingBefore:
+		return "before"
+	case TimingAfter:
+		return "after"
 	default:
 		return "unknown"
 	}
@@ -42,7 +54,9 @@ func (t Trigger) String() string {
 type Script struct {
 	Path        string
 	Name        string
-	Trigger     Trigger
+	Frequency   Frequency
+	Timing      Timing
+	Template    bool
 	Order       int
 	SourceDir   string
 	ContentHash string
@@ -56,33 +70,55 @@ func (s *Script) IsExecutable() bool {
 	return info.Mode()&0111 != 0
 }
 
-var scriptPattern = regexp.MustCompile(`^run_(once|onchange|before|after|always)_(\d+)-(.+)$`)
+// Script naming format: <order>-<name>#<freq>#<timing>[#template].<ext>
+// Examples:
+//   01-setup#once#before.sh
+//   02-cleanup#always#after.sh
+//   03-render#onchange#before#template.sh
+//   manual-task.sh (no attributes = manual)
+var orderPattern = regexp.MustCompile(`^(\d+)-(.+)$`)
 
-func ParseScriptName(name string) (Trigger, int, string) {
-	matches := scriptPattern.FindStringSubmatch(name)
-	if matches == nil {
-		baseName := strings.TrimSuffix(name, filepath.Ext(name))
-		return TriggerManual, 0, baseName
+func ParseScriptName(filename string) (name string, freq Frequency, timing Timing, template bool, order int) {
+	ext := filepath.Ext(filename)
+	base := strings.TrimSuffix(filename, ext)
+
+	parts := strings.Split(base, "#")
+	nameWithOrder := parts[0]
+
+	// Parse order prefix if present
+	if matches := orderPattern.FindStringSubmatch(nameWithOrder); matches != nil {
+		order, _ = strconv.Atoi(matches[1])
+		name = matches[2]
+	} else {
+		name = nameWithOrder
 	}
 
-	var trigger Trigger
-	switch matches[1] {
-	case "once":
-		trigger = TriggerOnce
-	case "onchange":
-		trigger = TriggerOnchange
-	case "before":
-		trigger = TriggerBefore
-	case "after":
-		trigger = TriggerAfter
-	case "always":
-		trigger = TriggerAlways
+	// Default to manual
+	freq = FreqManual
+	timing = TimingBefore
+
+	// Parse attributes
+	for _, attr := range parts[1:] {
+		switch strings.ToLower(attr) {
+		case "once":
+			freq = FreqOnce
+		case "onchange":
+			freq = FreqOnchange
+		case "always":
+			freq = FreqAlways
+		case "before":
+			timing = TimingBefore
+		case "after":
+			timing = TimingAfter
+		case "template":
+			template = true
+		}
 	}
 
-	order, _ := strconv.Atoi(matches[2])
-	scriptName := strings.TrimSuffix(matches[3], filepath.Ext(matches[3]))
+	// If frequency is set but timing is missing, default to before
+	// (timing is already TimingBefore by default, so nothing to do)
 
-	return trigger, order, scriptName
+	return name, freq, timing, template, order
 }
 
 type Scripts []*Script
@@ -100,10 +136,30 @@ func (s Scripts) Sort() {
 	sort.Sort(s)
 }
 
-func (s Scripts) ByTrigger(t Trigger) Scripts {
+func (s Scripts) ByTiming(t Timing) Scripts {
 	var result Scripts
 	for _, script := range s {
-		if script.Trigger == t {
+		if script.Timing == t {
+			result = append(result, script)
+		}
+	}
+	return result
+}
+
+func (s Scripts) ByFrequency(f Frequency) Scripts {
+	var result Scripts
+	for _, script := range s {
+		if script.Frequency == f {
+			result = append(result, script)
+		}
+	}
+	return result
+}
+
+func (s Scripts) Automatic() Scripts {
+	var result Scripts
+	for _, script := range s {
+		if script.Frequency != FreqManual {
 			result = append(result, script)
 		}
 	}

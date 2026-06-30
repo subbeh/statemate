@@ -8,53 +8,78 @@ import (
 
 func TestParseScriptName(t *testing.T) {
 	tests := []struct {
-		name        string
-		want        Trigger
-		wantOrder   int
-		wantName    string
+		filename     string
+		wantName     string
+		wantFreq     Frequency
+		wantTiming   Timing
+		wantTemplate bool
+		wantOrder    int
 	}{
-		{"run_once_10-setup.sh", TriggerOnce, 10, "setup"},
-		{"run_onchange_20-update.sh", TriggerOnchange, 20, "update"},
-		{"run_before_05-prepare.sh", TriggerBefore, 5, "prepare"},
-		{"run_after_30-cleanup.sh", TriggerAfter, 30, "cleanup"},
-		{"run_always_01-log.sh", TriggerAlways, 1, "log"},
-		{"manual-script.sh", TriggerManual, 0, "manual-script"},
-		{"script", TriggerManual, 0, "script"},
-		{"run_once_100-long-name-here.zsh", TriggerOnce, 100, "long-name-here"},
+		{"01-setup#once#before.sh", "setup", FreqOnce, TimingBefore, false, 1},
+		{"02-cleanup#always#after.sh", "cleanup", FreqAlways, TimingAfter, false, 2},
+		{"03-render#onchange#before#template.sh", "render", FreqOnchange, TimingBefore, true, 3},
+		{"10-install#once#after.sh", "install", FreqOnce, TimingAfter, false, 10},
+		{"05-prep#always#before.sh", "prep", FreqAlways, TimingBefore, false, 5},
+		{"manual-task.sh", "manual-task", FreqManual, TimingBefore, false, 0},
+		{"script", "script", FreqManual, TimingBefore, false, 0},
+		{"100-long-name-here#onchange#after.zsh", "long-name-here", FreqOnchange, TimingAfter, false, 100},
+		// Frequency only (timing defaults to before)
+		{"01-setup#once.sh", "setup", FreqOnce, TimingBefore, false, 1},
+		{"01-setup#always.sh", "setup", FreqAlways, TimingBefore, false, 1},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			trigger, order, name := ParseScriptName(tc.name)
-			if trigger != tc.want {
-				t.Errorf("trigger = %v, want %v", trigger, tc.want)
+		t.Run(tc.filename, func(t *testing.T) {
+			name, freq, timing, template, order := ParseScriptName(tc.filename)
+			if name != tc.wantName {
+				t.Errorf("name = %v, want %v", name, tc.wantName)
+			}
+			if freq != tc.wantFreq {
+				t.Errorf("frequency = %v, want %v", freq, tc.wantFreq)
+			}
+			if timing != tc.wantTiming {
+				t.Errorf("timing = %v, want %v", timing, tc.wantTiming)
+			}
+			if template != tc.wantTemplate {
+				t.Errorf("template = %v, want %v", template, tc.wantTemplate)
 			}
 			if order != tc.wantOrder {
 				t.Errorf("order = %v, want %v", order, tc.wantOrder)
-			}
-			if name != tc.wantName {
-				t.Errorf("name = %v, want %v", name, tc.wantName)
 			}
 		})
 	}
 }
 
-func TestTriggerString(t *testing.T) {
+func TestFrequencyString(t *testing.T) {
 	tests := []struct {
-		trigger Trigger
-		want    string
+		freq Frequency
+		want string
 	}{
-		{TriggerOnce, "once"},
-		{TriggerOnchange, "onchange"},
-		{TriggerBefore, "before"},
-		{TriggerAfter, "after"},
-		{TriggerAlways, "always"},
-		{TriggerManual, "manual"},
+		{FreqOnce, "once"},
+		{FreqOnchange, "onchange"},
+		{FreqAlways, "always"},
+		{FreqManual, "manual"},
 	}
 
 	for _, tc := range tests {
-		if got := tc.trigger.String(); got != tc.want {
-			t.Errorf("%v.String() = %v, want %v", tc.trigger, got, tc.want)
+		if got := tc.freq.String(); got != tc.want {
+			t.Errorf("%v.String() = %v, want %v", tc.freq, got, tc.want)
+		}
+	}
+}
+
+func TestTimingString(t *testing.T) {
+	tests := []struct {
+		timing Timing
+		want   string
+	}{
+		{TimingBefore, "before"},
+		{TimingAfter, "after"},
+	}
+
+	for _, tc := range tests {
+		if got := tc.timing.String(); got != tc.want {
+			t.Errorf("%v.String() = %v, want %v", tc.timing, got, tc.want)
 		}
 	}
 }
@@ -79,27 +104,61 @@ func TestScriptsSort(t *testing.T) {
 	}
 }
 
-func TestScriptsByTrigger(t *testing.T) {
+func TestScriptsByTiming(t *testing.T) {
 	scripts := Scripts{
-		{Name: "a", Trigger: TriggerBefore},
-		{Name: "b", Trigger: TriggerAfter},
-		{Name: "c", Trigger: TriggerBefore},
-		{Name: "d", Trigger: TriggerOnce},
+		{Name: "a", Timing: TimingBefore},
+		{Name: "b", Timing: TimingAfter},
+		{Name: "c", Timing: TimingBefore},
+		{Name: "d", Timing: TimingAfter},
 	}
 
-	before := scripts.ByTrigger(TriggerBefore)
+	before := scripts.ByTiming(TimingBefore)
 	if len(before) != 2 {
 		t.Errorf("expected 2 before scripts, got %d", len(before))
 	}
 
-	after := scripts.ByTrigger(TriggerAfter)
-	if len(after) != 1 {
-		t.Errorf("expected 1 after script, got %d", len(after))
+	after := scripts.ByTiming(TimingAfter)
+	if len(after) != 2 {
+		t.Errorf("expected 2 after scripts, got %d", len(after))
+	}
+}
+
+func TestScriptsByFrequency(t *testing.T) {
+	scripts := Scripts{
+		{Name: "a", Frequency: FreqOnce},
+		{Name: "b", Frequency: FreqAlways},
+		{Name: "c", Frequency: FreqOnce},
+		{Name: "d", Frequency: FreqManual},
 	}
 
-	always := scripts.ByTrigger(TriggerAlways)
-	if len(always) != 0 {
-		t.Errorf("expected 0 always scripts, got %d", len(always))
+	once := scripts.ByFrequency(FreqOnce)
+	if len(once) != 2 {
+		t.Errorf("expected 2 once scripts, got %d", len(once))
+	}
+
+	always := scripts.ByFrequency(FreqAlways)
+	if len(always) != 1 {
+		t.Errorf("expected 1 always script, got %d", len(always))
+	}
+}
+
+func TestScriptsAutomatic(t *testing.T) {
+	scripts := Scripts{
+		{Name: "a", Frequency: FreqOnce},
+		{Name: "b", Frequency: FreqAlways},
+		{Name: "c", Frequency: FreqManual},
+		{Name: "d", Frequency: FreqOnchange},
+	}
+
+	auto := scripts.Automatic()
+	if len(auto) != 3 {
+		t.Errorf("expected 3 automatic scripts, got %d", len(auto))
+	}
+
+	for _, s := range auto {
+		if s.Frequency == FreqManual {
+			t.Errorf("automatic scripts should not include manual: %s", s.Name)
+		}
 	}
 }
 
@@ -111,7 +170,7 @@ func TestDiscoverer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scriptPath := filepath.Join(scriptsDir, "run_once_10-test.sh")
+	scriptPath := filepath.Join(scriptsDir, "01-test#once#before.sh")
 	if err := os.WriteFile(scriptPath, []byte("#!/bin/bash\necho test"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +185,7 @@ func TestDiscoverer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sourceScriptPath := filepath.Join(sourceScriptsDir, "run_after_20-cleanup.sh")
+	sourceScriptPath := filepath.Join(sourceScriptsDir, "02-cleanup#always#after.sh")
 	if err := os.WriteFile(sourceScriptPath, []byte("#!/bin/bash\necho cleanup"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -141,11 +200,17 @@ func TestDiscoverer(t *testing.T) {
 		t.Errorf("expected 2 scripts, got %d", len(scripts))
 	}
 
-	if scripts[0].Order != 10 {
-		t.Errorf("expected first script order 10, got %d", scripts[0].Order)
+	if scripts[0].Order != 1 {
+		t.Errorf("expected first script order 1, got %d", scripts[0].Order)
 	}
-	if scripts[1].Order != 20 {
-		t.Errorf("expected second script order 20, got %d", scripts[1].Order)
+	if scripts[0].Frequency != FreqOnce {
+		t.Errorf("expected first script frequency once, got %v", scripts[0].Frequency)
+	}
+	if scripts[1].Order != 2 {
+		t.Errorf("expected second script order 2, got %d", scripts[1].Order)
+	}
+	if scripts[1].Timing != TimingAfter {
+		t.Errorf("expected second script timing after, got %v", scripts[1].Timing)
 	}
 }
 
