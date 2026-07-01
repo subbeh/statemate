@@ -61,16 +61,17 @@ brews:
     test: |
       system "#{bin}/mate", "version"
 
-aurs:
-  - name: statemate-bin
-    homepage: https://github.com/subbeh/statemate
-    description: Declarative system configuration management
-    maintainers:
-      - "Steven Terwindt <steven@sbbh.cloud>"
-    license: MIT
-    private_key: "{{ .Env.AUR_SSH_PRIVATE_KEY }}"
-    git_url: "ssh://aur@aur.archlinux.org/statemate-bin.git"
-    package: |-
-      install -Dm755 mate "${pkgdir}/usr/bin/mate"
-      install -Dm644 README.md "${pkgdir}/usr/share/doc/statemate/README.md"
-      install -Dm644 CHANGELOG.md "${pkgdir}/usr/share/doc/statemate/CHANGELOG.md"
+# TODO: Add AUR support when registration is available
+# aurs:
+#   - name: statemate-bin
+#     homepage: https://github.com/subbeh/statemate
+#     description: Declarative system configuration management
+#     maintainers:
+#       - "Steven Terwindt <steven@sbbh.cloud>"
+#     license: MIT
+#     private_key: "{{ .Env.AUR_SSH_PRIVATE_KEY }}"
+#     git_url: "ssh://aur@aur.archlinux.org/statemate-bin.git"
+#     package: |-
+#       install -Dm755 mate "${pkgdir}/usr/bin/mate"
+#       install -Dm644 README.md "${pkgdir}/usr/share/doc/statemate/README.md"
+#       install -Dm644 CHANGELOG.md "${pkgdir}/usr/share/doc/statemate/CHANGELOG.md"
