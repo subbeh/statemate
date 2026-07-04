@@ -93,12 +93,16 @@ func (e *Executor) ExecuteOne(script *Script) error {
 }
 
 func (e *Executor) shouldRun(script *Script) (bool, string, error) {
+	return ShouldRun(script, e.db)
+}
+
+func ShouldRun(script *Script, db *state.DB) (bool, string, error) {
 	switch script.Frequency {
 	case FreqManual:
 		return false, "manual only", nil
 
 	case FreqOnce:
-		hasRun, err := e.db.HasScriptRun(script.Path)
+		hasRun, err := db.HasScriptRun(script.Path)
 		if err != nil {
 			return false, "", err
 		}
@@ -108,7 +112,7 @@ func (e *Executor) shouldRun(script *Script) (bool, string, error) {
 		return true, "", nil
 
 	case FreqOnchange:
-		hasRunWithHash, err := e.db.HasScriptRunWithHash(script.Path, script.ContentHash)
+		hasRunWithHash, err := db.HasScriptRunWithHash(script.Path, script.ContentHash)
 		if err != nil {
 			return false, "", err
 		}
@@ -123,6 +127,20 @@ func (e *Executor) shouldRun(script *Script) (bool, string, error) {
 	default:
 		return false, "unknown frequency", nil
 	}
+}
+
+func PendingScripts(scripts Scripts, db *state.DB) (Scripts, error) {
+	var pending Scripts
+	for _, script := range scripts {
+		shouldRun, _, err := ShouldRun(script, db)
+		if err != nil {
+			return nil, err
+		}
+		if shouldRun {
+			pending = append(pending, script)
+		}
+	}
+	return pending, nil
 }
 
 func (e *Executor) run(script *Script) error {

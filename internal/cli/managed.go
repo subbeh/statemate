@@ -69,7 +69,7 @@ func runManaged(cmd *cobra.Command, args []string) error {
 		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
 		srcPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
 
-		if filterPath != "" && !strings.HasPrefix(srcPath, filterPath) {
+		if filterPath != "" && !matchesManagedFilter(e, srcPath, filterPath) {
 			continue
 		}
 
@@ -100,6 +100,22 @@ func runManaged(cmd *cobra.Command, args []string) error {
 	table.Bulk(data)
 	table.Render()
 	return nil
+}
+
+func matchesManagedFilter(e *source.Entry, srcPath, filter string) bool {
+	// Match against source relative path
+	if strings.HasPrefix(srcPath, filter) || strings.HasSuffix(srcPath, "/"+filter) {
+		return true
+	}
+	// Match against target path (absolute or basename)
+	if e.TargetPath == filter || strings.HasSuffix(e.TargetPath, "/"+filter) {
+		return true
+	}
+	// Match against relative path within source
+	if e.RelPath == filter || strings.HasPrefix(e.RelPath, filter+"/") || strings.HasSuffix(e.RelPath, "/"+filter) {
+		return true
+	}
+	return false
 }
 
 func isActiveForProfile(e *source.Entry, profileName string, activeSources map[string]bool, sourceDir string) bool {

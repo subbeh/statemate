@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
@@ -24,7 +25,7 @@ var statusCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(statusCmd)
-	statusCmd.Flags().Bool("short", false, "compact output for statuslines (format: +N ~N !N)")
+	statusCmd.Flags().Bool("short", false, "compact output for statuslines (format: +N ~N !N ?N *N)")
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -84,6 +85,17 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("finding orphans: %w", err)
 	}
 
+	discoverer := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths)
+	allScripts, err := discoverer.Discover()
+	if err != nil {
+		return fmt.Errorf("discovering scripts: %w", err)
+	}
+
+	pendingScripts, err := scripts.PendingScripts(allScripts.Automatic(), db)
+	if err != nil {
+		return fmt.Errorf("checking pending scripts: %w", err)
+	}
+
 	var filterPath string
 	if len(args) > 0 {
 		filterPath = args[0]
@@ -107,10 +119,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	short, _ := cmd.Flags().GetBool("short")
 	if short {
-		return printShortStatus(filteredChanges, filteredOrphans)
+		return printShortStatus(filteredChanges, filteredOrphans, pendingScripts)
 	}
 
-	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 {
+	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 && len(pendingScripts) == 0 {
 		fmt.Println("Everything is up to date")
 		return nil
 	}
@@ -149,10 +161,21 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr, "Run 'mate forget <path>' to remove from tracking, or delete the target file.")
 	}
 
+	if len(pendingScripts) > 0 {
+		fmt.Println("\nPending scripts:")
+		for _, s := range pendingScripts {
+			timing := "before"
+			if s.Timing == scripts.TimingAfter {
+				timing = "after"
+			}
+			fmt.Printf("  %s (%s, %s)\n", s.Name, s.Frequency, timing)
+		}
+	}
+
 	return nil
 }
 
-func printShortStatus(changes []*target.Change, orphans []string) error {
+func printShortStatus(changes []*target.Change, orphans []string, pending scripts.Scripts) error {
 	var added, modified, conflicts int
 	for _, c := range changes {
 		switch c.Status {
@@ -166,7 +189,7 @@ func printShortStatus(changes []*target.Change, orphans []string) error {
 	}
 
 	// No changes = no output (for statusline to hide)
-	if added == 0 && modified == 0 && conflicts == 0 && len(orphans) == 0 {
+	if added == 0 && modified == 0 && conflicts == 0 && len(orphans) == 0 && len(pending) == 0 {
 		return nil
 	}
 
@@ -182,6 +205,9 @@ func printShortStatus(changes []*target.Change, orphans []string) error {
 	}
 	if len(orphans) > 0 {
 		parts = append(parts, fmt.Sprintf("?%d", len(orphans)))
+	}
+	if len(pending) > 0 {
+		parts = append(parts, fmt.Sprintf("*%d", len(pending)))
 	}
 
 	fmt.Println(strings.Join(parts, " "))

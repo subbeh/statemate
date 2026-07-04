@@ -23,7 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate add` interactive source selection with fuzzy search (when no default/flag)
 - Tab completion for commands: forget, delete, diff, edit, encrypt, decrypt, rename, run
 - Tab completion for flags: `--source`, `--profile`
-- `mate status --short` flag for compact statusline output (format: `+N ~N !N ?N`)
+- `mate status --short` flag for compact statusline output (format: `+N ~N !N ?N *N`)
+- `mate status` now shows pending scripts that would run on next apply
 - Source-level `owner`, `group`, and `perm` defaults in `.mate.yaml`
 - Recursive directory attributes: `#owner-r:x`, `#group-r:x`, `#perm-r:x` (inherited by children)
 - `.SourceDir` template variable for accessing the dotfiles source directory

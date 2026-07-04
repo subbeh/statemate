@@ -355,7 +355,15 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 func (a *Applier) promptConflict(change *FileChange) (string, error) {
 	fmt.Printf("\nConflict: %s\n", change.Entry.TargetPath)
 	fmt.Printf("  Target has been modified since last apply\n")
-	fmt.Printf("  [o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort: ")
+
+	canImport := !change.Entry.Attrs.Template
+	var prompt string
+	if canImport {
+		prompt = "  [o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort: "
+	} else {
+		prompt = "  [o]verwrite, [s]kip, [d]iff, [a]bort: "
+	}
+	fmt.Print(prompt)
 
 	for {
 		char, err := readSingleChar()
@@ -370,7 +378,10 @@ func (a *Applier) promptConflict(change *FileChange) (string, error) {
 		case "o":
 			return "overwrite", nil
 		case "i":
-			return "import", nil
+			if canImport {
+				return "import", nil
+			}
+			fmt.Print("\n" + prompt)
 		case "s":
 			return "skip", nil
 		case "a":
@@ -379,9 +390,9 @@ func (a *Applier) promptConflict(change *FileChange) (string, error) {
 			if err := a.showConflictDiff(change.Entry); err != nil {
 				fmt.Printf("Error showing diff: %v\n", err)
 			}
-			fmt.Printf("  [o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort: ")
+			fmt.Print(prompt)
 		default:
-			fmt.Printf("\n  [o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort: ")
+			fmt.Print("\n" + prompt)
 		}
 	}
 }
