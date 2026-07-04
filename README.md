@@ -85,11 +85,38 @@ Use `#` suffixes to control behavior (stripped from target filename):
 | `#perm:600` | Set file permissions |
 | `#owner:user` | Set file owner |
 | `#group:group` | Set file group |
+| `#perm-r:600` | Recursive permissions (applies to all children) |
+| `#owner-r:user` | Recursive owner (applies to all children) |
+| `#group-r:group` | Recursive group (applies to all children) |
 | `#encrypted` | File is age-encrypted |
 | `#template` | Process as Go template |
 | `#symlink` | Create symlink instead of copy |
 
 Example: `.ssh/config#encrypted#perm:600`
+
+## Source Directory Config
+
+Each source directory can have a `.mate.yaml` to configure behavior:
+
+```yaml
+# myapp/.mate.yaml
+profile: linux              # only apply this source for linux profile
+owner: root                 # default owner for all files
+group: root                 # default group for all files
+perm: "644"                 # default permissions for all files
+targets:
+  etc: /etc                 # map etc/ subdirectory to /etc instead of ~/etc
+```
+
+This is useful for system files:
+```
+arch_root/
+  .mate.yaml                # targets: { etc: /etc }, owner: root
+  etc/
+    issue                   # deployed to /etc/issue as root
+    keyd/
+      default.conf          # deployed to /etc/keyd/default.conf as root
+```
 
 ## Scripts
 

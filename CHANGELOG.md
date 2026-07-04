@@ -84,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate diff` now properly handles files that are both encrypted and templated
 - Diff shows "(no differences)" instead of empty output when files are identical
 - Encrypted files without decryption key now show clear error instead of diffing gibberish
+- Symlinks are now detected and replaced when target should be a regular file
+- Sudo detection now correctly handles symlinks (checks parent dir, not symlink target)
+- Sudo permission check now properly evaluates owner, group, and world permissions
 
 - Initial release
 - Stow-style multi-directory source management
