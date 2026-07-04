@@ -162,3 +162,11 @@ func sudoMkdir(path string, mode os.FileMode) error {
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
+
+func sudoRemove(path string) error {
+	cmd := exec.Command("sudo", "rm", path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}

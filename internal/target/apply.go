@@ -283,6 +283,21 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 		}
 	}
 
+	// Remove existing symlink if target should be a regular file
+	if info, err := os.Lstat(entry.TargetPath); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 && !entry.Attrs.Symlink {
+			if useSudo {
+				if err := sudoRemove(entry.TargetPath); err != nil {
+					return fmt.Errorf("removing symlink: %w", err)
+				}
+			} else {
+				if err := os.Remove(entry.TargetPath); err != nil {
+					return fmt.Errorf("removing symlink: %w", err)
+				}
+			}
+		}
+	}
+
 	if useSudo {
 		if err := sudoWriteFile(entry.TargetPath, content, mode); err != nil {
 			return err
