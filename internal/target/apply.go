@@ -165,9 +165,19 @@ func (a *Applier) checkChange(entry *source.Entry) (*FileChange, error) {
 	}
 
 	if existing == nil {
-		if _, err := os.Stat(entry.TargetPath); os.IsNotExist(err) {
+		info, err := os.Lstat(entry.TargetPath)
+		if os.IsNotExist(err) {
 			change.Status = StatusNew
+		} else if err != nil {
+			return nil, err
 		} else {
+			// If target is a symlink but source is not a symlink type, treat as modified
+			targetIsSymlink := info.Mode()&os.ModeSymlink != 0
+			if targetIsSymlink && !entry.Attrs.Symlink {
+				change.Status = StatusModified
+				return change, nil
+			}
+
 			targetHash, err := state.HashFile(entry.TargetPath)
 			if err != nil {
 				return nil, err
@@ -197,12 +207,20 @@ func (a *Applier) checkChange(entry *source.Entry) (*FileChange, error) {
 
 	change.OldHash = existing.AppliedHash
 
-	targetExists := true
-	if _, err := os.Stat(entry.TargetPath); os.IsNotExist(err) {
-		targetExists = false
+	info, err := os.Lstat(entry.TargetPath)
+	targetExists := err == nil
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
 	}
 
 	if !targetExists {
+		change.Status = StatusModified
+		return change, nil
+	}
+
+	// If target is a symlink but source is not a symlink type, treat as modified
+	targetIsSymlink := info.Mode()&os.ModeSymlink != 0
+	if targetIsSymlink && !entry.Attrs.Symlink {
 		change.Status = StatusModified
 		return change, nil
 	}
