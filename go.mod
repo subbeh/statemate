@@ -1,6 +1,6 @@
 module github.com/subbeh/statemate
 
-go 1.26.4
+go 1.25.11
 
 require (
 	filippo.io/age v1.3.1
