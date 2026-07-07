@@ -53,7 +53,7 @@ func (b *SudoBatch) Execute() error {
 		if err := os.WriteFile(tmpPath, content, 0600); err != nil {
 			return fmt.Errorf("writing temp file %s: %w", tmpPath, err)
 		}
-		defer os.Remove(tmpPath)
+		defer func(p string) { _ = os.Remove(p) }(tmpPath)
 	}
 
 	cmd := exec.Command("sudo", "sh", "-c", b.script.String())

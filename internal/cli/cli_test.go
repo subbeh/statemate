@@ -9,16 +9,16 @@ import (
 func TestInitCommand(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
 
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
-	defer os.Setenv("XDG_CONFIG_HOME", origXDG)
+	_ = os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", origXDG) }()
 
 	cwd, _ := os.Getwd()
-	os.MkdirAll(filepath.Join(tmpDir, ".config", "statemate"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, ".config", "statemate", "mate.yaml"), []byte("source_dir: "+cwd+"\n"), 0644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".config", "statemate"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".config", "statemate", "mate.yaml"), []byte("source_dir: "+cwd+"\n"), 0644)
 
 	initFormat = "yaml"
 	defer func() { initFormat = "" }()
@@ -42,16 +42,16 @@ func TestInitCommand(t *testing.T) {
 func TestInitCommandTOML(t *testing.T) {
 	tmpDir := t.TempDir()
 	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(origDir) }()
+	_ = os.Chdir(tmpDir)
 
 	origXDG := os.Getenv("XDG_CONFIG_HOME")
-	os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
-	defer os.Setenv("XDG_CONFIG_HOME", origXDG)
+	_ = os.Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, ".config"))
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", origXDG) }()
 
 	cwd, _ := os.Getwd()
-	os.MkdirAll(filepath.Join(tmpDir, ".config", "statemate"), 0755)
-	os.WriteFile(filepath.Join(tmpDir, ".config", "statemate", "mate.yaml"), []byte("source_dir: "+cwd+"\n"), 0644)
+	_ = os.MkdirAll(filepath.Join(tmpDir, ".config", "statemate"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".config", "statemate", "mate.yaml"), []byte("source_dir: "+cwd+"\n"), 0644)
 
 	initFormat = "toml"
 	defer func() { initFormat = "" }()

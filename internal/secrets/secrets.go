@@ -282,7 +282,7 @@ func loadIdentity(source string) ([]age.Identity, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return age.ParseIdentities(f)
 }

@@ -136,8 +136,8 @@ func TestRenderWithConditional(t *testing.T) {
 }
 
 func TestRenderWithEnv(t *testing.T) {
-	os.Setenv("TEST_TEMPLATE_VAR", "test-value")
-	defer os.Unsetenv("TEST_TEMPLATE_VAR")
+	_ = os.Setenv("TEST_TEMPLATE_VAR", "test-value")
+	defer func() { _ = os.Unsetenv("TEST_TEMPLATE_VAR") }()
 
 	cfg := &config.Config{}
 	ctx, _ := NewContext(cfg, "")

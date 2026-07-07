@@ -78,7 +78,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var enc *encrypt.AgeEncryptor
 	if cfg.Age != nil {
@@ -194,13 +194,13 @@ func generateEncryptedTemplateDiff(entry *source.Entry, enc *encrypt.AgeEncrypto
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.Write(rendered); err != nil {
 		return "", err
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	return target.GenerateDiffWithTool(tmpFile.Name(), entry.TargetPath, diffTool)
 }
@@ -220,13 +220,13 @@ func generateDecryptedDiff(entry *source.Entry, enc *encrypt.AgeEncryptor, diffT
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.Write(plaintext); err != nil {
 		return "", err
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	return target.GenerateDiffWithTool(tmpFile.Name(), entry.TargetPath, diffTool)
 }
@@ -241,13 +241,13 @@ func generateTemplatedDiff(entry *source.Entry, tmplCtx *template.Context, diffT
 	if err != nil {
 		return "", err
 	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.Write(rendered); err != nil {
 		return "", err
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	return target.GenerateDiffWithTool(tmpFile.Name(), entry.TargetPath, diffTool)
 }

@@ -61,11 +61,6 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("setting up encryption: %w", err)
 	}
 
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
 	allSources := profile.AllSources(cfg)
 	allSourcePaths := cfg.ResolveSourcePaths(allSources)
 

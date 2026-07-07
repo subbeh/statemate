@@ -54,11 +54,6 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
 	allSources := profile.AllSources(cfg)
 	allSourcePaths := cfg.ResolveSourcePaths(allSources)
 
@@ -121,13 +116,13 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmpFile.Write(plaintext); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return fmt.Errorf("writing temp file: %w", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	beforeHash, err := state.HashFile(tmpPath)
 	if err != nil {

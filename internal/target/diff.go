@@ -130,7 +130,7 @@ func ShowDiffWithTool(sourcePath, targetPath, diffTool string) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
-		cmd.Run()
+		_ = cmd.Run()
 		return nil
 	}
 
@@ -139,7 +139,7 @@ func ShowDiffWithTool(sourcePath, targetPath, diffTool string) error {
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
-	cmd.Run()
+	_ = cmd.Run()
 
 	diff := out.String()
 	if diff == "" {
@@ -204,7 +204,7 @@ func GenerateDiffWithTool(sourcePath, targetPath, diffTool string) (string, erro
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 
-	cmd.Run()
+	_ = cmd.Run()
 
 	return out.String(), nil
 }
@@ -214,7 +214,7 @@ func IsBinaryFile(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	buf := make([]byte, 512)
 	n, err := f.Read(buf)

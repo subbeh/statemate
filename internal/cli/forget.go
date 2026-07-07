@@ -37,7 +37,7 @@ func runForget(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tracked, err := db.ListFiles()
 	if err != nil {

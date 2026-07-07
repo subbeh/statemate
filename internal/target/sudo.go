@@ -129,13 +129,13 @@ func sudoWriteFile(path string, content []byte, mode os.FileMode) error {
 		return err
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmpFile.Write(content); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return err
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	cmd := exec.Command("sudo", "cp", tmpPath, path)
 	cmd.Stdin = os.Stdin

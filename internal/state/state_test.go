@@ -14,7 +14,7 @@ func TestDBOpenClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		t.Error("database file was not created")
@@ -27,7 +27,7 @@ func TestFileOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	entry := &FileEntry{
 		SourcePath:  "/source/config.yaml",
@@ -99,7 +99,7 @@ func TestScriptOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	has, err := db.HasScriptRun("/scripts/setup.sh")
 	if err != nil {

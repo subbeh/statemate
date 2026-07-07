@@ -108,7 +108,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.DeleteFile(entry.TargetPath); err != nil {
 		return fmt.Errorf("removing from database: %w", err)

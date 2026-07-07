@@ -93,7 +93,7 @@ func (b *BitwardenProvider) unlock() error {
 	out, err := cmd.Output()
 	if err == nil {
 		session := strings.TrimSpace(string(out))
-		os.Setenv("BW_SESSION", session)
+		_ = os.Setenv("BW_SESSION", session)
 		return nil
 	}
 
@@ -112,7 +112,7 @@ func (b *BitwardenProvider) unlock() error {
 	}
 
 	session := strings.TrimSpace(string(out))
-	os.Setenv("BW_SESSION", session)
+	_ = os.Setenv("BW_SESSION", session)
 	return nil
 }
 
@@ -221,8 +221,8 @@ func (b *BitwardenProvider) extractAttachment(item *bwItem, filename string) (st
 		return "", err
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	cmd := exec.Command("bw", "get", "attachment", filename, "--itemid", item.ID, "--output", tmpPath)
 	cmd.Stderr = os.Stderr

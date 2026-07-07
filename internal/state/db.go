@@ -55,7 +55,7 @@ func Open(path string) (*DB, error) {
 	}
 
 	if _, err := db.Exec(schema); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
 

@@ -139,8 +139,8 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 			},
 		}),
 	)
-	table.Bulk(data)
-	table.Render()
+	_ = table.Bulk(data)
+	_ = table.Render()
 
 	scanner := bufio.NewScanner(&buf)
 	for scanner.Scan() {

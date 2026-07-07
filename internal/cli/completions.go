@@ -18,7 +18,7 @@ func completeTrackedFiles(cmd *cobra.Command, args []string, toComplete string) 
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	files, err := db.ListFiles()
 	if err != nil {
@@ -255,7 +255,7 @@ func completeOrphanedFiles(cmd *cobra.Command, args []string, toComplete string)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	orphans, err := findOrphans(db, tree)
 	if err != nil {

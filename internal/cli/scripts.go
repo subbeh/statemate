@@ -68,19 +68,20 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	fmt.Printf("%-10s %-8s %-6s %-30s %s\n", "FREQUENCY", "TIMING", "ORDER", "NAME", "PATH")
 	fmt.Println(strings.Repeat("-", 90))
 
 	for _, script := range allScripts {
 		status := ""
-		if script.Frequency == scripts.FreqOnce {
+		switch script.Frequency {
+		case scripts.FreqOnce:
 			hasRun, _ := db.HasScriptRun(script.Path)
 			if hasRun {
 				status = " (ran)"
 			}
-		} else if script.Frequency == scripts.FreqOnchange {
+		case scripts.FreqOnchange:
 			hasRunWithHash, _ := db.HasScriptRunWithHash(script.Path, script.ContentHash)
 			if hasRunWithHash {
 				status = " (unchanged)"
@@ -169,7 +170,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	profileName, _ := cmd.Flags().GetString("profile")
 	if profileName == "" {

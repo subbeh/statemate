@@ -83,10 +83,7 @@ func parseBitwardenCalls(line string) []FetchItem {
 func parseQuotedArgs(s string) ([]string, string) {
 	var args []string
 	rest := strings.TrimSpace(s)
-	for {
-		if len(rest) == 0 || rest[0] == '}' {
-			break
-		}
+	for len(rest) > 0 && rest[0] != '}' {
 		if rest[0] != '"' {
 			// Non-quoted arg (template variable) — can't resolve statically
 			break

@@ -92,7 +92,7 @@ func runSecretsFetch(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		fmt.Print("Continue with cached secrets? [y/n]: ")
 		var answer string
-		fmt.Scanln(&answer)
+		_, _ = fmt.Scanln(&answer)
 		if strings.ToLower(answer) != "y" {
 			return err
 		}

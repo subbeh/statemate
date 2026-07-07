@@ -98,8 +98,8 @@ func runManaged(cmd *cobra.Command, args []string) error {
 		}),
 	)
 
-	table.Bulk(data)
-	table.Render()
+	_ = table.Bulk(data)
+	_ = table.Render()
 	return nil
 }
 

@@ -413,7 +413,7 @@ func readSingleChar() (byte, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer term.Restore(fd, oldState)
+	defer func() { _ = term.Restore(fd, oldState) }()
 
 	b := make([]byte, 1)
 	_, err = os.Stdin.Read(b)
@@ -452,13 +452,13 @@ func (a *Applier) showConflictDiff(entry *source.Entry) error {
 		if err != nil {
 			return err
 		}
-		defer os.Remove(tmpFile.Name())
+		defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 		if _, err := tmpFile.Write(content); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return err
 		}
-		tmpFile.Close()
+		_ = tmpFile.Close()
 
 		return showDiff(tmpFile.Name(), entry.TargetPath)
 	}

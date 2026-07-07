@@ -76,7 +76,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	orphans, err := findOrphans(db, tree)
 	if err != nil {

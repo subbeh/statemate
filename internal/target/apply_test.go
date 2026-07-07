@@ -15,8 +15,8 @@ func TestApplier_Apply(t *testing.T) {
 	targetDir := filepath.Join(tmpDir, "target")
 	dbPath := filepath.Join(tmpDir, "state.db")
 
-	os.MkdirAll(filepath.Join(sourceDir, "app", ".config", "app"), 0755)
-	os.MkdirAll(targetDir, 0755)
+	_ = os.MkdirAll(filepath.Join(sourceDir, "app", ".config", "app"), 0755)
+	_ = os.MkdirAll(targetDir, 0755)
 
 	configContent := []byte("setting = true\n")
 	srcFile := filepath.Join(sourceDir, "app", ".config", "app", "config.txt")
@@ -28,7 +28,7 @@ func TestApplier_Apply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	scanner := source.NewScanner(targetDir, "")
 	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
@@ -72,8 +72,8 @@ func TestApplier_DryRun(t *testing.T) {
 	targetDir := filepath.Join(tmpDir, "target")
 	dbPath := filepath.Join(tmpDir, "state.db")
 
-	os.MkdirAll(filepath.Join(sourceDir, "app"), 0755)
-	os.MkdirAll(targetDir, 0755)
+	_ = os.MkdirAll(filepath.Join(sourceDir, "app"), 0755)
+	_ = os.MkdirAll(targetDir, 0755)
 
 	srcFile := filepath.Join(sourceDir, "app", "test.txt")
 	if err := os.WriteFile(srcFile, []byte("test"), 0644); err != nil {
@@ -84,7 +84,7 @@ func TestApplier_DryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	scanner := source.NewScanner(targetDir, "")
 	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
@@ -114,8 +114,8 @@ func TestComputeChanges(t *testing.T) {
 	targetDir := filepath.Join(tmpDir, "target")
 	dbPath := filepath.Join(tmpDir, "state.db")
 
-	os.MkdirAll(filepath.Join(sourceDir, "app"), 0755)
-	os.MkdirAll(targetDir, 0755)
+	_ = os.MkdirAll(filepath.Join(sourceDir, "app"), 0755)
+	_ = os.MkdirAll(targetDir, 0755)
 
 	srcFile := filepath.Join(sourceDir, "app", "new.txt")
 	if err := os.WriteFile(srcFile, []byte("new content"), 0644); err != nil {
@@ -126,7 +126,7 @@ func TestComputeChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	scanner := source.NewScanner(targetDir, "")
 	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})

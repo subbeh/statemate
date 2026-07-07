@@ -45,11 +45,6 @@ func runRename(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
 	allSources := profile.AllSources(cfg)
 	allSourcePaths := cfg.ResolveSourcePaths(allSources)
 
@@ -93,7 +88,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	newTargetPath := filepath.Join(filepath.Dir(entry.TargetPath), newName)
 

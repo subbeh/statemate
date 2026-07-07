@@ -83,7 +83,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	tmplCtx, err := template.NewContext(cfg, profileName)
 	if err != nil {

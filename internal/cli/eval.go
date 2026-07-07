@@ -91,7 +91,7 @@ func runEval(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("rendering template: %w", err)
 	}
 
-	os.Stdout.Write(rendered)
+	_, _ = os.Stdout.Write(rendered)
 	return nil
 }
 

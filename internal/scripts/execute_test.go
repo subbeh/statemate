@@ -23,7 +23,7 @@ func TestExecutor_RunOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	contentHash, _ := state.HashFile(scriptPath)
 	script := &Script{
@@ -50,7 +50,7 @@ func TestExecutor_RunOnce(t *testing.T) {
 		t.Error("marker file should exist after script execution")
 	}
 
-	os.Remove(markerFile)
+	_ = os.Remove(markerFile)
 
 	result2, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -81,7 +81,7 @@ func TestExecutor_RunOnchange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	contentHash, _ := state.HashFile(scriptPath)
 	script := &Script{
@@ -103,7 +103,7 @@ func TestExecutor_RunOnchange(t *testing.T) {
 		t.Errorf("expected 1 executed, got %d", result.Executed)
 	}
 
-	os.Remove(markerFile)
+	_ = os.Remove(markerFile)
 
 	result2, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -144,7 +144,7 @@ func TestExecutor_DryRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	contentHash, _ := state.HashFile(scriptPath)
 	script := &Script{
@@ -185,7 +185,7 @@ func TestExecutor_ManualScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	script := &Script{
 		Path:      scriptPath,

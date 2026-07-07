@@ -37,7 +37,7 @@ func runCat(cmd *cobra.Command, args []string) error {
 	}
 
 	if !isEncrypted(content) {
-		os.Stdout.Write(content)
+		_, _ = os.Stdout.Write(content)
 		return nil
 	}
 
@@ -65,6 +65,6 @@ func runCat(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decrypting file: %w", err)
 	}
 
-	os.Stdout.Write(decrypted)
+	_, _ = os.Stdout.Write(decrypted)
 	return nil
 }

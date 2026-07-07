@@ -160,13 +160,13 @@ func (e *Executor) run(script *Script) error {
 		if err != nil {
 			return fmt.Errorf("creating temp file: %w", err)
 		}
-		defer os.Remove(tmpFile.Name())
+		defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 		if _, err := tmpFile.Write(rendered); err != nil {
-			tmpFile.Close()
+			_ = tmpFile.Close()
 			return fmt.Errorf("writing temp file: %w", err)
 		}
-		tmpFile.Close()
+		_ = tmpFile.Close()
 
 		if err := os.Chmod(tmpFile.Name(), 0755); err != nil {
 			return fmt.Errorf("setting temp file permissions: %w", err)

@@ -44,7 +44,7 @@ func init() {
 	addCmd.Flags().StringVarP(&addSource, "source", "s", "", "target source directory")
 	addCmd.Flags().BoolVar(&addTemplate, "template", false, "mark file as template")
 
-	addCmd.RegisterFlagCompletionFunc("source", completeSources)
+	_ = addCmd.RegisterFlagCompletionFunc("source", completeSources)
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {

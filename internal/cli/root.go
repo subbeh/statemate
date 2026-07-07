@@ -49,5 +49,5 @@ func init() {
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
 	rootCmd.AddCommand(versionCmd)
 
-	rootCmd.RegisterFlagCompletionFunc("profile", completeProfiles)
+	_ = rootCmd.RegisterFlagCompletionFunc("profile", completeProfiles)
 }

@@ -9,8 +9,8 @@ import (
 )
 
 func TestDetectFromEnv(t *testing.T) {
-	os.Setenv("STATEMATE_PROFILE", "test-profile")
-	defer os.Unsetenv("STATEMATE_PROFILE")
+	_ = os.Setenv("STATEMATE_PROFILE", "test-profile")
+	defer func() { _ = os.Unsetenv("STATEMATE_PROFILE") }()
 
 	cfg := &config.Config{}
 	got := Detect(cfg)
