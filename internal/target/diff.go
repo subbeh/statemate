@@ -121,6 +121,19 @@ func computeChange(entry *source.Entry, db *state.DB) (*Change, error) {
 }
 
 func showDiff(sourcePath, targetPath string) error {
+	return ShowDiffWithTool(sourcePath, targetPath, "")
+}
+
+func ShowDiffWithTool(sourcePath, targetPath, diffTool string) error {
+	if diffTool != "" {
+		cmd := exec.Command(diffTool, targetPath, sourcePath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		cmd.Run()
+		return nil
+	}
+
 	cmd := exec.Command("diff", "-u", targetPath, sourcePath)
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -167,6 +180,10 @@ func ColorizeDiff(diff string) string {
 }
 
 func GenerateDiff(sourcePath, targetPath string) (string, error) {
+	return GenerateDiffWithTool(sourcePath, targetPath, "")
+}
+
+func GenerateDiffWithTool(sourcePath, targetPath, diffTool string) (string, error) {
 	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
 		content, err := os.ReadFile(sourcePath)
 		if err != nil {
@@ -175,7 +192,14 @@ func GenerateDiff(sourcePath, targetPath string) (string, error) {
 		return fmt.Sprintf("+++ %s (new file)\n%s", targetPath, content), nil
 	}
 
-	cmd := exec.Command("diff", "-u", targetPath, sourcePath)
+	tool := "diff"
+	args := []string{"-u", targetPath, sourcePath}
+	if diffTool != "" {
+		tool = diffTool
+		args = []string{targetPath, sourcePath}
+	}
+
+	cmd := exec.Command(tool, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

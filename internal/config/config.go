@@ -18,6 +18,7 @@ type Config struct {
 	Include      []string     `yaml:"include" toml:"include"`
 	AURHelper    string       `yaml:"aur_helper" toml:"aur_helper"`
 	SecretsCache string       `yaml:"secrets_cache" toml:"secrets_cache"`
+	DiffTool     string       `yaml:"diff_tool" toml:"diff_tool"`
 
 	sourceDir string
 }
@@ -58,6 +59,9 @@ func (c *Config) ApplyOverrides(override *Config) {
 	}
 	if override.Profiles != nil {
 		c.Profiles = override.Profiles
+	}
+	if override.DiffTool != "" {
+		c.DiffTool = override.DiffTool
 	}
 }
 

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `mate eval` command to render templates and output to stdout (useful for debugging)
+- `mate cat` command to display file contents (auto-decrypts encrypted files)
+- `diff_tool` config option and `mate diff --tool` flag for custom diff tools
+- `mate forget` now accepts multiple files and glob patterns
+- `mate clean` command to remove orphaned files (`--all`, `--force` flags)
+- Tab completion for: eval, cat, clean, status, managed (and improved edit/encrypt/decrypt/rename)
 - `mate init` now creates a README.md with setup instructions for new machines
 - `mate init` now initializes a git repository if not already in one
 - `mate status` now shows source directory column with header

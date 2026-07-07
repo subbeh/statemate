@@ -16,11 +16,12 @@ import (
 )
 
 var managedCmd = &cobra.Command{
-	Use:   "managed [path]",
-	Short: "List all managed files",
-	Long:  "List all files in source directories that are managed by mate. Optionally filter by path.",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runManaged,
+	Use:               "managed [path]",
+	Short:             "List all managed files",
+	Long:              "List all files in source directories that are managed by mate. Optionally filter by path.",
+	Args:              cobra.MaximumNArgs(1),
+	RunE:              runManaged,
+	ValidArgsFunction: completeSourceDirs,
 }
 
 func init() {

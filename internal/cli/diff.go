@@ -20,12 +20,16 @@ import (
 var diffCmd = &cobra.Command{
 	Use:               "diff [path]",
 	Short:             "Show pending changes",
-	Long:              "Show full unified diff of pending changes",
+	Long: `Show full unified diff of pending changes.
+
+Use --tool to specify an external diff tool (e.g., delta, difft, vimdiff).
+This can also be set in config with 'diff_tool'.`,
 	RunE:              runDiff,
 	ValidArgsFunction: completeManagedFiles,
 }
 
 func init() {
+	diffCmd.Flags().StringP("tool", "t", "", "external diff tool to use")
 	rootCmd.AddCommand(diffCmd)
 }
 
@@ -128,6 +132,11 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	diffTool, _ := cmd.Flags().GetString("tool")
+	if diffTool == "" {
+		diffTool = cfg.DiffTool
+	}
+
 	for _, change := range changes {
 		if target.IsBinaryFile(change.Entry.SourcePath) {
 			fmt.Printf("Binary files differ: %s\n", util.ShortenPath(change.Entry.TargetPath))
@@ -136,13 +145,13 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 		var diff string
 		if change.Entry.Attrs.Encrypted && change.Entry.Attrs.Template && enc != nil && enc.CanDecrypt() {
-			diff, err = generateEncryptedTemplateDiff(change.Entry, enc, tmplCtx)
+			diff, err = generateEncryptedTemplateDiff(change.Entry, enc, tmplCtx, diffTool)
 		} else if change.Entry.Attrs.Encrypted && enc != nil && enc.CanDecrypt() {
-			diff, err = generateDecryptedDiff(change.Entry, enc)
+			diff, err = generateDecryptedDiff(change.Entry, enc, diffTool)
 		} else if change.Entry.Attrs.Template {
-			diff, err = generateTemplatedDiff(change.Entry, tmplCtx)
+			diff, err = generateTemplatedDiff(change.Entry, tmplCtx, diffTool)
 		} else {
-			diff, err = target.GenerateDiff(change.Entry.SourcePath, change.Entry.TargetPath)
+			diff, err = target.GenerateDiffWithTool(change.Entry.SourcePath, change.Entry.TargetPath, diffTool)
 		}
 		fmt.Printf("=== %s ===\n", util.ShortenPath(change.Entry.TargetPath))
 		if err != nil {
@@ -152,7 +161,11 @@ func runDiff(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("generating diff for %s: %w", util.ShortenPath(change.Entry.TargetPath), err)
 			}
 		} else if diff != "" {
-			fmt.Println(target.ColorizeDiff(diff))
+			if diffTool == "" {
+				fmt.Println(target.ColorizeDiff(diff))
+			} else {
+				fmt.Println(diff)
+			}
 		} else {
 			fmt.Println("(no content difference, state mismatch only)")
 		}
@@ -161,7 +174,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func generateEncryptedTemplateDiff(entry *source.Entry, enc *encrypt.AgeEncryptor, tmplCtx *template.Context) (string, error) {
+func generateEncryptedTemplateDiff(entry *source.Entry, enc *encrypt.AgeEncryptor, tmplCtx *template.Context, diffTool string) (string, error) {
 	ciphertext, err := os.ReadFile(entry.SourcePath)
 	if err != nil {
 		return "", err
@@ -189,10 +202,10 @@ func generateEncryptedTemplateDiff(entry *source.Entry, enc *encrypt.AgeEncrypto
 	}
 	tmpFile.Close()
 
-	return target.GenerateDiff(tmpFile.Name(), entry.TargetPath)
+	return target.GenerateDiffWithTool(tmpFile.Name(), entry.TargetPath, diffTool)
 }
 
-func generateDecryptedDiff(entry *source.Entry, enc *encrypt.AgeEncryptor) (string, error) {
+func generateDecryptedDiff(entry *source.Entry, enc *encrypt.AgeEncryptor, diffTool string) (string, error) {
 	ciphertext, err := os.ReadFile(entry.SourcePath)
 	if err != nil {
 		return "", err
@@ -215,10 +228,10 @@ func generateDecryptedDiff(entry *source.Entry, enc *encrypt.AgeEncryptor) (stri
 	}
 	tmpFile.Close()
 
-	return target.GenerateDiff(tmpFile.Name(), entry.TargetPath)
+	return target.GenerateDiffWithTool(tmpFile.Name(), entry.TargetPath, diffTool)
 }
 
-func generateTemplatedDiff(entry *source.Entry, tmplCtx *template.Context) (string, error) {
+func generateTemplatedDiff(entry *source.Entry, tmplCtx *template.Context, diffTool string) (string, error) {
 	rendered, err := template.RenderFile(entry.SourcePath, tmplCtx)
 	if err != nil {
 		return "", fmt.Errorf("rendering template: %w", err)
@@ -236,5 +249,5 @@ func generateTemplatedDiff(entry *source.Entry, tmplCtx *template.Context) (stri
 	}
 	tmpFile.Close()
 
-	return target.GenerateDiff(tmpFile.Name(), entry.TargetPath)
+	return target.GenerateDiffWithTool(tmpFile.Name(), entry.TargetPath, diffTool)
 }

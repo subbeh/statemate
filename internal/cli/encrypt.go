@@ -33,7 +33,7 @@ Examples:
   mate encrypt zsh/.zshrc`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runEncrypt,
-	ValidArgsFunction: completeManagedFiles,
+	ValidArgsFunction: completeUnencryptedSourceFiles,
 }
 
 func init() {

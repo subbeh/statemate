@@ -32,7 +32,7 @@ Examples:
   mate decrypt secrets.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runDecrypt,
-	ValidArgsFunction: completeManagedFiles,
+	ValidArgsFunction: completeEncryptedSourceFiles,
 }
 
 func init() {

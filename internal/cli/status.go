@@ -20,10 +20,11 @@ import (
 )
 
 var statusCmd = &cobra.Command{
-	Use:   "status [path]",
-	Short: "Show files that would change on apply",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runStatus,
+	Use:               "status [path]",
+	Short:             "Show files that would change on apply",
+	Args:              cobra.MaximumNArgs(1),
+	RunE:              runStatus,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 func init() {
