@@ -141,13 +141,15 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, change := range changes {
-		if target.IsBinaryFile(change.Entry.SourcePath) {
+		if !change.Entry.Generated && target.IsBinaryFile(change.Entry.SourcePath) {
 			fmt.Printf("Binary files differ: %s\n", util.ShortenPath(change.Entry.TargetPath))
 			continue
 		}
 
 		var diff string
-		if change.Entry.Attrs.Encrypted && change.Entry.Attrs.Template && enc != nil && enc.CanDecrypt() {
+		if change.Entry.Generated {
+			diff, err = generateGeneratedDiff(change.Entry, diffTool)
+		} else if change.Entry.Attrs.Encrypted && change.Entry.Attrs.Template && enc != nil && enc.CanDecrypt() {
 			diff, err = generateEncryptedTemplateDiff(change.Entry, enc, tmplCtx, diffTool)
 		} else if change.Entry.Attrs.Encrypted && enc != nil && enc.CanDecrypt() {
 			diff, err = generateDecryptedDiff(change.Entry, enc, diffTool)
@@ -248,6 +250,22 @@ func generateTemplatedDiff(entry *source.Entry, tmplCtx *template.Context, diffT
 	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.Write(rendered); err != nil {
+		return "", err
+	}
+	_ = tmpFile.Close()
+
+	return target.GenerateDiffWithTool(tmpFile.Name(), entry.TargetPath, diffTool)
+}
+
+func generateGeneratedDiff(entry *source.Entry, diffTool string) (string, error) {
+	tmpFile, err := os.CreateTemp("", "mate-diff-*")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	defer func() { _ = tmpFile.Close() }()
+
+	if _, err := tmpFile.WriteString(entry.GeneratedContent); err != nil {
 		return "", err
 	}
 	_ = tmpFile.Close()
