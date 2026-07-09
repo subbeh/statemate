@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
@@ -124,9 +125,32 @@ func ShouldRun(script *Script, db *state.DB) (bool, string, error) {
 	case FreqAlways:
 		return true, "", nil
 
+	case FreqDaily:
+		return shouldRunInterval(script, db, 24*time.Hour)
+
+	case FreqWeekly:
+		return shouldRunInterval(script, db, 7*24*time.Hour)
+
+	case FreqMonthly:
+		return shouldRunInterval(script, db, 30*24*time.Hour)
+
 	default:
 		return false, "unknown frequency", nil
 	}
+}
+
+func shouldRunInterval(script *Script, db *state.DB, interval time.Duration) (bool, string, error) {
+	run, err := db.GetScriptRun(script.Path)
+	if err != nil {
+		return false, "", err
+	}
+	if run == nil {
+		return true, "", nil
+	}
+	if time.Since(run.RunAt) >= interval {
+		return true, "", nil
+	}
+	return false, fmt.Sprintf("last run %s ago", time.Since(run.RunAt).Round(time.Hour)), nil
 }
 
 func PendingScripts(scripts Scripts, db *state.DB) (Scripts, error) {
@@ -203,7 +227,8 @@ func (e *Executor) recordRun(script *Script) error {
 	if e.dryRun {
 		return nil
 	}
-	if script.Frequency == FreqOnce || script.Frequency == FreqOnchange {
+	switch script.Frequency {
+	case FreqOnce, FreqOnchange, FreqDaily, FreqWeekly, FreqMonthly:
 		return e.db.RecordScriptRun(script.Path, script.ContentHash)
 	}
 	return nil
