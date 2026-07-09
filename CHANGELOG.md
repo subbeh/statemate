@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate packages apply` now shows package manager output during install/uninstall
 - `generate` directive in `.mate.yaml` to dynamically create files from templates
 - `indent` template function for proper YAML multiline content formatting
+- `daily`, `weekly`, and `monthly` script frequencies for interval-based execution
 
 ### Changed
 - `mate profile` now shows the sources that apply to the active profile

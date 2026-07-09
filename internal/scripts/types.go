@@ -14,6 +14,9 @@ const (
 	FreqOnce     Frequency = iota // run once ever
 	FreqOnchange                  // run when content changes
 	FreqAlways                    // run on every apply
+	FreqDaily                     // run at most once per day
+	FreqWeekly                    // run at most once per week
+	FreqMonthly                   // run at most once per month
 	FreqManual                    // manual only
 )
 
@@ -25,6 +28,12 @@ func (f Frequency) String() string {
 		return "onchange"
 	case FreqAlways:
 		return "always"
+	case FreqDaily:
+		return "daily"
+	case FreqWeekly:
+		return "weekly"
+	case FreqMonthly:
+		return "monthly"
 	case FreqManual:
 		return "manual"
 	default:
@@ -102,6 +111,12 @@ func ParseScriptName(filename string) (name string, freq Frequency, timing Timin
 			freq = FreqOnchange
 		case "always":
 			freq = FreqAlways
+		case "daily":
+			freq = FreqDaily
+		case "weekly":
+			freq = FreqWeekly
+		case "monthly":
+			freq = FreqMonthly
 		case "before":
 			timing = TimingBefore
 		case "after":
