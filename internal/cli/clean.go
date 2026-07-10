@@ -71,7 +71,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 
 	if profileName != "" {
-		tree = tree.FilterByProfile(profileName)
+		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
 	}
 
 	db, err := state.Open("")

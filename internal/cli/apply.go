@@ -77,8 +77,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolve conflicts before applying")
 	}
 
+	profileChain := profile.InheritanceChain(cfg, profileName)
 	if profileName != "" {
-		tree = tree.FilterByProfile(profileName)
+		tree = tree.FilterByProfile(profileChain)
 	}
 
 	db, err := state.Open("")
@@ -127,7 +128,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0)
 
-	beforeScripts := allScripts.Automatic().ByProfile(profileName).ByTiming(scripts.TimingBefore)
+	beforeScripts := allScripts.Automatic().ByProfile(profileChain).ByTiming(scripts.TimingBefore)
 	beforeScripts.Sort()
 
 	if len(beforeScripts) > 0 {
@@ -158,7 +159,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	afterScripts := allScripts.Automatic().ByProfile(profileName).ByTiming(scripts.TimingAfter)
+	afterScripts := allScripts.Automatic().ByProfile(profileChain).ByTiming(scripts.TimingAfter)
 	afterScripts.Sort()
 
 	if len(afterScripts) > 0 {

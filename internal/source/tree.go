@@ -54,14 +54,23 @@ func (t *Tree) HasConflicts() bool {
 	return len(t.Conflicts) > 0
 }
 
-func (t *Tree) FilterByProfile(profile string) *Tree {
+func (t *Tree) FilterByProfile(profileChain []string) *Tree {
 	filtered := &Tree{}
 	for _, e := range t.Entries {
-		if e.Attrs.Profile == "" || e.Attrs.Profile == profile {
+		if e.Attrs.Profile == "" || profileMatches(e.Attrs.Profile, profileChain) {
 			filtered.Entries = append(filtered.Entries, e)
 		}
 	}
 	return filtered
+}
+
+func profileMatches(target string, chain []string) bool {
+	for _, p := range chain {
+		if p == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *Tree) Files() []*Entry {

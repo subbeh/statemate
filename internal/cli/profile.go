@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
@@ -50,7 +51,12 @@ func runProfile(cmd *cobra.Command, args []string) error {
 	}
 
 	if profileName != "" {
-		fmt.Printf("Profile: %s\n", profileName)
+		chain := profile.InheritanceChain(cfg, profileName)
+		if len(chain) > 1 {
+			fmt.Printf("Profile: %s\n", strings.Join(chain, " > "))
+		} else {
+			fmt.Printf("Profile: %s\n", profileName)
+		}
 		fmt.Printf("Source:  %s\n", source)
 		if source == "auto-detected" {
 			printDetectionReason(cfg, profileName)
