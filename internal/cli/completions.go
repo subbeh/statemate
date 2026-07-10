@@ -312,7 +312,7 @@ func completeOrphanedFiles(cmd *cobra.Command, args []string, toComplete string)
 	}
 
 	if profileName != "" {
-		tree = tree.FilterByProfile(profileName)
+		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
 	}
 
 	db, err := state.Open("")

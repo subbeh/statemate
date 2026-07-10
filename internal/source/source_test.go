@@ -135,7 +135,7 @@ func TestScannerWithProfile(t *testing.T) {
 		t.Fatalf("expected 2 files, got %d", len(tree.Files()))
 	}
 
-	filtered := tree.FilterByProfile("work")
+	filtered := tree.FilterByProfile([]string{"work"})
 	files := filtered.Files()
 
 	var hasDefault, hasWork bool
