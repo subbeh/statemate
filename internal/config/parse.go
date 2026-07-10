@@ -335,6 +335,10 @@ func (c *Config) resolveRelPath(path string) string {
 	return path
 }
 
+func (c *Config) ResolveRelPath(path string) string {
+	return c.resolveRelPath(path)
+}
+
 func mergePackageLists(base, add *PackageList) *PackageList {
 	if add == nil {
 		return base

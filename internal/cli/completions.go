@@ -9,6 +9,7 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
+	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 )
 
@@ -29,10 +30,15 @@ func completeTrackedFiles(cmd *cobra.Command, args []string, toComplete string) 
 		seen[arg] = true
 	}
 
+	cwd, _ := os.Getwd()
+
 	var completions []string
 	for _, f := range files {
-		if !seen[f.TargetPath] {
-			completions = append(completions, f.TargetPath)
+		if seen[f.TargetPath] {
+			continue
+		}
+		if rel := relativeTo(f.TargetPath, cwd); rel != "" {
+			completions = append(completions, rel)
 		}
 	}
 
@@ -71,12 +77,8 @@ func completeManagedFiles(cmd *cobra.Command, args []string, toComplete string) 
 
 	var completions []string
 	for _, e := range tree.Files() {
-		// Include if current dir is under target path, source path, or vice versa
-		if strings.HasPrefix(e.TargetPath, cwd+"/") ||
-			strings.HasPrefix(cwd, filepath.Dir(e.TargetPath)) ||
-			strings.HasPrefix(e.SourcePath, cwd+"/") ||
-			strings.HasPrefix(cwd, filepath.Dir(e.SourcePath)) {
-			completions = append(completions, e.TargetPath)
+		if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
+			completions = append(completions, rel)
 		}
 	}
 
@@ -111,9 +113,19 @@ func completeSourceFiles(cmd *cobra.Command, args []string, toComplete string) (
 		return nil, cobra.ShellCompDirectiveError
 	}
 
+	cwd, _ := os.Getwd()
+	extraFiles := resolveExtraFiles(cfg)
+
 	var completions []string
 	for _, e := range tree.Files() {
-		completions = append(completions, e.SourcePath)
+		if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
+			completions = append(completions, rel)
+		}
+	}
+	for _, f := range extraFiles {
+		if rel := relativeToDir(f, cwd, cfg.SourceDir()); rel != "" {
+			completions = append(completions, rel)
+		}
 	}
 
 	return completions, cobra.ShellCompDirectiveNoFileComp
@@ -147,10 +159,22 @@ func completeEncryptedSourceFiles(cmd *cobra.Command, args []string, toComplete 
 		return nil, cobra.ShellCompDirectiveError
 	}
 
+	cwd, _ := os.Getwd()
+	extraFiles := resolveExtraFiles(cfg)
+
 	var completions []string
 	for _, e := range tree.Files() {
 		if e.Attrs.Encrypted {
-			completions = append(completions, e.SourcePath)
+			if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
+				completions = append(completions, rel)
+			}
+		}
+	}
+	for _, f := range extraFiles {
+		if strings.HasSuffix(f, "#encrypted") {
+			if rel := relativeToDir(f, cwd, cfg.SourceDir()); rel != "" {
+				completions = append(completions, rel)
+			}
 		}
 	}
 
@@ -185,10 +209,22 @@ func completeUnencryptedSourceFiles(cmd *cobra.Command, args []string, toComplet
 		return nil, cobra.ShellCompDirectiveError
 	}
 
+	cwd, _ := os.Getwd()
+	extraFiles := resolveExtraFiles(cfg)
+
 	var completions []string
 	for _, e := range tree.Files() {
 		if !e.Attrs.Encrypted {
-			completions = append(completions, e.SourcePath)
+			if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
+				completions = append(completions, rel)
+			}
+		}
+	}
+	for _, f := range extraFiles {
+		if !strings.HasSuffix(f, "#encrypted") {
+			if rel := relativeToDir(f, cwd, cfg.SourceDir()); rel != "" {
+				completions = append(completions, rel)
+			}
 		}
 	}
 
@@ -290,6 +326,8 @@ func completeOrphanedFiles(cmd *cobra.Command, args []string, toComplete string)
 		return nil, cobra.ShellCompDirectiveError
 	}
 
+	cwd, _ := os.Getwd()
+
 	seen := make(map[string]bool)
 	for _, arg := range args {
 		seen[arg] = true
@@ -297,8 +335,11 @@ func completeOrphanedFiles(cmd *cobra.Command, args []string, toComplete string)
 
 	var completions []string
 	for _, o := range orphans {
-		if !seen[o] {
-			completions = append(completions, o)
+		if seen[o] {
+			continue
+		}
+		if rel := relativeTo(o, cwd); rel != "" {
+			completions = append(completions, rel)
 		}
 	}
 
@@ -323,6 +364,76 @@ func completeSourceDirs(cmd *cobra.Command, args []string, toComplete string) ([
 
 	sources := profile.ResolveSources(cfg, profileName)
 	return sources, cobra.ShellCompDirectiveNoFileComp
+}
+
+// resolveExtraFiles returns absolute paths of include and var_files from the config.
+// These files live outside the source tree but can be edited/encrypted/decrypted.
+func resolveExtraFiles(cfg *config.Config) []string {
+	var files []string
+	for _, f := range cfg.Include {
+		files = append(files, cfg.ResolveRelPath(f))
+	}
+	for _, f := range cfg.VarFiles {
+		files = append(files, cfg.ResolveRelPath(f))
+	}
+	return files
+}
+
+// cwdRelativeCompletion returns a relative path for the entry if cwd is within
+// the same source directory or target directory as the entry. Returns "" if no match.
+func cwdRelativeCompletion(e *source.Entry, cwd string, sourcePaths []string) string {
+	// Check if cwd is within or equal to the entry's source directory
+	for _, sp := range sourcePaths {
+		if !strings.HasPrefix(e.SourcePath, sp+"/") {
+			continue
+		}
+		if cwd == sp || strings.HasPrefix(cwd, sp+"/") {
+			rel, err := filepath.Rel(cwd, e.SourcePath)
+			if err == nil {
+				return rel
+			}
+		}
+	}
+
+	// Check if the entry's target is under cwd
+	if strings.HasPrefix(e.TargetPath, cwd+"/") {
+		rel, err := filepath.Rel(cwd, e.TargetPath)
+		if err == nil {
+			return rel
+		}
+	}
+
+	return ""
+}
+
+// relativeToDir returns a path relative to cwd if the file is under cwd or
+// cwd is under sourceDir (so the file can be expressed relative to cwd without
+// leaving the source tree). Returns "" if no meaningful relative path exists.
+func relativeToDir(absPath, cwd, sourceDir string) string {
+	// File is directly under cwd
+	if strings.HasPrefix(absPath, cwd+"/") {
+		rel, err := filepath.Rel(cwd, absPath)
+		if err == nil {
+			return rel
+		}
+	}
+	// Cwd is under sourceDir (or is sourceDir), and so is the file
+	if (cwd == sourceDir || strings.HasPrefix(cwd, sourceDir+"/")) &&
+		strings.HasPrefix(absPath, sourceDir+"/") {
+		rel, err := filepath.Rel(cwd, absPath)
+		if err == nil {
+			return rel
+		}
+	}
+	return ""
+}
+
+// relativeTo returns path relative to base if path is under base, otherwise "".
+func relativeTo(path, base string) string {
+	if rel, ok := strings.CutPrefix(path, base+"/"); ok {
+		return rel
+	}
+	return ""
 }
 
 func completeFilesInSourceDir(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

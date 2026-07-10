@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bitwarden provider now shows clear error messages when vault is locked or session is invalid instead of "unexpected end of JSON input"
 - `mate encrypt` and `mate decrypt` now work with files outside the source tree (e.g. var_files in `.matedata/`)
 - Encrypted var_files (`#encrypted` suffix) are now transparently decrypted during template rendering
+- Tab completion now shows only files in the current directory tree with relative paths instead of all files with absolute paths
 
 ### Added
 - Per-source `target_base` in `.mate.yaml` to deploy files to a different root directory
