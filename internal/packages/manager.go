@@ -9,6 +9,7 @@ type Manager interface {
 	Name() string
 	IsAvailable() bool
 	ListInstalled() ([]Package, error)
+	QueryInstalled(pkgs []string) ([]Package, error)
 	Describe(pkgs []string) (map[string]string, error)
 	Install(pkgs []string) error
 	Uninstall(pkgs []string) error

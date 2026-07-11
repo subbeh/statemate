@@ -146,27 +146,31 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 			continue
 		}
 
-		installed, err := manager.ListInstalled()
-		if err != nil {
-			return nil, err
-		}
-
-		installedMap := make(map[string]Package)
-		for _, p := range installed {
-			installedMap[p.Name] = p
-		}
-
 		wantedMap := make(map[string]*pkgEntry)
 		for _, e := range pkgs {
 			name, _ := ParsePackageSpec(e.spec)
 			wantedMap[name] = e
 		}
 
+		// Query wanted packages (includes deps, accurate check)
+		wantedNames := make([]string, 0, len(wantedMap))
+		for name := range wantedMap {
+			wantedNames = append(wantedNames, name)
+		}
+		queried, err := manager.QueryInstalled(wantedNames)
+		if err != nil {
+			return nil, err
+		}
+		queriedMap := make(map[string]Package)
+		for _, p := range queried {
+			queriedMap[p.Name] = p
+		}
+
 		result := SyncResult{Manager: managerName}
 
 		for name, e := range wantedMap {
 			_, version := ParsePackageSpec(e.spec)
-			if inst, ok := installedMap[name]; ok {
+			if inst, ok := queriedMap[name]; ok {
 				status := PackageStatus{
 					Name:      name,
 					Version:   version,
@@ -188,10 +192,15 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 			}
 		}
 
-		for name, inst := range installedMap {
-			if _, ok := wantedMap[name]; !ok {
+		// List explicitly installed for extras detection
+		installed, err := manager.ListInstalled()
+		if err != nil {
+			return nil, err
+		}
+		for _, inst := range installed {
+			if _, ok := wantedMap[inst.Name]; !ok {
 				result.Statuses = append(result.Statuses, PackageStatus{
-					Name:      name,
+					Name:      inst.Name,
 					Status:    StatusExtra,
 					Installed: inst.Version,
 				})

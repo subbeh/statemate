@@ -24,7 +24,7 @@ func (p *PacmanManager) IsAvailable() bool {
 }
 
 func (p *PacmanManager) ListInstalled() ([]Package, error) {
-	cmd := exec.Command("pacman", "-Qentt")
+	cmd := exec.Command("pacman", "-Qe")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -48,6 +48,35 @@ func (p *PacmanManager) ListInstalled() ([]Package, error) {
 		}
 	}
 
+	return packages, scanner.Err()
+}
+
+func (p *PacmanManager) QueryInstalled(pkgs []string) ([]Package, error) {
+	if len(pkgs) == 0 {
+		return nil, nil
+	}
+	args := append([]string{"-Q"}, pkgs...)
+	cmd := exec.Command("pacman", args...)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	_ = cmd.Run()
+
+	var packages []Package
+	scanner := bufio.NewScanner(&out)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 1 {
+			pkg := Package{Name: parts[0]}
+			if len(parts) >= 2 {
+				pkg.Version = parts[1]
+			}
+			packages = append(packages, pkg)
+		}
+	}
 	return packages, scanner.Err()
 }
 
