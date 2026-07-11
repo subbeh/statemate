@@ -59,6 +59,39 @@ func (b *BrewManager) ListInstalled() ([]Package, error) {
 	return packages, scanner.Err()
 }
 
+func (b *BrewManager) QueryInstalled(pkgs []string) ([]Package, error) {
+	if len(pkgs) == 0 {
+		return nil, nil
+	}
+	cmd := exec.Command("brew", "list", "--formula", "-1")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	_ = cmd.Run()
+
+	installed := make(map[string]bool)
+	scanner := bufio.NewScanner(&out)
+	for scanner.Scan() {
+		installed[strings.TrimSpace(scanner.Text())] = true
+	}
+
+	cmd = exec.Command("brew", "list", "--cask", "-1")
+	out.Reset()
+	cmd.Stdout = &out
+	_ = cmd.Run()
+	scanner = bufio.NewScanner(&out)
+	for scanner.Scan() {
+		installed[strings.TrimSpace(scanner.Text())] = true
+	}
+
+	var result []Package
+	for _, name := range pkgs {
+		if installed[name] {
+			result = append(result, Package{Name: name})
+		}
+	}
+	return result, nil
+}
+
 func (b *BrewManager) Describe(pkgs []string) (map[string]string, error) {
 	if len(pkgs) == 0 {
 		return nil, nil
