@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/packages"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
@@ -159,6 +161,10 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := promptMissingPackages(cfg, profileName, sourcePaths, dryRun, force); err != nil {
+		return err
+	}
+
 	afterScripts := allScripts.Automatic().ByProfile(profileChain).ByTiming(scripts.TimingAfter)
 	afterScripts.Sort()
 
@@ -188,6 +194,50 @@ func runApply(cmd *cobra.Command, args []string) error {
 			fmt.Println("Nothing to do")
 		} else {
 			fmt.Printf("%s\n", strings.Join(parts, ", "))
+		}
+	}
+
+	return nil
+}
+
+func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, dryRun bool, autoConfirm bool) error {
+	results, err := packages.ComputeSync(cfg, profileName, sourcePaths)
+	if err != nil {
+		return nil
+	}
+
+	for _, result := range results {
+		missing := result.Missing()
+		if len(missing) == 0 {
+			continue
+		}
+
+		manager, err := packages.GetManager(result.Manager, cfg.AURHelper)
+		if err != nil {
+			continue
+		}
+
+		if dryRun {
+			fmt.Printf("\nMissing %s packages: %s\n", result.Manager, strings.Join(missing, ", "))
+			continue
+		}
+
+		fmt.Printf("\nMissing %s packages: %s\n", result.Manager, strings.Join(missing, ", "))
+		if !autoConfirm {
+			fmt.Print("Install? [y/N] ")
+			reader := bufio.NewReader(os.Stdin)
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return nil
+			}
+			input = strings.TrimSpace(strings.ToLower(input))
+			if input != "y" && input != "yes" {
+				continue
+			}
+		}
+
+		if err := manager.Install(missing); err != nil {
+			return fmt.Errorf("installing packages: %w", err)
 		}
 	}
 
