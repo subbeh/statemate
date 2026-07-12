@@ -225,6 +225,79 @@ targets:
 	}
 }
 
+func TestScannerDirConfigIgnore(t *testing.T) {
+	dir := t.TempDir()
+
+	appDir := filepath.Join(dir, "app", ".config", "app")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "config.yaml"), []byte("app"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, ".stylua.toml"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dirCfgContent := `
+ignore:
+  - .stylua.toml
+`
+	if err := os.WriteFile(filepath.Join(dir, "app", ".mate.yaml"), []byte(dirCfgContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner("/home/testuser", "")
+	tree, err := scanner.Scan([]string{filepath.Join(dir, "app")})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	files := tree.Files()
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file (config.yaml), got %d", len(files))
+	}
+	if files[0].Name != "config.yaml" {
+		t.Errorf("expected config.yaml, got %q", files[0].Name)
+	}
+}
+
+func TestScannerDirConfigIgnoreScopedToSource(t *testing.T) {
+	dir := t.TempDir()
+
+	// Source "a" ignores README.md; source "b" does not.
+	for _, src := range []string{"a", "b"} {
+		srcDir := filepath.Join(dir, src)
+		if err := os.MkdirAll(srcDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(srcDir, "README.md"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dirCfgContent := `
+ignore:
+  - README.md
+`
+	if err := os.WriteFile(filepath.Join(dir, "a", ".mate.yaml"), []byte(dirCfgContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner("/home/testuser", "")
+	tree, err := scanner.Scan([]string{filepath.Join(dir, "a"), filepath.Join(dir, "b")})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	files := tree.Files()
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file (b/README.md), got %d", len(files))
+	}
+	if !filepath.IsAbs(files[0].SourcePath) || filepath.Base(filepath.Dir(files[0].SourcePath)) != "b" {
+		t.Errorf("expected the surviving file to come from source b, got %q", files[0].SourcePath)
+	}
+}
+
 func TestScannerSkipsSpecialDirs(t *testing.T) {
 	dir := t.TempDir()
 

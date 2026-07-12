@@ -59,6 +59,11 @@ func (s *Scanner) scanSource(sourceDir string, tree *Tree) error {
 		s.dirConfigs[sourceDir] = dirCfg
 	}
 
+	var dirIgnore *gitignore.GitIgnore
+	if dirCfg != nil && len(dirCfg.Ignore) > 0 {
+		dirIgnore = gitignore.CompileIgnoreLines(dirCfg.Ignore...)
+	}
+
 	if dirCfg != nil && len(dirCfg.Generate) > 0 {
 		if err := s.processGenerateDirectives(sourceDir, dirCfg, tree); err != nil {
 			return err
@@ -89,6 +94,13 @@ func (s *Scanner) scanSource(sourceDir string, tree *Tree) error {
 		}
 
 		if s.isIgnored(filepath.Join(sourceName, relToSource), d.IsDir()) {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if matchesIgnore(dirIgnore, relToSource, d.IsDir()) {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -216,7 +228,11 @@ func (s *Scanner) shouldSkip(name string) bool {
 }
 
 func (s *Scanner) isIgnored(relPath string, isDir bool) bool {
-	if s.ignore == nil {
+	return matchesIgnore(s.ignore, relPath, isDir)
+}
+
+func matchesIgnore(ignore *gitignore.GitIgnore, relPath string, isDir bool) bool {
+	if ignore == nil {
 		return false
 	}
 
@@ -225,7 +241,7 @@ func (s *Scanner) isIgnored(relPath string, isDir bool) bool {
 		checkPath = relPath + "/"
 	}
 
-	return s.ignore.MatchesPath(checkPath)
+	return ignore.MatchesPath(checkPath)
 }
 
 func (s *Scanner) processGenerateDirectives(sourceDir string, dirCfg *config.DirConfig, tree *Tree) error {
