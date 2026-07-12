@@ -106,6 +106,9 @@ group: root                 # default group for all files
 perm: "644"                 # default permissions for all files
 targets:
   etc: /etc                 # map etc/ subdirectory to /etc instead of ~/etc
+ignore:                     # gitignore-style patterns, scoped to this source
+  - .stylua.toml
+  - "*.md"
 ```
 
 This is useful for system files:
@@ -190,6 +193,14 @@ Machine-specific overrides at `~/.config/statemate/mate.yaml`:
 ```yaml
 source_dir: "~/dotfiles"  # where to find mate.yaml
 profile: work             # override auto-detection
+```
+
+The `STATEMATE_DIR` environment variable overrides `source_dir` (and the
+current directory) to point at a different dotfiles directory, useful for
+temporarily working against another repo:
+
+```bash
+STATEMATE_DIR=~/other-dotfiles mate status
 ```
 
 ## Commands

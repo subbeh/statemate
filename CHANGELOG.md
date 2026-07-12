@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `ignore` key in `mate.yaml` for gitignore-style patterns to exclude files from scanning (replaces `.mateignore` files)
+- `ignore` key in per-source `.mate.yaml` for patterns scoped to that source only
+- Documented the `STATEMATE_DIR` environment variable, which overrides `source_dir` to point at a different dotfiles directory
 - Per-source `target_base` in `.mate.yaml` to deploy files to a different root directory
 - `.mate.yaml` files now support template rendering (use variables like `{{ .Vars.workspace }}`)
 - `mate add` prompts to create/update `.mate.yaml` when adding files outside home directory

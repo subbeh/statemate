@@ -121,6 +121,7 @@ type DirConfig struct {
 	TargetBase string            `yaml:"target_base" toml:"target_base"`
 	Profile    string            `yaml:"profile" toml:"profile"`
 	Targets    map[string]string `yaml:"targets" toml:"targets"`
+	Ignore     []string          `yaml:"ignore" toml:"ignore"`
 	Owner      string            `yaml:"owner" toml:"owner"`
 	Group      string            `yaml:"group" toml:"group"`
 	Perm       string            `yaml:"perm" toml:"perm"`
