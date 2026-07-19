@@ -209,11 +209,20 @@ func (s *Scanner) getParentAttrs(relDir string) Attrs {
 		if partAttrs.Perm != 0 {
 			attrs.Perm = partAttrs.Perm
 		}
+		if partAttrs.PermR != 0 {
+			attrs.PermR = partAttrs.PermR
+		}
 		if partAttrs.Owner != "" {
 			attrs.Owner = partAttrs.Owner
 		}
+		if partAttrs.OwnerR != "" {
+			attrs.OwnerR = partAttrs.OwnerR
+		}
 		if partAttrs.Group != "" {
 			attrs.Group = partAttrs.Group
+		}
+		if partAttrs.GroupR != "" {
+			attrs.GroupR = partAttrs.GroupR
 		}
 	}
 	return attrs
