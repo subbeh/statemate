@@ -298,6 +298,35 @@ ignore:
 	}
 }
 
+func TestScannerPermRInheritance(t *testing.T) {
+	dir := t.TempDir()
+
+	binDir := filepath.Join(dir, "app", ".local", "bin#perm-r:755")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(binDir, "script.sh"), []byte("#!/bin/sh"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner("/home/testuser", "")
+	tree, err := scanner.Scan([]string{filepath.Join(dir, "app")})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	files := tree.Files()
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	if files[0].Attrs.Perm != 0755 {
+		t.Errorf("expected perm 0755 from perm-r inheritance, got %#o", files[0].Attrs.Perm)
+	}
+	if files[0].TargetPath != "/home/testuser/.local/bin/script.sh" {
+		t.Errorf("expected target /home/testuser/.local/bin/script.sh, got %q", files[0].TargetPath)
+	}
+}
+
 func TestScannerSkipsSpecialDirs(t *testing.T) {
 	dir := t.TempDir()
 
