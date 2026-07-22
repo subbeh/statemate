@@ -154,6 +154,12 @@ func runApply(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				return fmt.Errorf("reloading template context: %w", err)
 			}
+			if mgrErr == nil {
+				tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
+					key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
+					return mgr.Get(key)
+				}
+			}
 		}
 	}
 
