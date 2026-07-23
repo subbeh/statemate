@@ -48,6 +48,19 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) ([]*Ch
 
 	var changes []*Change
 
+	for _, dir := range tree.Dirs() {
+		if dir.Attrs.Perm == 0 {
+			continue
+		}
+		info, err := os.Lstat(dir.TargetPath)
+		if err != nil {
+			continue
+		}
+		if info.Mode().Perm() != os.FileMode(dir.Attrs.Perm) {
+			changes = append(changes, &Change{Entry: dir, Status: StatusModified})
+		}
+	}
+
 	for _, entry := range tree.Files() {
 		change, err := computeChange(entry, db, &o)
 		if err != nil {
