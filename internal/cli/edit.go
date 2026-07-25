@@ -65,19 +65,7 @@ func runEdit(cmd *cobra.Command, args []string) error {
 
 	srcPattern := args[0]
 
-	var entry *source.Entry
-	for _, e := range tree.Files() {
-		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
-		relPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
-		if relPath == srcPattern || e.SourcePath == srcPattern || e.TargetPath == srcPattern ||
-			strings.HasSuffix(relPath, "/"+srcPattern) ||
-			strings.HasSuffix(e.SourcePath, "/"+srcPattern) ||
-			strings.HasSuffix(e.TargetPath, "/"+srcPattern) {
-			entry = e
-			break
-		}
-	}
-
+	entry := findSourceEntry(tree.Files(), srcPattern)
 	if entry == nil {
 		return fmt.Errorf("file not found: %s", srcPattern)
 	}
@@ -186,6 +174,58 @@ func runEditor(editor, path string) error {
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("editor exited with error: %w", err)
+	}
+
+	return nil
+}
+
+// findSourceEntry finds a source entry matching the given pattern.
+// Match priority:
+// 1. Exact match against source path, target path, or source/relPath
+// 2. Pattern resolved relative to cwd matches a target path
+// 3. Suffix match (only if pattern contains a path separator)
+func findSourceEntry(entries []*source.Entry, pattern string) *source.Entry {
+	// Expand ~ to home directory
+	if strings.HasPrefix(pattern, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			pattern = filepath.Join(home, pattern[2:])
+		}
+	}
+
+	// Try exact matches first
+	for _, e := range entries {
+		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
+		relPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
+		if pattern == e.SourcePath || pattern == e.TargetPath || pattern == relPath {
+			return e
+		}
+	}
+
+	// Try resolving pattern relative to cwd and matching against target paths
+	if !filepath.IsAbs(pattern) {
+		if cwd, err := os.Getwd(); err == nil {
+			absPattern := filepath.Join(cwd, pattern)
+			for _, e := range entries {
+				if absPattern == e.TargetPath {
+					return e
+				}
+			}
+		}
+	}
+
+	// Only try suffix matching if pattern contains a path separator
+	if !strings.Contains(pattern, "/") {
+		return nil
+	}
+
+	for _, e := range entries {
+		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
+		relPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
+		if strings.HasSuffix(e.SourcePath, "/"+pattern) ||
+			strings.HasSuffix(e.TargetPath, "/"+pattern) ||
+			strings.HasSuffix(relPath, "/"+pattern) {
+			return e
+		}
 	}
 
 	return nil
