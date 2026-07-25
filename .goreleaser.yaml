@@ -62,3 +62,22 @@ brews:
       bin.install "mate"
     test: |
       system "#{bin}/mate", "--version"
+
+aurs:
+  - name: statemate-bin
+    homepage: "https://github.com/subbeh/statemate"
+    description: "Declarative system configuration management"
+    license: "MIT"
+    maintainers:
+      - "Steven Terwindt <git@sbbh.cloud>"
+    contributors:
+      - "Steven Terwindt <git@sbbh.cloud>"
+    private_key: "{{ .Env.AUR_SSH_KEY }}"
+    git_url: "ssh://aur@aur.archlinux.org/statemate-bin.git"
+    provides:
+      - statemate
+    conflicts:
+      - statemate
+    package: |-
+      install -Dm755 mate "${pkgdir}/usr/bin/mate"
+      install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/statemate/LICENSE"
