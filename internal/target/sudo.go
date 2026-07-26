@@ -1,6 +1,8 @@
 package target
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 )
 
 func needsSudo(path string) bool {
@@ -174,4 +177,54 @@ func sudoRemove(path string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func sudoAvailable() bool {
+	cmd := exec.Command("sudo", "-n", "true")
+	return cmd.Run() == nil
+}
+
+func sudoLstat(path string) (os.FileInfo, error) {
+	cmd := exec.Command("sudo", "stat", "-c", "%f %s %Y", path)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var modeHex string
+	var size int64
+	var mtime int64
+	if _, err := fmt.Sscanf(string(out), "%s %d %d", &modeHex, &size, &mtime); err != nil {
+		return nil, fmt.Errorf("parsing stat output: %w", err)
+	}
+
+	mode, _ := strconv.ParseUint(modeHex, 16, 32)
+	return &sudoFileInfo{
+		name: filepath.Base(path),
+		size: size,
+		mode: os.FileMode(mode),
+	}, nil
+}
+
+type sudoFileInfo struct {
+	name string
+	size int64
+	mode os.FileMode
+}
+
+func (s *sudoFileInfo) Name() string      { return s.name }
+func (s *sudoFileInfo) Size() int64        { return s.size }
+func (s *sudoFileInfo) Mode() os.FileMode  { return s.mode }
+func (s *sudoFileInfo) IsDir() bool        { return s.mode.IsDir() }
+func (s *sudoFileInfo) Sys() any           { return nil }
+func (s *sudoFileInfo) ModTime() (t time.Time) { return }
+
+func sudoHashFile(path string) (string, error) {
+	cmd := exec.Command("sudo", "cat", path)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	h := sha256.Sum256(out)
+	return hex.EncodeToString(h[:]), nil
 }

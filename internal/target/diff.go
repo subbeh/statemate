@@ -36,17 +36,30 @@ func permMismatch(entry *source.Entry, info os.FileInfo) bool {
 }
 
 type ComputeOpts struct {
-	TmplCtx *template.Context
-	Enc     *encrypt.AgeEncryptor
+	TmplCtx    *template.Context
+	Enc        *encrypt.AgeEncryptor
+	Sudo       bool // prompt for sudo if needed
+	sudoCached bool // whether sudo is available (non-interactive or Sudo=true)
 }
 
-func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) ([]*Change, error) {
+type ComputeResult struct {
+	Changes  []*Change
+	Skipped  []string // paths skipped due to permission denied
+}
+
+func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) (*ComputeResult, error) {
 	var o ComputeOpts
 	if len(opts) > 0 {
 		o = opts[0]
 	}
 
-	var changes []*Change
+	if !o.Sudo {
+		o.sudoCached = sudoAvailable()
+	} else {
+		o.sudoCached = true
+	}
+
+	result := &ComputeResult{}
 
 	for _, dir := range tree.Dirs() {
 		if dir.Attrs.Perm == 0 {
@@ -54,10 +67,18 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) ([]*Ch
 		}
 		info, err := os.Lstat(dir.TargetPath)
 		if err != nil {
-			continue
+			if os.IsPermission(err) && o.sudoCached {
+				info, err = sudoLstat(dir.TargetPath)
+			}
+			if err != nil {
+				if os.IsPermission(err) {
+					result.Skipped = append(result.Skipped, dir.TargetPath)
+				}
+				continue
+			}
 		}
 		if info.Mode().Perm() != os.FileMode(dir.Attrs.Perm) {
-			changes = append(changes, &Change{Entry: dir, Status: StatusModified})
+			result.Changes = append(result.Changes, &Change{Entry: dir, Status: StatusModified})
 		}
 	}
 
@@ -66,12 +87,17 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) ([]*Ch
 		if err != nil {
 			return nil, err
 		}
-		if change.Status != StatusUnchanged && change.Status != StatusStateOnly {
-			changes = append(changes, change)
+		switch change.Status {
+		case StatusUnchanged, StatusStateOnly:
+			// skip
+		case StatusSkipped:
+			result.Skipped = append(result.Skipped, entry.TargetPath)
+		default:
+			result.Changes = append(result.Changes, change)
 		}
 	}
 
-	return changes, nil
+	return result, nil
 }
 
 func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Change, error) {
@@ -105,6 +131,30 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 		info, err := os.Lstat(entry.TargetPath)
 		if os.IsNotExist(err) {
 			change.Status = StatusNew
+		} else if os.IsPermission(err) {
+			if !opts.sudoCached {
+				change.Status = StatusSkipped
+				return change, nil
+			}
+			info, err = sudoLstat(entry.TargetPath)
+			if err != nil {
+				change.Status = StatusSkipped
+				return change, nil
+			}
+			targetHash, err := sudoHashFile(entry.TargetPath)
+			if err != nil {
+				change.Status = StatusSkipped
+				return change, nil
+			}
+			if targetHash != renderedHash {
+				change.Status = StatusConflict
+				change.OldHash = targetHash
+			} else if permMismatch(entry, info) {
+				change.Status = StatusModified
+			} else {
+				change.Status = StatusStateOnly
+			}
+			return change, nil
 		} else if err != nil {
 			return nil, err
 		} else {
@@ -136,7 +186,19 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 	info, err := os.Lstat(entry.TargetPath)
 	targetExists := err == nil
 	if err != nil && !os.IsNotExist(err) {
-		return nil, err
+		if os.IsPermission(err) && opts.sudoCached {
+			info, err = sudoLstat(entry.TargetPath)
+			if err != nil {
+				change.Status = StatusSkipped
+				return change, nil
+			}
+			targetExists = true
+		} else if os.IsPermission(err) {
+			change.Status = StatusSkipped
+			return change, nil
+		} else {
+			return nil, err
+		}
 	}
 
 	if !targetExists {
@@ -153,7 +215,18 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 
 	targetHash, err := state.HashFile(entry.TargetPath)
 	if err != nil {
-		return nil, err
+		if os.IsPermission(err) && opts.sudoCached {
+			targetHash, err = sudoHashFile(entry.TargetPath)
+			if err != nil {
+				change.Status = StatusSkipped
+				return change, nil
+			}
+		} else if os.IsPermission(err) {
+			change.Status = StatusSkipped
+			return change, nil
+		} else {
+			return nil, err
+		}
 	}
 
 	if existing.SourceHash == sourceHash {

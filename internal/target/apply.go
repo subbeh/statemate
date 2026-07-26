@@ -39,6 +39,7 @@ const (
 	StatusModified
 	StatusConflict
 	StatusStateOnly // content matches but state DB needs update
+	StatusSkipped   // cannot access file (permission denied, no sudo)
 )
 
 func (s ChangeStatus) String() string {

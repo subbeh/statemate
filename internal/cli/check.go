@@ -27,6 +27,7 @@ var checkQuiet bool
 func init() {
 	rootCmd.AddCommand(checkCmd)
 	checkCmd.Flags().BoolVarP(&checkQuiet, "quiet", "q", false, "suppress output, only use exit code")
+	checkCmd.Flags().Bool("sudo", false, "use sudo to check files requiring elevated access")
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
@@ -101,17 +102,23 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	changes, err := target.ComputeChanges(tree, db, target.ComputeOpts{
+	useSudo, _ := cmd.Flags().GetBool("sudo")
+	result, err := target.ComputeChanges(tree, db, target.ComputeOpts{
 		TmplCtx: tmplCtx,
 		Enc:     enc,
+		Sudo:    useSudo,
 	})
 	if err != nil {
 		return fmt.Errorf("computing changes: %w", err)
 	}
+	changes := result.Changes
 
 	if len(changes) == 0 {
 		if !checkQuiet {
 			fmt.Println("OK: configuration is in sync")
+			if len(result.Skipped) > 0 {
+				fmt.Fprintf(os.Stderr, "Warning: %d file(s) skipped (permission denied, use --sudo to check)\n", len(result.Skipped))
+			}
 		}
 		return nil
 	}

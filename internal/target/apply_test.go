@@ -134,17 +134,17 @@ func TestComputeChanges(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	changes, err := ComputeChanges(tree, db)
+	result, err := ComputeChanges(tree, db)
 	if err != nil {
 		t.Fatalf("ComputeChanges: %v", err)
 	}
 
-	if len(changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(changes))
+	if len(result.Changes) != 1 {
+		t.Errorf("expected 1 change, got %d", len(result.Changes))
 	}
 
-	if changes[0].Status != StatusNew {
-		t.Errorf("expected StatusNew, got %v", changes[0].Status)
+	if result.Changes[0].Status != StatusNew {
+		t.Errorf("expected StatusNew, got %v", result.Changes[0].Status)
 	}
 }
 
@@ -181,17 +181,17 @@ func TestComputeChanges_PermMismatch(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	changes, err := ComputeChanges(tree, db)
+	result, err := ComputeChanges(tree, db)
 	if err != nil {
 		t.Fatalf("ComputeChanges: %v", err)
 	}
 
-	if len(changes) != 1 {
-		t.Fatalf("expected 1 change, got %d", len(changes))
+	if len(result.Changes) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(result.Changes))
 	}
 
-	if changes[0].Status != StatusModified {
-		t.Errorf("expected StatusModified for perm mismatch, got %v", changes[0].Status)
+	if result.Changes[0].Status != StatusModified {
+		t.Errorf("expected StatusModified for perm mismatch, got %v", result.Changes[0].Status)
 	}
 }
 
@@ -228,13 +228,13 @@ func TestComputeChanges_PermMatch(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	changes, err := ComputeChanges(tree, db)
+	result, err := ComputeChanges(tree, db)
 	if err != nil {
 		t.Fatalf("ComputeChanges: %v", err)
 	}
 
-	if len(changes) != 0 {
-		t.Errorf("expected 0 changes (perms match), got %d with status %v", len(changes), changes[0].Status)
+	if len(result.Changes) != 0 {
+		t.Errorf("expected 0 changes (perms match), got %d with status %v", len(result.Changes), result.Changes[0].Status)
 	}
 }
 
