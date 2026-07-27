@@ -30,6 +30,7 @@ This can also be set in config with 'diff_tool'.`,
 
 func init() {
 	diffCmd.Flags().StringP("tool", "t", "", "external diff tool to use")
+	diffCmd.Flags().Bool("sudo", false, "use sudo to check files requiring elevated access")
 	rootCmd.AddCommand(diffCmd)
 }
 
@@ -114,13 +115,16 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	changes, err := target.ComputeChanges(tree, db, target.ComputeOpts{
+	useSudo, _ := cmd.Flags().GetBool("sudo")
+	result, err := target.ComputeChanges(tree, db, target.ComputeOpts{
 		TmplCtx: tmplCtx,
 		Enc:     enc,
+		Sudo:    useSudo,
 	})
 	if err != nil {
 		return fmt.Errorf("computing changes: %w", err)
 	}
+	changes := result.Changes
 
 	var filterPath string
 	if len(args) > 0 {
@@ -138,6 +142,9 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(changes) == 0 {
+		if len(result.Skipped) > 0 {
+			fmt.Fprintf(os.Stderr, "Warning: %d file(s) skipped (permission denied, use --sudo to check)\n", len(result.Skipped))
+		}
 		fmt.Println("No changes")
 		return nil
 	}

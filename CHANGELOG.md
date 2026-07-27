@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `mate status`, `mate diff`, and `mate check` now render templates before comparing hashes — variable changes in include files are correctly detected as pending changes
+- `mate status`, `mate diff`, and `mate check` no longer fail on permission-denied files — uses cached sudo when available, skips with a warning otherwise
+
+### Added
+- `--sudo` flag for `mate status`, `mate diff`, and `mate check` to prompt for elevated access when checking restricted files
 
 ## [0.2.0] - 2026-07-22
 

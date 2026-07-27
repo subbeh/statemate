@@ -32,6 +32,7 @@ var statusCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(statusCmd)
 	statusCmd.Flags().Bool("short", false, "compact output for statuslines (format: +N ~N !N ?N *N sN)")
+	statusCmd.Flags().Bool("sudo", false, "use sudo to check files requiring elevated access")
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -104,13 +105,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	changes, err := target.ComputeChanges(tree, db, target.ComputeOpts{
+	useSudo, _ := cmd.Flags().GetBool("sudo")
+	result, err := target.ComputeChanges(tree, db, target.ComputeOpts{
 		TmplCtx: tmplCtx,
 		Enc:     enc,
+		Sudo:    useSudo,
 	})
 	if err != nil {
 		return fmt.Errorf("computing changes: %w", err)
 	}
+	changes := result.Changes
 
 	orphans, err := findOrphans(db, tree)
 	if err != nil {
@@ -227,6 +231,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	if pendingSecrets > 0 {
 		fmt.Printf("\nSecrets:\n  %d secrets need refresh (run 'mate secrets fetch')\n", pendingSecrets)
+	}
+
+	if len(result.Skipped) > 0 {
+		fmt.Fprintf(os.Stderr, "\nWarning: %d file(s) skipped (permission denied, use --sudo to check)\n", len(result.Skipped))
 	}
 
 	return nil
