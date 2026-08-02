@@ -150,7 +150,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		destName = destName + "#template"
 	}
 
-	destPath := filepath.Join(sourceDir, filepath.Dir(relPath), destName)
+	destPath := filepath.Join(resolveAttrsPath(sourceDir, filepath.Dir(relPath)), destName)
 
 	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
 		return fmt.Errorf("creating directories: %w", err)
@@ -262,6 +262,13 @@ func resolveTargetBaseForAdd(sourceDir, targetPath, globalTargetBase string, tre
 		if fileUnderGlobal {
 			return globalBase, nil
 		}
+		// Check if file falls under a targets mapping
+		for _, mappedBase := range dirCfg.Targets {
+			mappedBase = expandPath(mappedBase)
+			if strings.HasPrefix(targetPath, mappedBase+string(filepath.Separator)) || targetPath == mappedBase {
+				return filepath.Dir(mappedBase), nil
+			}
+		}
 		// Check if source already has files
 		if sourceHasFiles(sourceDir, tree) {
 			return "", fmt.Errorf("source %q has existing files under %s; cannot add file from %s", filepath.Base(sourceDir), globalBase, targetPath)
@@ -279,6 +286,44 @@ func resolveTargetBaseForAdd(sourceDir, targetPath, globalTargetBase string, tre
 	}
 
 	return configuredBase, nil
+}
+
+func resolveAttrsPath(baseDir, relPath string) string {
+	parts := strings.Split(relPath, string(filepath.Separator))
+	current := baseDir
+	for _, part := range parts {
+		if part == "." {
+			continue
+		}
+		exact := filepath.Join(current, part)
+		if _, err := os.Stat(exact); err == nil {
+			current = exact
+			continue
+		}
+		// Look for a directory with attrs suffix matching this base name
+		entries, err := os.ReadDir(current)
+		if err != nil {
+			current = exact
+			continue
+		}
+		found := false
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			baseName := strings.SplitN(name, "#", 2)[0]
+			if baseName == part {
+				current = filepath.Join(current, name)
+				found = true
+				break
+			}
+		}
+		if !found {
+			current = exact
+		}
+	}
+	return current
 }
 
 func sourceHasFiles(sourceDir string, tree *source.Tree) bool {
