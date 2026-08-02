@@ -7,14 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-02
+
 ### Fixed
 - `mate status`, `mate diff`, and `mate check` now render templates before comparing hashes — variable changes in include files are correctly detected as pending changes
-- `mate status`, `mate diff`, and `mate check` no longer fail on permission-denied files — uses cached sudo when available, skips with a warning otherwise
+- `mate apply` now re-renders templates when variables change, even if the source file is unchanged
+- `mate apply` restores secret lookup after config reload (before-scripts no longer break templates with bitwarden calls)
+- `mate status`, `mate diff`, and `mate check` no longer fail on permission-denied files — uses non-interactive sudo to check when possible, skips with a warning otherwise
+- `mate status` and `mate apply` now detect and fix directory permission mismatches
+- `mate apply` respects perm attributes on directories (previously hardcoded 0755)
 - `mate add` now works with files under `targets` mappings (e.g. adding `/etc/...` to a source with `targets: { etc: /etc }`)
 - `mate add` resolves existing attrs-suffixed directories (e.g. `etc#owner-r:root`) instead of creating plain duplicates
+- `mate edit` resolves files relative to cwd and target paths
 
 ### Added
 - `--sudo` flag for `mate status`, `mate diff`, and `mate check` to prompt for elevated access when checking restricted files
+- AUR publishing via goreleaser (`statemate-bin` package)
+- `#tmpl` as short alias for `#template` file suffix
+
+### Changed
+- Consolidated duplicate change-detection logic into single `computeChange` function (status/diff/check/apply all use the same path)
 
 ## [0.2.0] - 2026-07-22
 
