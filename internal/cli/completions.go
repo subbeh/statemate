@@ -238,12 +238,25 @@ func completeSources(cmd *cobra.Command, args []string, toComplete string) ([]st
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
+	seen := make(map[string]bool)
+	var sources []string
+	for _, s := range cfg.Sources {
+		if !seen[s] {
+			seen[s] = true
+			sources = append(sources, s)
+		}
 	}
-
-	sources := profile.ResolveSources(cfg, profileName)
+	for _, p := range cfg.Profiles {
+		if p == nil {
+			continue
+		}
+		for _, s := range p.Sources {
+			if !seen[s] {
+				seen[s] = true
+				sources = append(sources, s)
+			}
+		}
+	}
 	return sources, cobra.ShellCompDirectiveNoFileComp
 }
 
