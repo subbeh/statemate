@@ -24,7 +24,7 @@ func (p *PacmanManager) IsAvailable() bool {
 }
 
 func (p *PacmanManager) ListInstalled() ([]Package, error) {
-	cmd := exec.Command("pacman", "-Qe")
+	cmd := exec.Command("pacman", "-Qen")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
