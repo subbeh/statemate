@@ -179,13 +179,16 @@ func sudoRemove(path string) error {
 	return cmd.Run()
 }
 
-func sudoAvailable() bool {
-	cmd := exec.Command("sudo", "-n", "true")
+func SudoPrompt() bool {
+	cmd := exec.Command("sudo", "true")
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	return cmd.Run() == nil
 }
 
 func sudoLstat(path string) (os.FileInfo, error) {
-	cmd := exec.Command("sudo", "stat", "-c", "%f %s %Y", path)
+	cmd := exec.Command("sudo", "-n", "stat", "-c", "%f %s %Y", path)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -220,7 +223,7 @@ func (s *sudoFileInfo) Sys() any           { return nil }
 func (s *sudoFileInfo) ModTime() (t time.Time) { return }
 
 func sudoHashFile(path string) (string, error) {
-	cmd := exec.Command("sudo", "cat", path)
+	cmd := exec.Command("sudo", "-n", "cat", path)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
