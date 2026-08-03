@@ -2,6 +2,7 @@ package target
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,10 @@ import (
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
 )
+
+func isPermissionDenied(err error) bool {
+	return errors.Is(err, os.ErrPermission)
+}
 
 type Change struct {
 	Entry   *source.Entry
@@ -36,10 +41,9 @@ func permMismatch(entry *source.Entry, info os.FileInfo) bool {
 }
 
 type ComputeOpts struct {
-	TmplCtx    *template.Context
-	Enc        *encrypt.AgeEncryptor
-	Sudo       bool // prompt for sudo if needed
-	sudoCached bool // whether sudo is available (non-interactive or Sudo=true)
+	TmplCtx *template.Context
+	Enc     *encrypt.AgeEncryptor
+	Sudo    bool // prompt for sudo upfront to cache credentials
 }
 
 type ComputeResult struct {
@@ -53,10 +57,8 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) (*Comp
 		o = opts[0]
 	}
 
-	if !o.Sudo {
-		o.sudoCached = sudoAvailable()
-	} else {
-		o.sudoCached = true
+	if o.Sudo {
+		SudoPrompt()
 	}
 
 	result := &ComputeResult{}
@@ -67,11 +69,11 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) (*Comp
 		}
 		info, err := os.Lstat(dir.TargetPath)
 		if err != nil {
-			if os.IsPermission(err) && o.sudoCached {
+			if isPermissionDenied(err) {
 				info, err = sudoLstat(dir.TargetPath)
 			}
 			if err != nil {
-				if os.IsPermission(err) {
+				if isPermissionDenied(err) {
 					result.Skipped = append(result.Skipped, dir.TargetPath)
 				}
 				continue
@@ -131,11 +133,7 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 		info, err := os.Lstat(entry.TargetPath)
 		if os.IsNotExist(err) {
 			change.Status = StatusNew
-		} else if os.IsPermission(err) {
-			if !opts.sudoCached {
-				change.Status = StatusSkipped
-				return change, nil
-			}
+		} else if isPermissionDenied(err) {
 			info, err = sudoLstat(entry.TargetPath)
 			if err != nil {
 				change.Status = StatusSkipped
@@ -167,7 +165,16 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 
 			targetHash, err := state.HashFile(entry.TargetPath)
 			if err != nil {
-				return nil, err
+				if isPermissionDenied(err) {
+					targetHash, err = sudoHashFile(entry.TargetPath)
+				}
+				if err != nil {
+					if isPermissionDenied(err) {
+						change.Status = StatusSkipped
+						return change, nil
+					}
+					return nil, err
+				}
 			}
 			if targetHash != renderedHash {
 				change.Status = StatusConflict
@@ -186,16 +193,13 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 	info, err := os.Lstat(entry.TargetPath)
 	targetExists := err == nil
 	if err != nil && !os.IsNotExist(err) {
-		if os.IsPermission(err) && opts.sudoCached {
+		if isPermissionDenied(err) {
 			info, err = sudoLstat(entry.TargetPath)
 			if err != nil {
 				change.Status = StatusSkipped
 				return change, nil
 			}
 			targetExists = true
-		} else if os.IsPermission(err) {
-			change.Status = StatusSkipped
-			return change, nil
 		} else {
 			return nil, err
 		}
@@ -215,16 +219,14 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 
 	targetHash, err := state.HashFile(entry.TargetPath)
 	if err != nil {
-		if os.IsPermission(err) && opts.sudoCached {
+		if isPermissionDenied(err) {
 			targetHash, err = sudoHashFile(entry.TargetPath)
-			if err != nil {
+		}
+		if err != nil {
+			if isPermissionDenied(err) {
 				change.Status = StatusSkipped
 				return change, nil
 			}
-		} else if os.IsPermission(err) {
-			change.Status = StatusSkipped
-			return change, nil
-		} else {
 			return nil, err
 		}
 	}
