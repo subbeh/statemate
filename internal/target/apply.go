@@ -216,7 +216,7 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 	if info, err := os.Lstat(entry.TargetPath); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 && !entry.Attrs.Symlink {
 			if useSudo {
-				if err := sudoRemove(entry.TargetPath); err != nil {
+				if err := SudoRemove(entry.TargetPath); err != nil {
 					return fmt.Errorf("removing symlink: %w", err)
 				}
 			} else {

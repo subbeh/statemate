@@ -10,6 +10,7 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/util"
 )
 
@@ -132,7 +133,13 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 
 		if err := os.Remove(path); err != nil {
-			return fmt.Errorf("removing %s: %w", path, err)
+			if os.IsPermission(err) {
+				if err := target.SudoRemove(path); err != nil {
+					return fmt.Errorf("removing %s: %w", path, err)
+				}
+			} else {
+				return fmt.Errorf("removing %s: %w", path, err)
+			}
 		}
 
 		if err := db.DeleteFile(path); err != nil {
