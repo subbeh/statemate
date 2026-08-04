@@ -42,18 +42,17 @@ make lint       # Run golangci-lint
 
 ## Development Workflow
 
-**All changes go through PRs** - no direct pushes to main.
+Active development happens on the `develop` branch. Commit directly there — no feature branches or PRs needed during development.
 
-1. **Create feature branch**: `git checkout -b feat/name` (or `fix/`, `chore/`, `docs/`, `refactor/`, `test/`)
+1. **Work on develop**: `git checkout develop`
 2. **Implement changes**: Update code and CHANGELOG.md under `[Unreleased]`
 3. **Run checks**: `make test` and `make lint` must pass
-4. **Code review**: Run `/code-review` and fix any issues before creating PR
-5. **Create PR**: Use conventional commit format for title, include Summary + Test Plan in body
-6. **Squash merge**: All commits become one clean commit on main
+4. **Commit**: Use conventional commit format
+5. **Push**: `git push` directly to develop
 
-For incomplete work, use **Draft PRs** on GitHub.
+When ready for a release, merge `develop` into `main` (via PR or direct merge).
 
-See CONTRIBUTING.md for full details.
+**No direct pushes to main** — main is the stable release branch.
 
 ## Commit Messages
 
