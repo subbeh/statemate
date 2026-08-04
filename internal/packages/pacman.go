@@ -55,13 +55,15 @@ func (p *PacmanManager) QueryInstalled(pkgs []string) ([]Package, error) {
 	if len(pkgs) == 0 {
 		return nil, nil
 	}
+
+	// Bulk query first (fast path)
 	args := append([]string{"-Q"}, pkgs...)
 	cmd := exec.Command("pacman", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	_ = cmd.Run()
 
-	var packages []Package
+	found := make(map[string]Package)
 	scanner := bufio.NewScanner(&out)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -74,10 +76,36 @@ func (p *PacmanManager) QueryInstalled(pkgs []string) ([]Package, error) {
 			if len(parts) >= 2 {
 				pkg.Version = parts[1]
 			}
-			packages = append(packages, pkg)
+			found[pkg.Name] = pkg
 		}
 	}
-	return packages, scanner.Err()
+
+	// For packages not found by exact name, re-check individually
+	// (handles virtual/provides packages like "man" -> "man-db")
+	var packages []Package
+	for _, name := range pkgs {
+		if pkg, ok := found[name]; ok {
+			packages = append(packages, pkg)
+			continue
+		}
+		cmd := exec.Command("pacman", "-Q", name)
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		if err := cmd.Run(); err != nil {
+			continue
+		}
+		line := strings.TrimSpace(out.String())
+		if line == "" {
+			continue
+		}
+		parts := strings.Fields(line)
+		pkg := Package{Name: name}
+		if len(parts) >= 2 {
+			pkg.Version = parts[1]
+		}
+		packages = append(packages, pkg)
+	}
+	return packages, nil
 }
 
 func (p *PacmanManager) Describe(pkgs []string) (map[string]string, error) {
