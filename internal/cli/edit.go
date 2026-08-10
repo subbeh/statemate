@@ -17,12 +17,20 @@ import (
 )
 
 var editCmd = &cobra.Command{
-	Use:   "edit <source>",
+	Use:   "edit <path>",
 	Short: "Edit a managed file",
 	Long: `Edit a managed file in your editor.
 
-For encrypted files, the file is decrypted to a temporary location,
-opened in the editor, and re-encrypted after saving.
+Paths are resolved like any other command-line tool: absolute paths are used
+as-is, relative paths resolve against the current directory.
+
+Files under the source directory are opened directly. If you pass a target
+path (a deployed file), the corresponding source file is opened instead --
+mate never edits deployed files in place.
+
+For encrypted files (with the '#encrypted' suffix), the file is decrypted to a
+temporary location, opened in the editor, and re-encrypted after saving. The
+original file permissions are preserved.
 
 The editor is determined by (in order):
   1. The 'editor' field in mate.yaml
@@ -32,10 +40,16 @@ The editor is determined by (in order):
 
 Examples:
   mate edit nvim/init.lua
-  mate edit secrets.yaml`,
-	Args:              cobra.ExactArgs(1),
-	RunE:              runEdit,
-	ValidArgsFunction: completeSourceFiles,
+  mate edit .matedata/secrets.yaml#encrypted
+  mate edit ~/.config/nvim/init.lua`,
+	Args: cobra.ExactArgs(1),
+	RunE: runEdit,
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) > 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveDefault
+	},
 }
 
 func init() {
@@ -63,17 +77,21 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scanning sources: %w", err)
 	}
 
-	srcPattern := args[0]
-
-	entry := findSourceEntry(tree.Files(), srcPattern)
-	if entry == nil {
-		return fmt.Errorf("file not found: %s", srcPattern)
+	editPath, isManagedSource, err := resolveEditPath(args[0], cfg, tree.Files())
+	if err != nil {
+		return err
 	}
 
 	editor := getEditor(cfg)
 
-	if !entry.Attrs.Encrypted {
-		return runEditor(editor, entry.SourcePath)
+	if !strings.Contains(filepath.Base(editPath), "#encrypted") {
+		if err := runEditor(editor, editPath); err != nil {
+			return err
+		}
+		if isManagedSource {
+			fmt.Printf("Edited %s -- run 'mate apply' to deploy changes\n", util.ShortenPath(editPath))
+		}
+		return nil
 	}
 
 	if cfg.Age == nil || (cfg.Age.Identity == "" && cfg.Age.IdentityCommand == "") {
@@ -88,7 +106,14 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("setting up encryption: %w", err)
 	}
 
-	ciphertext, err := os.ReadFile(entry.SourcePath)
+	// Capture the existing mode so it can be preserved on write-back.
+	info, err := os.Stat(editPath)
+	if err != nil {
+		return fmt.Errorf("stat file: %w", err)
+	}
+	origMode := info.Mode().Perm()
+
+	ciphertext, err := os.ReadFile(editPath)
 	if err != nil {
 		return fmt.Errorf("reading file: %w", err)
 	}
@@ -98,13 +123,19 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decrypting: %w", err)
 	}
 
-	baseName := strings.TrimSuffix(filepath.Base(entry.SourcePath), "#encrypted")
+	baseName := strings.TrimSuffix(filepath.Base(editPath), "#encrypted")
 	tmpFile, err := os.CreateTemp("", "mate-edit-*-"+baseName)
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
 	defer func() { _ = os.Remove(tmpPath) }()
+
+	// Plaintext secrets must never be group/world readable.
+	if err := tmpFile.Chmod(0600); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("securing temp file: %w", err)
+	}
 
 	if _, err := tmpFile.Write(plaintext); err != nil {
 		_ = tmpFile.Close()
@@ -141,11 +172,18 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("encrypting: %w", err)
 	}
 
-	if err := os.WriteFile(entry.SourcePath, newCiphertext, entry.Mode.Perm()); err != nil {
+	if err := os.WriteFile(editPath, newCiphertext, origMode); err != nil {
 		return fmt.Errorf("writing encrypted file: %w", err)
 	}
+	// WriteFile only applies mode when creating, so enforce it explicitly.
+	if err := os.Chmod(editPath, origMode); err != nil {
+		return fmt.Errorf("restoring permissions: %w", err)
+	}
 
-	fmt.Printf("Saved and encrypted: %s\n", util.ShortenPath(entry.SourcePath))
+	fmt.Printf("Saved and encrypted: %s\n", util.ShortenPath(editPath))
+	if isManagedSource {
+		fmt.Println("Run 'mate apply' to deploy changes")
+	}
 
 	return nil
 }
@@ -179,54 +217,85 @@ func runEditor(editor, path string) error {
 	return nil
 }
 
-// findSourceEntry finds a source entry matching the given pattern.
-// Match priority:
-// 1. Exact match against source path, target path, or source/relPath
-// 2. Pattern resolved relative to cwd matches a target path
-// 3. Suffix match (only if pattern contains a path separator)
-func findSourceEntry(entries []*source.Entry, pattern string) *source.Entry {
-	// Expand ~ to home directory
-	if strings.HasPrefix(pattern, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			pattern = filepath.Join(home, pattern[2:])
-		}
+// resolveEditPath resolves a user-supplied path to the file that should be
+// opened in the editor. Paths behave like any other CLI file argument: absolute
+// paths are used as-is, relative paths resolve against the current directory.
+//
+// A path is editable if it lives under the source directory, or if it is a
+// target path produced by a managed source (in which case the source file is
+// returned -- mate never edits deployed files in place).
+//
+// The second return value reports whether the resolved file is a managed source
+// file, so callers can decide whether to show an "apply pending" hint.
+func resolveEditPath(input string, cfg *config.Config, entries []*source.Entry) (string, bool, error) {
+	abs, err := expandToAbs(input)
+	if err != nil {
+		return "", false, err
 	}
 
-	// Try exact matches first
-	for _, e := range entries {
-		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
-		relPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
-		if pattern == e.SourcePath || pattern == e.TargetPath || pattern == relPath {
-			return e
-		}
-	}
+	sourceDir := resolveSymlinks(cfg.SourceDir())
+	abs = resolveSymlinks(abs)
 
-	// Try resolving pattern relative to cwd and matching against target paths
-	if !filepath.IsAbs(pattern) {
-		if cwd, err := os.Getwd(); err == nil {
-			absPattern := filepath.Join(cwd, pattern)
-			for _, e := range entries {
-				if absPattern == e.TargetPath {
-					return e
-				}
+	// Path is inside the repo -- edit it directly.
+	if abs == sourceDir || strings.HasPrefix(abs, sourceDir+string(filepath.Separator)) {
+		if _, err := os.Stat(abs); err != nil {
+			if os.IsNotExist(err) {
+				return "", false, fmt.Errorf("file not found: %s", input)
 			}
+			return "", false, err
 		}
+		return abs, isManagedSourcePath(abs, entries), nil
 	}
 
-	// Only try suffix matching if pattern contains a path separator
-	if !strings.Contains(pattern, "/") {
-		return nil
-	}
-
+	// Path is outside the repo -- only valid if it is a managed target.
 	for _, e := range entries {
-		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
-		relPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
-		if strings.HasSuffix(e.SourcePath, "/"+pattern) ||
-			strings.HasSuffix(e.TargetPath, "/"+pattern) ||
-			strings.HasSuffix(relPath, "/"+pattern) {
-			return e
+		if resolveSymlinks(e.TargetPath) == abs {
+			return resolveSymlinks(e.SourcePath), true, nil
 		}
 	}
 
-	return nil
+	return "", false, fmt.Errorf("%s is not managed by mate", input)
+}
+
+// resolveSymlinks returns the path with symlinks resolved, falling back to the
+// original path when it cannot be resolved (e.g. it does not exist yet). This
+// keeps prefix comparisons reliable on systems where temp and home directories
+// are symlinked.
+func resolveSymlinks(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return path
+}
+
+// expandToAbs expands a leading ~ and resolves the path against the current
+// directory, returning a cleaned absolute path.
+func expandToAbs(path string) (string, error) {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("resolving home directory: %w", err)
+		}
+		if path == "~" {
+			return home, nil
+		}
+		return filepath.Join(home, path[2:]), nil
+	}
+
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolving path %s: %w", path, err)
+	}
+	return abs, nil
+}
+
+// isManagedSourcePath reports whether the path is the source of a managed entry.
+// The input is expected to already have symlinks resolved.
+func isManagedSourcePath(abs string, entries []*source.Entry) bool {
+	for _, e := range entries {
+		if resolveSymlinks(e.SourcePath) == abs {
+			return true
+		}
+	}
+	return false
 }

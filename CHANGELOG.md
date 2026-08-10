@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `mate packages status` no longer shows AUR packages as extras under pacman (uses `-Qen` for native-only)
+- `mate edit` now works on `include`/`var_files` (e.g. `.matedata/secrets.yaml#encrypted`), which previously failed with "file not found"
+- `mate edit` tab completion now offers real filesystem paths instead of a computed list that could suggest unopenable files
+- `mate edit` preserves the original file permissions when re-encrypting, and writes the plaintext temp file as `0600`
+
+### Changed
+- `mate edit` resolves paths strictly like other CLI tools (absolute or relative to the current directory). Fuzzy suffix matching is no longer supported — `mate edit nvim/init.lua` must be run from the directory containing `nvim/`
+- `mate edit` accepts any file under the source directory, and resolves target paths to their source file
+- `mate edit` prints a reminder to run `mate apply` after editing a managed source file
 
 ## [0.2.1] - 2026-08-02
 
