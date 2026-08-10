@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--no-scripts` flag for `mate apply` to skip all scripts (intended for automated runs)
 
 ### Changed
+- `mate managed <path>` now matches exactly one file when given a path to an existing file (target or source), instead of every file with the same basename. Bare names that do not resolve to a file still match loosely, so `mate managed nvim` continues to list a whole source
 - `mate apply --force` now also auto-confirms scripts, in addition to overwriting modified targets
 - `mate apply` skips scripts with a warning when there is no terminal to confirm on. **Automated runs that relied on scripts executing must now pass `--force` (to run them) or `--no-scripts` (to skip silently)**
 - `mate edit` resolves paths strictly like other CLI tools (absolute or relative to the current directory). Fuzzy suffix matching is no longer supported — `mate edit nvim/init.lua` must be run from the directory containing `nvim/`
