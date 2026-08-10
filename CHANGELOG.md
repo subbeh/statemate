@@ -19,8 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `mate status` now reports missing packages (declared in config but not installed), grouped by package manager
+- `mate apply` now asks for confirmation before running each script, with `[y]es / [n]o / [a]ll / [q]uit`. Declining a script does not record it as run, so it is offered again on the next apply
+- Scripts can describe themselves with a `# Description: <text>` comment in their first 10 lines. Descriptions are shown in the confirmation prompt, `mate scripts list`, and `mate status`
+- `--no-scripts` flag for `mate apply` to skip all scripts (intended for automated runs)
 
 ### Changed
+- `mate apply --force` now also auto-confirms scripts, in addition to overwriting modified targets
+- `mate apply` skips scripts with a warning when there is no terminal to confirm on. **Automated runs that relied on scripts executing must now pass `--force` (to run them) or `--no-scripts` (to skip silently)**
 - `mate edit` resolves paths strictly like other CLI tools (absolute or relative to the current directory). Fuzzy suffix matching is no longer supported — `mate edit nvim/init.lua` must be run from the directory containing `nvim/`
 - `mate edit` accepts any file under the source directory, and resolves target paths to their source file
 - `mate edit` prints a reminder to run `mate apply` after editing a managed source file

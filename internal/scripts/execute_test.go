@@ -35,7 +35,7 @@ func TestExecutor_RunOnce(t *testing.T) {
 		ContentHash: contentHash,
 	}
 
-	executor := NewExecutor(db, nil, false, false)
+	executor := NewExecutor(db, nil, false, false).WithConfirmation(true, false)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -93,7 +93,7 @@ func TestExecutor_RunOnchange(t *testing.T) {
 		ContentHash: contentHash,
 	}
 
-	executor := NewExecutor(db, nil, false, false)
+	executor := NewExecutor(db, nil, false, false).WithConfirmation(true, false)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {

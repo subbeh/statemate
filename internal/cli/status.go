@@ -247,6 +247,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				timing = "after"
 			}
 			fmt.Printf("  %s (%s, %s)\n", s.Name, s.Frequency, timing)
+			if s.Description != "" {
+				fmt.Printf("      %s\n", s.Description)
+			}
 		}
 	}
 

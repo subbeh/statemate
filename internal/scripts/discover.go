@@ -83,6 +83,7 @@ func (d *Discoverer) discoverDir(dir, sourceDir string) (Scripts, error) {
 			Order:       order,
 			SourceDir:   sourceDir,
 			ContentHash: contentHash,
+			Description: ReadDescription(path),
 		})
 		return nil
 	})
@@ -122,6 +123,7 @@ func (d *Discoverer) DiscoverFromDirConfig(sourceDir string, paths []string) (Sc
 			Order:       order,
 			SourceDir:   sourceDir,
 			ContentHash: contentHash,
+			Description: ReadDescription(fullPath),
 		})
 	}
 	return scripts, nil

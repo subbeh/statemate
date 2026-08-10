@@ -17,13 +17,21 @@ import (
 var scriptsCmd = &cobra.Command{
 	Use:   "scripts",
 	Short: "Manage scripts",
-	Long:  "List and manage lifecycle scripts",
+	Long: `List and manage lifecycle scripts.
+
+A script can describe itself with a comment in its first 10 lines:
+
+  #!/usr/bin/env bash
+  # Description: Bootstrap the development environment
+
+The description is shown by 'scripts list', 'mate status', and the
+confirmation prompt during apply. Matching is case-insensitive.`,
 }
 
 var scriptsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all scripts",
-	Long:  "List all discovered scripts and their status",
+	Long:  "List all discovered scripts and their status, including descriptions",
 	RunE:  runScriptsList,
 }
 
@@ -143,6 +151,12 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			name,
 			status,
 		)
+
+		// Descriptions go on their own line -- the table is already wide enough
+		// that another column would wrap on most terminals.
+		if script.Description != "" {
+			fmt.Printf("  %s\n", script.Description)
+		}
 	}
 
 	return nil

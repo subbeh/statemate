@@ -22,20 +22,26 @@ import (
 var applyCmd = &cobra.Command{
 	Use:   "apply",
 	Short: "Apply configuration to target",
-	Long:  "Apply files from source directories to their targets",
-	RunE:  runApply,
+	Long: `Apply files from source directories to their targets.
+
+Scripts due to run are confirmed individually before executing. Use --force to
+auto-confirm them, or --no-scripts to skip them entirely (useful for automated
+runs). Without a terminal to prompt on, scripts are skipped with a warning.`,
+	RunE: runApply,
 }
 
 var (
-	dryRun  bool
-	force   bool
-	verbose int
+	dryRun    bool
+	force     bool
+	noScripts bool
+	verbose   int
 )
 
 func init() {
 	rootCmd.AddCommand(applyCmd)
 	applyCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
-	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite modified targets without prompting")
+	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite modified targets and auto-confirm scripts")
+	applyCmd.Flags().BoolVar(&noScripts, "no-scripts", false, "skip all scripts")
 	applyCmd.Flags().CountVarP(&verbose, "verbose", "V", "increase verbosity (can be repeated)")
 }
 
@@ -130,7 +136,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
 
-	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0)
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0).WithConfirmation(force, noScripts)
 
 	beforeScripts := allScripts.Automatic().ByProfile(profileChain).ByTiming(scripts.TimingBefore)
 	beforeScripts.Sort()
@@ -139,9 +145,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 		if verbose > 0 || dryRun {
 			fmt.Println("Running before scripts...")
 		}
-		if _, err := executor.Execute(beforeScripts); err != nil {
+		res, err := executor.Execute(beforeScripts)
+		if err != nil {
 			return err
 		}
+		warnSkippedScripts(res)
 
 		// Reload config and template context after before scripts
 		// (scripts may generate var_files like secrets)
@@ -180,9 +188,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 		if verbose > 0 || dryRun {
 			fmt.Println("Running after scripts...")
 		}
-		if _, err := executor.Execute(afterScripts); err != nil {
+		res, err := executor.Execute(afterScripts)
+		if err != nil {
 			return err
 		}
+		warnSkippedScripts(res)
 	}
 
 	if dryRun {
@@ -262,6 +272,19 @@ func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.
 	}
 
 	return nil
+}
+
+// warnSkippedScripts reports scripts that were due but could not be confirmed
+// because there was no terminal to prompt on.
+func warnSkippedScripts(res *scripts.ExecuteResult) {
+	if res == nil || len(res.SkippedNoTTY) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\nWarning: %d script(s) skipped (no terminal to confirm on):\n", len(res.SkippedNoTTY))
+	for _, s := range res.SkippedNoTTY {
+		fmt.Fprintf(os.Stderr, "  - %s\n", s)
+	}
+	fmt.Fprintln(os.Stderr, "Use --force to run them, or --no-scripts to silence this warning.")
 }
 
 func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, dryRun bool, autoConfirm bool) error {

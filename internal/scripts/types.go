@@ -69,6 +69,7 @@ type Script struct {
 	Order       int
 	SourceDir   string
 	ContentHash string
+	Description string
 }
 
 func (s *Script) IsExecutable() bool {
