@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate edit` preserves the original file permissions when re-encrypting, and writes the plaintext temp file as `0600`
 
 ### Added
+- `mate config source-dir` prints the resolved source directory as a bare path, for use in scripts and editor integrations (`cd "$(mate config source-dir)"`)
 - `mate status` now reports missing packages (declared in config but not installed), grouped by package manager
 - `mate apply` now asks for confirmation before running each script, with `[y]es / [n]o / [a]ll / [q]uit`. Declining a script does not record it as run, so it is offered again on the next apply
 - Scripts can describe themselves with a `# Description: <text>` comment in their first 10 lines. Descriptions are shown in the confirmation prompt, `mate scripts list`, and `mate status`
