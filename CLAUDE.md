@@ -36,19 +36,43 @@ make lint       # Run golangci-lint
 ## When Making Changes
 
 1. Update command help text in `internal/cli/*.go` if changing CLI behavior
-2. Add user-facing changes to CHANGELOG.md under `[Unreleased]`
+2. **Update CHANGELOG.md** — see the mandatory rule below
 3. Run `make test` before finishing
 4. Run `make docs` if command help changed (docs are gitignored, generated at release)
+
+## CHANGELOG is Mandatory
+
+**Every commit that changes user-visible behavior MUST include a CHANGELOG.md entry in the same commit.**
+
+This is not optional and is repeatedly forgotten. Treat it as part of the change, not a follow-up step.
+
+**Checklist before every `git commit`:**
+
+```bash
+git diff --cached --stat   # if this touches internal/ or cmd/, CHANGELOG.md must be staged too
+```
+
+If `internal/` or `cmd/` files are staged and `CHANGELOG.md` is not, stop and add the entry first.
+
+**What requires an entry:** bug fixes, new features, changed behavior, new/changed flags, removed functionality — anything a user would notice.
+
+**What does not:** internal refactors with no behavior change, test-only changes, doc-only changes (CLAUDE.md, CONTRIBUTING.md), CI config.
+
+Write entries from the **user's** perspective (what they observe), not the implementation's:
+
+- Good: `` `mate clean` now uses sudo to remove files requiring elevated access ``
+- Bad: `Added SudoRemove helper to target package`
 
 ## Development Workflow
 
 Active development happens on the `develop` branch. Commit directly there — no feature branches or PRs needed during development.
 
 1. **Work on develop**: `git checkout develop`
-2. **Implement changes**: Update code and CHANGELOG.md under `[Unreleased]`
-3. **Run checks**: `make test` and `make lint` must pass
-4. **Commit**: Use conventional commit format
-5. **Push**: `git push` directly to develop
+2. **Implement changes**: Update code
+3. **Update CHANGELOG.md** under `[Unreleased]` (mandatory — see above)
+4. **Run checks**: `make test` and `make lint` must pass
+5. **Commit**: Use conventional commit format, including CHANGELOG.md in the same commit
+6. **Push**: `git push` directly to develop
 
 When ready for a release, merge `develop` into `main` (via PR or direct merge).
 

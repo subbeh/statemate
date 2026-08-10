@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `mate packages status` no longer shows AUR packages as extras under pacman (uses `-Qen` for native-only)
+- `mate packages status` now detects virtual/provides packages as installed (e.g. `man` provided by `man-db`)
+- `mate clean` now uses sudo to remove files requiring elevated access instead of failing with "permission denied"
+- `mate status`, `mate diff`, and `mate check` now correctly detect permission errors on wrapped errors, and always attempt non-interactive sudo for restricted files
+- Tab completion for `--source` now lists sources from all profiles, not just the detected one
 - `mate edit` now works on `include`/`var_files` (e.g. `.matedata/secrets.yaml#encrypted`), which previously failed with "file not found"
 - `mate edit` tab completion now offers real filesystem paths instead of a computed list that could suggest unopenable files
 - `mate edit` preserves the original file permissions when re-encrypting, and writes the plaintext temp file as `0600`
