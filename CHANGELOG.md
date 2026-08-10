@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate edit` tab completion now offers real filesystem paths instead of a computed list that could suggest unopenable files
 - `mate edit` preserves the original file permissions when re-encrypting, and writes the plaintext temp file as `0600`
 
+### Added
+- `mate status` now reports missing packages (declared in config but not installed), grouped by package manager
+
 ### Changed
 - `mate edit` resolves paths strictly like other CLI tools (absolute or relative to the current directory). Fuzzy suffix matching is no longer supported — `mate edit nvim/init.lua` must be run from the directory containing `nvim/`
 - `mate edit` accepts any file under the source directory, and resolves target paths to their source file

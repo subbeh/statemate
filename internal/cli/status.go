@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/packages"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
@@ -22,8 +23,12 @@ import (
 // Note: source import is still needed for source.Entry type
 
 var statusCmd = &cobra.Command{
-	Use:               "status [path]",
-	Short:             "Show files that would change on apply",
+	Use:   "status [path]",
+	Short: "Show files that would change on apply",
+	Long: `Show pending changes that would be made on apply.
+
+Reports files to be created, modified, or in conflict, plus orphaned files,
+missing packages, pending scripts, and secrets needing refresh.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runStatus,
 	ValidArgsFunction: completeManagedFiles,
@@ -153,6 +158,21 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Missing packages are informational only -- a package manager being
+	// unavailable should never fail status.
+	type missingPkgs struct {
+		manager  string
+		packages []string
+	}
+	var pendingPackages []missingPkgs
+	if syncResults, err := packages.ComputeSync(cfg, profileName, sourcePaths); err == nil {
+		for _, r := range syncResults {
+			if missing := r.Missing(); len(missing) > 0 {
+				pendingPackages = append(pendingPackages, missingPkgs{manager: r.Manager, packages: missing})
+			}
+		}
+	}
+
 	var filterPath string
 	if len(args) > 0 {
 		filterPath = args[0]
@@ -179,7 +199,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return printShortStatus(filteredChanges, filteredOrphans, pendingScripts, pendingSecrets)
 	}
 
-	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 && len(pendingScripts) == 0 && pendingSecrets == 0 {
+	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 && len(pendingScripts) == 0 &&
+		pendingSecrets == 0 && len(pendingPackages) == 0 {
 		fmt.Println("Everything is up to date")
 		return nil
 	}
@@ -226,6 +247,13 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				timing = "after"
 			}
 			fmt.Printf("  %s (%s, %s)\n", s.Name, s.Frequency, timing)
+		}
+	}
+
+	if len(pendingPackages) > 0 {
+		fmt.Println("\nMissing packages:")
+		for _, p := range pendingPackages {
+			fmt.Printf("  %s: %s\n", p.manager, strings.Join(p.packages, ", "))
 		}
 	}
 
