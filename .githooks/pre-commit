@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# Blocks commits that change user-visible behavior without a CHANGELOG.md entry.
+#
+# Rationale: CHANGELOG updates were repeatedly forgotten, leaving released
+# versions with missing entries that had to be backfilled from git log.
+#
+# Bypass for genuinely non-user-facing changes (internal refactors, tests):
+#   git commit --no-verify
+
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+# Only care about changes to actual program code.
+code_changed=$(printf '%s\n' "$staged" | grep -E '^(internal|cmd)/' || true)
+
+# Test-only changes don't need a CHANGELOG entry.
+non_test_code=$(printf '%s\n' "$code_changed" | grep -v '_test\.go$' || true)
+
+if [ -z "$non_test_code" ]; then
+  exit 0
+fi
+
+if printf '%s\n' "$staged" | grep -qx 'CHANGELOG.md'; then
+  exit 0
+fi
+
+cat >&2 <<'EOF'
+✗ Commit blocked: CHANGELOG.md not updated
+
+Staged changes touch internal/ or cmd/ but CHANGELOG.md is not staged.
+Add an entry under [Unreleased], written from the user's perspective:
+
+  ### Fixed
+  - `mate clean` now uses sudo to remove files requiring elevated access
+
+Then stage it:
+
+  git add CHANGELOG.md
+
+If this change is genuinely not user-facing (internal refactor, tests only):
+
+  git commit --no-verify
+
+Staged code files:
+EOF
+
+printf '%s\n' "$non_test_code" | sed 's/^/  /' >&2
+
+exit 1

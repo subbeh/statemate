@@ -46,13 +46,22 @@ make lint       # Run golangci-lint
 
 This is not optional and is repeatedly forgotten. Treat it as part of the change, not a follow-up step.
 
+**This is enforced by a pre-commit hook** (`.githooks/pre-commit`). Commits that stage
+non-test files under `internal/` or `cmd/` without staging `CHANGELOG.md` are rejected.
+
+One-time setup after cloning (`core.hooksPath` is local git config, not version-controlled):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+If the change genuinely isn't user-facing, bypass with `git commit --no-verify`.
+
 **Checklist before every `git commit`:**
 
 ```bash
 git diff --cached --stat   # if this touches internal/ or cmd/, CHANGELOG.md must be staged too
 ```
-
-If `internal/` or `cmd/` files are staged and `CHANGELOG.md` is not, stop and add the entry first.
 
 **What requires an entry:** bug fixes, new features, changed behavior, new/changed flags, removed functionality — anything a user would notice.
 
