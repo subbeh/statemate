@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate edit` now works on `include`/`var_files` (e.g. `.matedata/secrets.yaml#encrypted`), which previously failed with "file not found"
 - `mate edit` tab completion now offers real filesystem paths instead of a computed list that could suggest unopenable files
 - `mate edit` preserves the original file permissions when re-encrypting, and writes the plaintext temp file as `0600`
+- `mate add` source picker now lists profile-provided sources, not just the top-level `sources:` list. Previously the picker showed a different list than it indexed, so a selection could map to the wrong source
 
 ### Added
 - `mate config source-dir` prints the resolved source directory as a bare path, for use in scripts and editor integrations (`cd "$(mate config source-dir)"`)

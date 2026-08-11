@@ -114,7 +114,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("source %q not in configured sources", sourceName)
 		}
 	} else {
-		idx, err := promptSourceSelection(cfg.Sources)
+		// Must offer the same list that absSources is indexed from: cfg.Sources
+		// omits profile-provided sources, so showing it both hid valid choices and
+		// mapped the selection to the wrong source.
+		idx, err := promptSourceSelection(sources)
 		if err != nil {
 			return err
 		}
