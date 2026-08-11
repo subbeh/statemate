@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `mate config source-dir` prints the resolved source directory as a bare path, for use in scripts and editor integrations (`cd "$(mate config source-dir)"`)
 - `mate status` now reports missing packages (declared in config but not installed), grouped by package manager
-- `mate apply` now asks for confirmation before running each script, with `[y]es / [n]o / [a]ll / [q]uit`. Declining a script does not record it as run, so it is offered again on the next apply
+- `mate apply` now asks for confirmation before running each script, with `[y]es / [n]o / [s]kip / [a]ll / [q]uit`. `[n]o` skips this time only, so the script is offered again on the next apply; `[s]kip` marks it as done without running so it is not offered again. `[s]kip` is not offered for `always` scripts, whose runs are never recorded. A script marked as done still appears in `mate scripts list` and can be run manually with `mate scripts run`
 - Scripts can describe themselves with a `# Description: <text>` comment in their first 10 lines. Descriptions are shown in the confirmation prompt, `mate scripts list`, and `mate status`
 - `--no-scripts` flag for `mate apply` to skip all scripts (intended for automated runs)
 

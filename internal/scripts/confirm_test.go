@@ -115,6 +115,84 @@ func newTestExecutor(t *testing.T, dryRun bool) *Executor {
 	return NewExecutor(db, nil, dryRun, false)
 }
 
+func TestCanMarkSkipped(t *testing.T) {
+	tests := []struct {
+		freq Frequency
+		want bool
+	}{
+		{FreqOnce, true},
+		{FreqOnchange, true},
+		{FreqDaily, true},
+		{FreqWeekly, true},
+		{FreqMonthly, true},
+		// `always` runs are never recorded, so there is nothing to mark.
+		{FreqAlways, false},
+		{FreqManual, false},
+	}
+
+	for _, tc := range tests {
+		got := canMarkSkipped(&Script{Frequency: tc.freq})
+		if got != tc.want {
+			t.Errorf("%v: got %v, want %v", tc.freq, got, tc.want)
+		}
+	}
+}
+
+// canMarkSkipped must agree with recordRun: the option is only offered for
+// frequencies whose runs are actually persisted, otherwise "mark as done" would
+// silently do nothing.
+func TestCanMarkSkippedMatchesRecordRun(t *testing.T) {
+	dir := t.TempDir()
+	path := writeScript(t, dir, "01-x.sh#once#before", "#!/bin/bash\ntrue\n")
+
+	for _, freq := range []Frequency{FreqOnce, FreqOnchange, FreqDaily, FreqWeekly, FreqMonthly, FreqAlways, FreqManual} {
+		executor := newTestExecutor(t, false)
+		script := &Script{Path: path, Name: "x", Frequency: freq, ContentHash: "h"}
+
+		if err := executor.recordRun(script); err != nil {
+			t.Fatalf("%v: recordRun failed: %v", freq, err)
+		}
+
+		hasRun, err := executor.db.HasScriptRun(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hasRun != canMarkSkipped(script) {
+			t.Errorf("%v: recordRun persisted=%v but canMarkSkipped=%v", freq, hasRun, canMarkSkipped(script))
+		}
+	}
+}
+
+// Marking a script as done must record it without executing it.
+func TestSkipMarkRecordsWithoutRunning(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker")
+	path := writeScript(t, dir, "01-x.sh#once#before", "#!/bin/bash\ntouch "+marker+"\n")
+
+	executor := newTestExecutor(t, false)
+	script := &Script{Path: path, Name: "x", Frequency: FreqOnce, Timing: TimingBefore, ContentHash: "h"}
+
+	if err := executor.recordRun(script); err != nil {
+		t.Fatalf("recordRun failed: %v", err)
+	}
+
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Error("marking as done must not execute the script")
+	}
+
+	// With a run recorded, the script is no longer due.
+	shouldRun, reason, err := ShouldRun(script, executor.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shouldRun {
+		t.Error("expected a marked script to no longer be due")
+	}
+	if reason != "already run" {
+		t.Errorf("unexpected reason: %q", reason)
+	}
+}
+
 func TestExecute_NoScriptsSkipsEverything(t *testing.T) {
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "marker")

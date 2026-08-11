@@ -24,9 +24,21 @@ var applyCmd = &cobra.Command{
 	Short: "Apply configuration to target",
 	Long: `Apply files from source directories to their targets.
 
-Scripts due to run are confirmed individually before executing. Use --force to
-auto-confirm them, or --no-scripts to skip them entirely (useful for automated
-runs). Without a terminal to prompt on, scripts are skipped with a warning.`,
+Scripts due to run are confirmed individually before executing:
+
+  [y]es    run the script
+  [n]o     skip this time; ask again on the next apply
+  [s]kip   mark as done without running, so it is not offered again
+           (not available for 'always' scripts, whose runs are never recorded)
+  [a]ll    run this and auto-confirm the rest
+  [q]uit   abort the apply
+
+A script marked as done still appears in 'mate scripts list' and can be run
+manually with 'mate scripts run'.
+
+Use --force to auto-confirm all scripts, or --no-scripts to skip them entirely
+(useful for automated runs). Without a terminal to prompt on, scripts are
+skipped with a warning.`,
 	RunE: runApply,
 }
 

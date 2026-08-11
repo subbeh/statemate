@@ -112,9 +112,22 @@ type scriptAction int
 
 const (
 	actionRun scriptAction = iota
-	actionSkip
+	actionSkip     // skip for now; ask again next apply
+	actionSkipMark // skip and record as run, so it is never asked again
 	actionAbort
 )
+
+// canMarkSkipped reports whether a script's run can be recorded without
+// contradicting its frequency. An `always` script is explicitly opted into
+// running on every apply, so there is no meaningful "never ask again" for it --
+// recordRun does not persist that frequency either.
+func canMarkSkipped(script *Script) bool {
+	switch script.Frequency {
+	case FreqOnce, FreqOnchange, FreqDaily, FreqWeekly, FreqMonthly:
+		return true
+	}
+	return false
+}
 
 func isInteractive() bool {
 	return term.IsTerminal(int(os.Stdin.Fd()))
@@ -136,8 +149,17 @@ func (e *Executor) confirm(script *Script) (scriptAction, error) {
 		fmt.Printf("  %s\n", script.Description)
 	}
 
+	// [s]kip records the script as run without executing it, so it is not offered
+	// again while that record stands. Meaningless for `always` scripts, whose runs
+	// are never recorded, so the option is hidden for them.
+	markable := canMarkSkipped(script)
+	prompt := "[y]es / [n]o / [a]ll / [q]uit: "
+	if markable {
+		prompt = "[y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit: "
+	}
+
 	for {
-		fmt.Print("[y]es / [n]o / [a]ll / [q]uit: ")
+		fmt.Print(prompt)
 		input, err := e.stdin.ReadString('\n')
 		if err != nil {
 			// EOF with no answer -- treat as abort rather than assuming consent.
@@ -149,6 +171,10 @@ func (e *Executor) confirm(script *Script) (scriptAction, error) {
 			return actionRun, nil
 		case "n", "no":
 			return actionSkip, nil
+		case "s", "skip":
+			if markable {
+				return actionSkipMark, nil
+			}
 		case "a", "all":
 			e.confirmAll = true
 			return actionRun, nil
@@ -208,6 +234,16 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 		switch action {
 		case actionSkip:
 			// Deliberately not recorded, so the script is offered again next apply.
+			result.Skipped++
+			continue
+		case actionSkipMark:
+			// Record without running, so it is treated as done and never offered
+			// again. 'mate scripts list' still shows it, and 'mate scripts run'
+			// can run it manually.
+			if err := e.recordRun(script); err != nil {
+				return nil, fmt.Errorf("recording skipped script: %w", err)
+			}
+			fmt.Printf("  marked as done without running: %s\n", script.Name)
 			result.Skipped++
 			continue
 		case actionAbort:
