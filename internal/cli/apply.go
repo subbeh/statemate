@@ -148,7 +148,17 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
 
-	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0).WithConfirmation(force, noScripts)
+	// Compute pending changes before applying anything, so #onchange scripts see
+	// the same set whether they run #before or #after -- once apply has written
+	// the files there are no pending changes left to detect.
+	pending, err := target.ComputeChanges(tree, db, target.ComputeOpts{TmplCtx: tmplCtx, Enc: enc})
+	if err != nil {
+		return fmt.Errorf("computing changes: %w", err)
+	}
+
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0).
+		WithConfirmation(force, noScripts).
+		WithChangedSources(changedSources(pending.Changes))
 
 	beforeScripts := allScripts.Automatic().ByProfile(profileChain).ByTiming(scripts.TimingBefore)
 	beforeScripts.Sort()

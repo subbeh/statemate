@@ -77,6 +77,15 @@ type Executor struct {
 	// confirmAll is set once the user answers "all" at a prompt.
 	confirmAll bool
 	stdin      *bufio.Reader
+	// changed names the sources with pending changes, used by #onchange scripts.
+	changed ChangedSources
+}
+
+// WithChangedSources tells the executor which sources have pending changes, so
+// #onchange scripts can be scheduled. Without it, no #onchange script runs.
+func (e *Executor) WithChangedSources(changed ChangedSources) *Executor {
+	e.changed = changed
+	return e
 }
 
 func NewExecutor(db *state.DB, tmplCtx *template.Context, dryRun, verbose bool) *Executor {
@@ -287,10 +296,14 @@ func (e *Executor) ExecuteOne(script *Script) error {
 }
 
 func (e *Executor) shouldRun(script *Script) (bool, string, error) {
-	return ShouldRun(script, e.db)
+	return ShouldRun(script, e.db, e.changed)
 }
 
-func ShouldRun(script *Script, db *state.DB) (bool, string, error) {
+// ShouldRun reports whether a script is due.
+//
+// changed names the sources with pending changes and is only consulted for
+// #onchange scripts; pass a zero ChangedSources when there are none.
+func ShouldRun(script *Script, db *state.DB, changed ChangedSources) (bool, string, error) {
 	switch script.Frequency {
 	case FreqManual:
 		return false, "manual only", nil
@@ -306,14 +319,18 @@ func ShouldRun(script *Script, db *state.DB) (bool, string, error) {
 		return true, "", nil
 
 	case FreqOnchange:
-		hasRunWithHash, err := db.HasScriptRunWithHash(script.Path, script.ContentHash)
-		if err != nil {
-			return false, "", err
+		// Triggered by changes to the script's own source, not to the script
+		// itself. A repo-root script has no owning source, so any change counts.
+		if script.SourceDir == "" {
+			if changed.Any() {
+				return true, "", nil
+			}
+			return false, "no source changes", nil
 		}
-		if hasRunWithHash {
-			return false, "unchanged", nil
+		if changed.Has(script.SourceDir) {
+			return true, "", nil
 		}
-		return true, "", nil
+		return false, "no source changes", nil
 
 	case FreqAlways:
 		return true, "", nil
@@ -346,10 +363,14 @@ func shouldRunInterval(script *Script, db *state.DB, interval time.Duration) (bo
 	return false, fmt.Sprintf("last run %s ago", time.Since(run.RunAt).Round(time.Hour)), nil
 }
 
-func PendingScripts(scripts Scripts, db *state.DB) (Scripts, error) {
+// PendingScripts returns the scripts that are due.
+//
+// changed names the sources with pending changes, so #onchange scripts are
+// reported consistently with what apply will actually run.
+func PendingScripts(scripts Scripts, db *state.DB, changed ChangedSources) (Scripts, error) {
 	var pending Scripts
 	for _, script := range scripts {
-		shouldRun, _, err := ShouldRun(script, db)
+		shouldRun, _, err := ShouldRun(script, db, changed)
 		if err != nil {
 			return nil, err
 		}

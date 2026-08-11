@@ -133,7 +133,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	profileChain := profile.InheritanceChain(cfg, profileName)
-	pendingScripts, err := scripts.PendingScripts(allScripts.Automatic().ByProfile(profileChain), db)
+	pendingScripts, err := scripts.PendingScripts(
+		allScripts.Automatic().ByProfile(profileChain), db, changedSources(result.Changes))
 	if err != nil {
 		return fmt.Errorf("checking pending scripts: %w", err)
 	}
@@ -316,6 +317,16 @@ func printShortStatus(changes []*target.Change, orphans []string, pending script
 func extractSourceDir(entry *source.Entry) string {
 	srcDir := strings.TrimSuffix(entry.SourcePath, "/"+entry.RelPath)
 	return filepath.Base(srcDir)
+}
+
+// changedSources collects the sources with pending changes, which is what
+// schedules #onchange scripts.
+func changedSources(changes []*target.Change) scripts.ChangedSources {
+	names := make([]string, 0, len(changes))
+	for _, c := range changes {
+		names = append(names, extractSourceDir(c.Entry))
+	}
+	return scripts.NewChangedSources(names...)
 }
 
 func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {

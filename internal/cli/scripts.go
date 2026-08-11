@@ -11,6 +11,7 @@ import (
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 )
 
@@ -25,7 +26,13 @@ A script can describe itself with a comment in its first 10 lines:
   # Description: Bootstrap the development environment
 
 The description is shown by 'scripts list', 'mate status', and the
-confirmation prompt during apply. Matching is case-insensitive.`,
+confirmation prompt during apply. Matching is case-insensitive.
+
+An '#onchange' script runs when its own source has pending changes -- the files
+'mate status' lists for the source the script lives in. A script in the
+repo-root .matescripts directory has no owning source, so any pending change
+triggers it. Editing the script itself does not trigger it; use
+'mate scripts run <name>' to run one on demand.`,
 }
 
 var scriptsListCmd = &cobra.Command{
@@ -88,6 +95,21 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 
 	profileChain := profile.InheritanceChain(cfg, profileName)
 
+	// #onchange scripts are scheduled by pending source changes, so compute them
+	// here too -- otherwise this listing would disagree with what apply will run.
+	// Failures are non-fatal: the listing degrades to "no source changes".
+	var changed scripts.ChangedSources
+	if scanner, err := newScanner(cfg, profileName); err == nil {
+		if tree, err := scanner.Scan(sourcePaths); err == nil {
+			if profileName != "" {
+				tree = tree.FilterByProfile(profileChain)
+			}
+			if res, err := target.ComputeChanges(tree, db); err == nil {
+				changed = changedSources(res.Changes)
+			}
+		}
+	}
+
 	fmt.Printf(" %-10s %-8s %-6s %-10s %-30s %s\n", "FREQUENCY", "TIMING", "ORDER", "SOURCE", "NAME", "STATUS")
 	fmt.Println(strings.Repeat("-", 90))
 
@@ -112,15 +134,16 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 					status = "pending"
 				}
 			case scripts.FreqOnchange:
-				if lastRun != nil {
-					hasRunWithHash, _ := db.HasScriptRunWithHash(script.Path, script.ContentHash)
-					if hasRunWithHash {
-						status = "unchanged (" + lastRun.RunAt.Format("2006-01-02 15:04") + ")"
-					} else {
-						status = "changed (" + lastRun.RunAt.Format("2006-01-02 15:04") + ")"
-					}
-				} else {
+				// Driven by pending changes to the script's source, so ask the
+				// shared scheduler rather than duplicating the rule here.
+				due, _, _ := scripts.ShouldRun(script, db, changed)
+				switch {
+				case due:
 					status = "pending"
+				case lastRun != nil:
+					status = "unchanged (" + lastRun.RunAt.Format("2006-01-02 15:04") + ")"
+				default:
+					status = "unchanged"
 				}
 			default:
 				if lastRun != nil {

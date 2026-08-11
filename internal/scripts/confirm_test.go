@@ -181,7 +181,7 @@ func TestSkipMarkRecordsWithoutRunning(t *testing.T) {
 	}
 
 	// With a run recorded, the script is no longer due.
-	shouldRun, reason, err := ShouldRun(script, executor.db)
+	shouldRun, reason, err := ShouldRun(script, executor.db, ChangedSources{})
 	if err != nil {
 		t.Fatal(err)
 	}
