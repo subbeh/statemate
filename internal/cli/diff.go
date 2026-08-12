@@ -22,8 +22,12 @@ var diffCmd = &cobra.Command{
 	Short:             "Show pending changes",
 	Long: `Show full unified diff of pending changes.
 
+The positional argument filters by file or path; use --source to limit the diff
+to a single source.
+
 Use --tool to specify an external diff tool (e.g., delta, difft, vimdiff).
 This can also be set in config with 'diff_tool'.`,
+	Args:              cobra.MaximumNArgs(1),
 	RunE:              runDiff,
 	ValidArgsFunction: completeManagedFiles,
 }
@@ -31,6 +35,7 @@ This can also be set in config with 'diff_tool'.`,
 func init() {
 	diffCmd.Flags().StringP("tool", "t", "", "external diff tool to use")
 	diffCmd.Flags().Bool("sudo", false, "use sudo to check files requiring elevated access")
+	addScopeFlag(diffCmd)
 	rootCmd.AddCommand(diffCmd)
 }
 
@@ -126,15 +131,18 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 	changes := result.Changes
 
-	var filterPath string
-	if len(args) > 0 {
-		filterPath = args[0]
+	scope, err := scopeFrom(cmd, args)
+	if err != nil {
+		return err
+	}
+	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
+		return err
 	}
 
-	if filterPath != "" {
+	if !scope.IsZero() {
 		var filtered []*target.Change
 		for _, c := range changes {
-			if matchesPath(c.Entry, filterPath, cfg.SourceDir()) {
+			if scope.Matches(c.Entry, cfg.SourceDir()) {
 				filtered = append(filtered, c)
 			}
 		}

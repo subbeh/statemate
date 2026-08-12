@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate add` source picker now lists profile-provided sources, not just the top-level `sources:` list. Previously the picker showed a different list than it indexed, so a selection could map to the wrong source
 
 ### Added
+- `mate apply` can now be scoped: `mate apply <path>` applies only matching files (no scripts, packages, or secret fetch), and `mate apply -s <source>` applies that source's files, runs its scripts, and prompts for its packages. Repo-root scripts are not run under `--source`, since they apply to the whole repository
+- `--source`/`-s` flag for `mate status` and `mate diff` to limit output to a single source, matching the flag `mate add` already uses
 - `mate config source-dir` prints the resolved source directory as a bare path, for use in scripts and editor integrations (`cd "$(mate config source-dir)"`)
 - `mate status` now reports missing packages (declared in config but not installed), grouped by package manager
 - `mate apply` now asks for confirmation before running each script, with `[y]es / [n]o / [s]kip / [a]ll / [q]uit`. `[n]o` skips this time only, so the script is offered again on the next apply; `[s]kip` marks it as done without running so it is not offered again. `[s]kip` is not offered for `always` scripts, whose runs are never recorded. A script marked as done still appears in `mate scripts list` and can be run manually with `mate scripts run`
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--no-scripts` flag for `mate apply` to skip all scripts (intended for automated runs)
 
 ### Changed
+- **The positional argument to `mate status` and `mate diff` is now a file/path filter only.** Previously a bare word also prefix-matched a whole source, so `mate status nvim` filtered by source; use `mate status -s nvim` instead. A positional that names a source now errors with that suggestion rather than silently matching files
 - `mate scripts list` shows descriptions in a `DESCRIPTION` column instead of an unaligned line under each row, so there is one row per script. Long descriptions are truncated with `…` to fit the terminal; when the output is piped or redirected they are printed in full. Column widths now size to their content, and the `-` marker for profile-inactive scripts is gone since those rows already show `n/a`
 - **`#onchange` scripts now trigger on changes to their source, not to the script itself.** A script in `<source>/.matescripts/` runs when `<source>` has pending changes (the files `mate status` lists); one in the repo-root `.matescripts/` runs when any source has pending changes. Editing an `#onchange` script no longer reruns it — use `mate scripts run <name>` to run it on demand. Previously `#onchange` compared the script's own content hash, so a script like `arch/.matescripts/00-env_reload.sh#onchange#after` only fired when you edited the reload script, which meant it effectively never ran
 - `mate managed <path>` now matches exactly one file when given a path to an existing file (target or source), instead of every file with the same basename. Bare names that do not resolve to a file still match loosely, so `mate managed nvim` continues to list a whole source

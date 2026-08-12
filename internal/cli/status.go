@@ -28,7 +28,10 @@ var statusCmd = &cobra.Command{
 	Long: `Show pending changes that would be made on apply.
 
 Reports files to be created, modified, or in conflict, plus orphaned files,
-missing packages, pending scripts, and secrets needing refresh.`,
+missing packages, pending scripts, and secrets needing refresh.
+
+The positional argument filters by file or path; use --source to limit the
+report to a single source.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runStatus,
 	ValidArgsFunction: completeManagedFiles,
@@ -38,6 +41,7 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 	statusCmd.Flags().Bool("short", false, "compact output for statuslines (format: +N ~N !N ?N *N sN)")
 	statusCmd.Flags().Bool("sudo", false, "use sudo to check files requiring elevated access")
+	addScopeFlag(statusCmd)
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -174,22 +178,30 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	var filterPath string
-	if len(args) > 0 {
-		filterPath = args[0]
+	scope, err := scopeFrom(cmd, args)
+	if err != nil {
+		return err
+	}
+	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
+		return err
 	}
 
 	var filteredChanges []*target.Change
 	for _, c := range changes {
-		if filterPath != "" && !matchesPath(c.Entry, filterPath, cfg.SourceDir()) {
+		if !scope.Matches(c.Entry, cfg.SourceDir()) {
 			continue
 		}
 		filteredChanges = append(filteredChanges, c)
 	}
 
+	// Orphans are no longer in any source, so they can only be matched by path.
+	// Under --source there is nothing to match against, so report none.
 	var filteredOrphans []string
 	for _, o := range orphans {
-		if filterPath != "" && !strings.Contains(o, filterPath) && !strings.HasSuffix(o, "/"+filterPath) {
+		switch {
+		case scope.Source != "":
+			continue
+		case scope.Path != "" && !strings.Contains(o, scope.Path) && !strings.HasSuffix(o, "/"+scope.Path):
 			continue
 		}
 		filteredOrphans = append(filteredOrphans, o)

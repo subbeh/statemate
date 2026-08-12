@@ -20,9 +20,20 @@ import (
 )
 
 var applyCmd = &cobra.Command{
-	Use:   "apply",
+	Use:   "apply [path]",
 	Short: "Apply configuration to target",
 	Long: `Apply files from source directories to their targets.
+
+With no argument, applies everything. Otherwise the run is narrowed:
+
+  mate apply <path>        apply matching files only -- no scripts, no
+                           packages, no secret fetch
+  mate apply -s <source>   apply that source's files, run its scripts, and
+                           prompt for its packages
+
+The positional argument is always a file or path filter; --source is the only
+way to select a source. Repo-root scripts are not run under --source, since
+they apply to the whole repository.
 
 Scripts due to run are confirmed individually before executing:
 
@@ -39,7 +50,9 @@ manually with 'mate scripts run'.
 Use --force to auto-confirm all scripts, or --no-scripts to skip them entirely
 (useful for automated runs). Without a terminal to prompt on, scripts are
 skipped with a warning.`,
-	RunE: runApply,
+	Args:              cobra.MaximumNArgs(1),
+	RunE:              runApply,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 var (
@@ -55,6 +68,7 @@ func init() {
 	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite modified targets and auto-confirm scripts")
 	applyCmd.Flags().BoolVar(&noScripts, "no-scripts", false, "skip all scripts")
 	applyCmd.Flags().CountVarP(&verbose, "verbose", "V", "increase verbosity (can be repeated)")
+	addScopeFlag(applyCmd)
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
@@ -102,6 +116,17 @@ func runApply(cmd *cobra.Command, args []string) error {
 		tree = tree.FilterByProfile(profileChain)
 	}
 
+	// Narrow the run before anything is applied, so every later phase (files,
+	// scripts, packages, orphans) sees the same scope.
+	scope, err := scopeFrom(cmd, args)
+	if err != nil {
+		return err
+	}
+	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
+		return err
+	}
+	tree = scope.FilterTree(tree, cfg.SourceDir())
+
 	db, err := state.Open("")
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
@@ -137,8 +162,13 @@ func runApply(cmd *cobra.Command, args []string) error {
 			return mgr.Get(key)
 		}
 
-		if err := fetchMissingSecrets(cfg, mgr, enc, profileName, sourcePaths, dryRun, verbose); err != nil {
-			return err
+		// A file-scoped run deploys files and nothing else, so it does not reach
+		// out to fetch secrets. Source scope still does, since its templates may
+		// need them.
+		if scope.Path == "" {
+			if err := fetchMissingSecrets(cfg, mgr, enc, profileName, sourcePaths, dryRun, verbose); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -147,6 +177,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
+	allScripts = scopedScripts(allScripts, scope)
 
 	// Compute pending changes before applying anything, so #onchange scripts see
 	// the same set whether they run #before or #after -- once apply has written
@@ -199,7 +230,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := promptMissingPackages(cfg, profileName, sourcePaths, dryRun, force); err != nil {
+	if err := promptMissingPackages(cfg, profileName, sourcePaths, dryRun, force, scope); err != nil {
 		return err
 	}
 
@@ -309,14 +340,21 @@ func warnSkippedScripts(res *scripts.ExecuteResult) {
 	fmt.Fprintln(os.Stderr, "Use --force to run them, or --no-scripts to silence this warning.")
 }
 
-func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, dryRun bool, autoConfirm bool) error {
+func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, dryRun bool, autoConfirm bool, scope Scope) error {
+	// A file-scoped run touches files only.
+	if scope.Path != "" {
+		return nil
+	}
+
 	results, err := packages.ComputeSync(cfg, profileName, sourcePaths)
 	if err != nil {
 		return nil
 	}
 
 	for _, result := range results {
-		missing := result.Missing()
+		// Under --source, install only what that source declares. Filter the
+		// statuses (which carry the contributing source) rather than the names.
+		missing := missingNames(scopedPackages(result.Statuses, scope))
 		if len(missing) == 0 {
 			continue
 		}
