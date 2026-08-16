@@ -81,12 +81,44 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 		if dir.Attrs.Perm != 0 {
 			dirMode = os.FileMode(dir.Attrs.Perm)
 		}
+
+		// An existing directory needs no work unless an attribute asks for it.
+		// This matters most for mapped roots like etc: /etc -- creating them is a
+		// no-op, but chmodding a system directory the user never asked about is
+		// not.
+		if info, err := os.Stat(dir.TargetPath); err == nil && info.IsDir() {
+			if dir.Attrs.Perm == 0 && dir.Attrs.Owner == "" && dir.Attrs.Group == "" {
+				continue
+			}
+		}
+
+		// Directories outside the user's writable tree (e.g. a source mapping
+		// etc: /etc) need elevated access, the same way applyFile handles the
+		// parent directories of individual files.
+		if needsSudo(dir.TargetPath) {
+			// sudoMkdir chmods after creating, so this covers both steps.
+			if err := sudoMkdir(dir.TargetPath, dirMode); err != nil {
+				return nil, fmt.Errorf("creating directory %s: %w", dir.TargetPath, err)
+			}
+			if dir.Attrs.Owner != "" || dir.Attrs.Group != "" {
+				if err := sudoChown(dir.TargetPath, dir.Attrs.Owner, dir.Attrs.Group); err != nil {
+					return nil, fmt.Errorf("setting ownership on %s: %w", dir.TargetPath, err)
+				}
+			}
+			continue
+		}
+
 		if err := os.MkdirAll(dir.TargetPath, dirMode); err != nil {
 			return nil, fmt.Errorf("creating directory %s: %w", dir.TargetPath, err)
 		}
 		if dir.Attrs.Perm != 0 {
 			if err := os.Chmod(dir.TargetPath, dirMode); err != nil {
 				return nil, fmt.Errorf("setting permissions on %s: %w", dir.TargetPath, err)
+			}
+		}
+		if dir.Attrs.Owner != "" || dir.Attrs.Group != "" {
+			if err := chownFile(dir.TargetPath, dir.Attrs.Owner, dir.Attrs.Group); err != nil {
+				return nil, fmt.Errorf("setting ownership on %s: %w", dir.TargetPath, err)
 			}
 		}
 	}

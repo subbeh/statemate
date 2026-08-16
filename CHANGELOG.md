@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `mate apply` now uses sudo to create directories outside your writable tree, so a source mapping `targets: { etc: /etc }` no longer fails with `creating directory /etc/restic: permission denied`. Directory `owner`/`group` attributes are also applied now, which they previously were not. An existing directory with no perm/owner/group attribute is left completely untouched, so mapped roots like `/etc` are never chmodded
 - `mate apply -s <source>` no longer fetches secrets or discovers scripts belonging to other sources. Secret discovery walks the source directories directly, so a scoped run could fail trying to fetch a secret referenced only by a source it was not applying
 - `mate packages status` no longer shows AUR packages as extras under pacman (uses `-Qen` for native-only)
 - `mate packages status` now detects virtual/provides packages as installed (e.g. `man` provided by `man-db`)
