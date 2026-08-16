@@ -284,7 +284,7 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 		}
 	}
 
-	targetHash, err := state.HashFile(entry.TargetPath)
+	targetHash, err := hashTarget(entry.TargetPath)
 	if err != nil {
 		return err
 	}
@@ -434,7 +434,7 @@ func (a *Applier) importFile(entry *source.Entry) error {
 		return err
 	}
 
-	targetHash, err := state.HashFile(entry.TargetPath)
+	targetHash, err := hashTarget(entry.TargetPath)
 	if err != nil {
 		return err
 	}
@@ -449,8 +449,31 @@ func (a *Applier) importFile(entry *source.Entry) error {
 }
 
 
+// hashTarget hashes a deployed file, falling back to elevated access when it is
+// unreadable as the invoking user.
+//
+// Files written via sudo -- root-owned, or mode 0600 like a secret -- generally
+// cannot be read back by the user who ran mate, so recording state after
+// applying them would fail on the hash rather than the write.
+func hashTarget(path string) (string, error) {
+	hash, err := state.HashFile(path)
+	if err == nil {
+		return hash, nil
+	}
+	if !isPermissionDenied(err) {
+		return "", err
+	}
+
+	hash, sudoErr := sudoHashFile(path)
+	if sudoErr != nil {
+		// Report the original permission error, which is the actionable one.
+		return "", fmt.Errorf("reading %s: %w", path, err)
+	}
+	return hash, nil
+}
+
 func (a *Applier) recordState(entry *source.Entry, sourceHash string) error {
-	targetHash, err := state.HashFile(entry.TargetPath)
+	targetHash, err := hashTarget(entry.TargetPath)
 	if err != nil {
 		return err
 	}

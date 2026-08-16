@@ -3,6 +3,7 @@ package target
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/subbeh/statemate/internal/source"
@@ -381,5 +382,57 @@ func TestApplier_LeavesExistingUnattributedDirectoriesAlone(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0705 {
 		t.Errorf("existing directory mode changed: got %o, want 705 (untouched)", got)
+	}
+}
+
+// A file written via sudo (root-owned, or mode 0600 like a secret) usually
+// cannot be read back by the invoking user, so recording state after applying it
+// must not fail on the hash. When elevated access is unavailable too, the error
+// should name the path rather than surfacing a bare EACCES from inside HashFile.
+func TestHashTarget_UnreadableFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: mode 000 is still readable")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret")
+	if err := os.WriteFile(path, []byte("s3cret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0000); err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := hashTarget(path)
+	if err == nil {
+		// sudo -n succeeded, so the fallback worked and we got a real hash.
+		if hash == "" {
+			t.Error("expected a hash when the sudo fallback succeeds")
+		}
+		return
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("error should name the unreadable path, got: %v", err)
+	}
+}
+
+func TestHashTarget_ReadableFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plain")
+	if err := os.WriteFile(path, []byte("hello\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := hashTarget(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want, err := state.HashFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash != want {
+		t.Errorf("got %q, want %q", hash, want)
 	}
 }
