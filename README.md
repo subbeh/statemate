@@ -179,12 +179,28 @@ Templates use Go's `text/template` syntax with these variables and functions:
 - `.Env` - environment variables
 
 **Functions:**
+
+The [sprig](https://masterminds.github.io/sprig/) library is available, giving
+around 200 functions for strings, lists, dicts, math, dates, and encoding —
+`splitList`, `trimSuffix`, `upper`, `join`, `ternary`, `regexReplaceAll`, and so
+on:
+
+```
+HostName {{ (splitList "-" .Vars.user) | first }}.example.com
+```
+
+Statemate adds its own, which take precedence where a name collides:
 - `{{ bitwarden "item" "type" "field" }}` - fetch secret from cache (see Secrets)
 - `{{ required .Vars.secret }}` - error if value is missing/empty
 - `{{ default "fallback" .Vars.maybe }}` - use fallback if nil/empty
-- `{{ env "HOME" }}` - get environment variable
+- `{{ env "HOME" }}` - environment variable, from the rendering context
 - `{{ cmd "hostname -s" }}` - run command
 - `{{ base64Decode "..." }}` - decode base64 string
+- `{{ indent 2 .Vars.block }}` - indent each non-empty line
+
+Three names shadow sprig's: `env` reads statemate's context rather than the live
+process environment, `default` only substitutes for `nil` and `""` (sprig's also
+substitutes for `0` and `false`), and `indent` leaves blank lines unpadded.
 
 ## Local Config
 

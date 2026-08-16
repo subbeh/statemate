@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Secret discovery now renders templates with the same functions as `mate apply`. A template using a function discovery did not know about failed to parse there and was skipped silently, so its secrets were never fetched and the apply failed on a cache miss
 - `mate apply` can now record state for files it wrote via sudo. A root-owned or `0600` target (such as a rendered secret) is unreadable as the invoking user, so the apply failed on hashing the file it had just written successfully
 - `mate apply` now uses sudo to create directories outside your writable tree, so a source mapping `targets: { etc: /etc }` no longer fails with `creating directory /etc/restic: permission denied`. Directory `owner`/`group` attributes are also applied now, which they previously were not. An existing directory with no perm/owner/group attribute is left completely untouched, so mapped roots like `/etc` are never chmodded
 - `mate apply -s <source>` no longer fetches secrets or discovers scripts belonging to other sources. Secret discovery walks the source directories directly, so a scoped run could fail trying to fetch a secret referenced only by a source it was not applying
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate add` source picker now lists profile-provided sources, not just the top-level `sources:` list. Previously the picker showed a different list than it indexed, so a selection could map to the wrong source
 
 ### Added
+- Templates now have the [sprig](https://masterminds.github.io/sprig/) function library (~200 functions: `splitList`, `trimSuffix`, `upper`, `join`, `ternary`, `regexReplaceAll`, and so on). Previously only 9 functions existed, so a template using anything else failed with `function "splitList" not defined`. Statemate's own functions take precedence where a name collides — `env` still reads the rendering context rather than the live process environment, `default` still substitutes only for `nil` and `""` (sprig's also replaces `0` and `false`), and `indent` still leaves blank lines unpadded
 - `mate apply` can now be scoped: `mate apply <path>` applies only matching files (no scripts, packages, or secret fetch), and `mate apply -s <source>` applies that source's files, runs its scripts, and prompts for its packages. Repo-root scripts are not run under `--source`, since they apply to the whole repository
 - `--source`/`-s` flag for `mate status` and `mate diff` to limit output to a single source, matching the flag `mate add` already uses
 - `mate config source-dir` prints the resolved source directory as a bare path, for use in scripts and editor integrations (`cd "$(mate config source-dir)"`)
