@@ -171,6 +171,30 @@ func missingNames(statuses []packages.PackageStatus) []string {
 	return names
 }
 
+// FilterSourcePaths narrows a list of absolute source directories to the scope.
+//
+// Secret discovery and script discovery walk these paths directly rather than
+// going through the tree, so they must be filtered too -- otherwise a scoped run
+// discovers templates from other sources and tries to fetch their secrets.
+//
+// A file scope returns nothing: such a run deploys files and performs no
+// discovery at all.
+func (s Scope) FilterSourcePaths(paths []string) []string {
+	switch {
+	case s.Path != "":
+		return nil
+	case s.Source != "":
+		for _, p := range paths {
+			if filepath.Base(p) == s.Source {
+				return []string{p}
+			}
+		}
+		return nil
+	default:
+		return paths
+	}
+}
+
 // FilterTree returns a tree containing only the entries inside the scope.
 func (s Scope) FilterTree(tree *source.Tree, sourceDir string) *source.Tree {
 	if s.IsZero() {

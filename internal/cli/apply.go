@@ -127,6 +127,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 	tree = scope.FilterTree(tree, cfg.SourceDir())
 
+	// Narrow the source paths too. Secret discovery and script discovery both
+	// walk these directly, so leaving them unfiltered would make a scoped run
+	// fetch secrets for templates it is never going to render.
+	sourcePaths = scope.FilterSourcePaths(sourcePaths)
+
 	db, err := state.Open("")
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)

@@ -140,6 +140,38 @@ func TestScopedPackages(t *testing.T) {
 	})
 }
 
+// Secret and script discovery walk the source paths directly rather than going
+// through the tree, so those paths must be scoped too. Leaving them unfiltered
+// made `mate apply -s env` try to fetch secrets for another source's templates.
+func TestScope_FilterSourcePaths(t *testing.T) {
+	paths := []string{"/repo/env", "/repo/restic", "/repo/nvim"}
+
+	t.Run("no scope keeps everything", func(t *testing.T) {
+		if got := (Scope{}).FilterSourcePaths(paths); len(got) != 3 {
+			t.Errorf("expected all 3 paths, got %v", got)
+		}
+	})
+
+	t.Run("source scope keeps only that source", func(t *testing.T) {
+		got := (Scope{Source: "env"}).FilterSourcePaths(paths)
+		if len(got) != 1 || got[0] != "/repo/env" {
+			t.Errorf("expected only /repo/env, got %v", got)
+		}
+	})
+
+	t.Run("file scope keeps none", func(t *testing.T) {
+		if got := (Scope{Path: "some/file"}).FilterSourcePaths(paths); len(got) != 0 {
+			t.Errorf("a file-scoped run performs no discovery, got %v", got)
+		}
+	})
+
+	t.Run("unknown source keeps none", func(t *testing.T) {
+		if got := (Scope{Source: "nope"}).FilterSourcePaths(paths); len(got) != 0 {
+			t.Errorf("expected no paths for an unknown source, got %v", got)
+		}
+	})
+}
+
 func TestMissingNamesOnlyReportsMissing(t *testing.T) {
 	got := missingNames([]packages.PackageStatus{
 		{Name: "a", Status: packages.StatusMissing},

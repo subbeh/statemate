@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `mate apply -s <source>` no longer fetches secrets or discovers scripts belonging to other sources. Secret discovery walks the source directories directly, so a scoped run could fail trying to fetch a secret referenced only by a source it was not applying
 - `mate packages status` no longer shows AUR packages as extras under pacman (uses `-Qen` for native-only)
 - `mate packages status` now detects virtual/provides packages as installed (e.g. `man` provided by `man-db`)
 - `mate clean` now uses sudo to remove files requiring elevated access instead of failing with "permission denied"
