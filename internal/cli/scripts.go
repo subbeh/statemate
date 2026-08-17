@@ -164,11 +164,11 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		}
 
 		data = append(data, []string{
+			strconv.Itoa(script.Order),
+			name,
+			source,
 			script.Frequency.String(),
 			script.Timing.String(),
-			strconv.Itoa(script.Order),
-			source,
-			name,
 			status,
 			script.Description,
 		})
@@ -181,7 +181,7 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 	//
 	// With no terminal (piped, redirected, CI) nothing is truncated: descriptions
 	// print in full rather than mangling data the caller is about to process.
-	headers := []string{"FREQUENCY", "TIMING", "ORDER", "SOURCE", "NAME", "STATUS", "DESCRIPTION"}
+	headers := []string{"ORDER", "NAME", "SOURCE", "FREQUENCY", "TIMING", "STATUS", "DESCRIPTION"}
 
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
@@ -194,8 +194,9 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		// Truncate rather than wrap: wrapping would reintroduce the per-script
 		// continuation lines this column replaced.
 		tablewriter.WithRowAutoWrap(tw.WrapTruncate),
+		// ORDER is numeric, so it reads better right-aligned.
 		tablewriter.WithAlignment(tw.Alignment{
-			tw.AlignLeft, tw.AlignLeft, tw.AlignRight, tw.AlignLeft,
+			tw.AlignRight, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
 			tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
 		}),
 		tablewriter.WithRendition(tw.Rendition{

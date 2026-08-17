@@ -5,10 +5,13 @@ import (
 	"testing"
 )
 
-var listHeaders = []string{"FREQUENCY", "TIMING", "ORDER", "SOURCE", "NAME", "STATUS", "DESCRIPTION"}
+var listHeaders = []string{"ORDER", "NAME", "SOURCE", "FREQUENCY", "TIMING", "STATUS", "DESCRIPTION"}
 
+// row builds a scripts-list row in column order. Arguments stay in the caller's
+// reading order (frequency first) so the tests below read naturally; the returned
+// slice is in display order.
 func row(freq, timing, order, source, name, status, desc string) []string {
-	return []string{freq, timing, order, source, name, status, desc}
+	return []string{order, name, source, freq, timing, status, desc}
 }
 
 func TestTruncateDescriptions(t *testing.T) {
