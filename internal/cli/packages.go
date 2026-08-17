@@ -33,7 +33,9 @@ Packages can be defined in:
   - <source>/.mate.yaml packages (source-level)
   - Files referenced via 'include' field
 
-Use --all to show extra packages not in config.
+Use --all to show extra packages not in config. Detecting extras means listing
+every installed package, which is noticeably slower, so it is only done when
+--all is given.
 Use --verbose to show package descriptions.`,
 	RunE: runPackagesStatus,
 }
@@ -77,7 +79,8 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	sources := profile.ResolveSources(cfg, profileName)
-	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources), packages.WithVerbose(packagesVerbose))
+	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),
+		packages.WithVerbose(packagesVerbose), packages.WithExtras(packagesShowAll))
 	if err != nil {
 		return fmt.Errorf("computing sync: %w", err)
 	}
@@ -147,11 +150,11 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 		fmt.Println(strings.TrimRight(scanner.Text(), " "))
 	}
 
-	for _, result := range results {
-		extra := result.Extra()
-		if !packagesShowAll && len(extra) > 0 {
-			fmt.Printf("(%d extra %s packages not in config, use --all to show)\n", len(extra), result.Manager)
-		}
+	// Reporting how many extras exist would mean listing every installed package,
+	// which is the slow half of a sync (about a second for brew). The hint is
+	// static so the common case stays fast.
+	if !packagesShowAll {
+		fmt.Println("\nUse --all to also show packages not in config.")
 	}
 
 	return nil
@@ -171,7 +174,8 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 	}
 
 	sources := profile.ResolveSources(cfg, profileName)
-	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources))
+	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),
+		packages.WithExtras(packagesPrune))
 	if err != nil {
 		return fmt.Errorf("computing sync: %w", err)
 	}
