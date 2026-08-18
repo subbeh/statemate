@@ -26,7 +26,7 @@ Examples:
   mate rename zsh/.zshrc .zshrc.bak`,
 	Args:              cobra.ExactArgs(2),
 	RunE:              runRename,
-	ValidArgsFunction: completeSourceFiles,
+	ValidArgsFunction: completeFilePaths,
 }
 
 func init() {

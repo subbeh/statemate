@@ -13,6 +13,23 @@ import (
 	"github.com/subbeh/statemate/internal/state"
 )
 
+// completeFilePaths hands completion to the shell's own filesystem completion.
+//
+// Commands that resolve their argument as an ordinary path (absolute, or relative
+// to the current directory) should use this. Offering a computed list instead
+// suppresses shell completion via NoFileComp, so anything the list did not
+// anticipate -- a file reached with ../, a var_file outside the source tree, a file
+// not yet managed -- became impossible to complete even though the command accepts
+// it. `mate edit` has always delegated this way; encrypt, decrypt, eval and rename
+// did not, and offered almost nothing.
+func completeFilePaths(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	// One path argument only; a second is not accepted, so offer nothing.
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return nil, cobra.ShellCompDirectiveDefault
+}
+
 func completeTrackedFiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	db, err := state.Open("")
 	if err != nil {
@@ -79,152 +96,6 @@ func completeManagedFiles(cmd *cobra.Command, args []string, toComplete string) 
 	for _, e := range tree.Files() {
 		if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
 			completions = append(completions, rel)
-		}
-	}
-
-	return completions, cobra.ShellCompDirectiveNoFileComp
-}
-
-func completeSourceFiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	tree, err := scanner.Scan(sourcePaths)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	cwd, _ := os.Getwd()
-	extraFiles := resolveExtraFiles(cfg)
-
-	var completions []string
-	for _, e := range tree.Files() {
-		if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
-			completions = append(completions, rel)
-		}
-	}
-	for _, f := range extraFiles {
-		if rel := relativeToDir(f, cwd, cfg.SourceDir()); rel != "" {
-			completions = append(completions, rel)
-		}
-	}
-
-	return completions, cobra.ShellCompDirectiveNoFileComp
-}
-
-func completeEncryptedSourceFiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	tree, err := scanner.Scan(sourcePaths)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	cwd, _ := os.Getwd()
-	extraFiles := resolveExtraFiles(cfg)
-
-	var completions []string
-	for _, e := range tree.Files() {
-		if e.Attrs.Encrypted {
-			if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
-				completions = append(completions, rel)
-			}
-		}
-	}
-	for _, f := range extraFiles {
-		if strings.HasSuffix(f, "#encrypted") {
-			if rel := relativeToDir(f, cwd, cfg.SourceDir()); rel != "" {
-				completions = append(completions, rel)
-			}
-		}
-	}
-
-	return completions, cobra.ShellCompDirectiveNoFileComp
-}
-
-func completeUnencryptedSourceFiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	if len(args) > 0 {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	tree, err := scanner.Scan(sourcePaths)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	cwd, _ := os.Getwd()
-	extraFiles := resolveExtraFiles(cfg)
-
-	var completions []string
-	for _, e := range tree.Files() {
-		if !e.Attrs.Encrypted {
-			if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
-				completions = append(completions, rel)
-			}
-		}
-	}
-	for _, f := range extraFiles {
-		if !strings.HasSuffix(f, "#encrypted") {
-			if rel := relativeToDir(f, cwd, cfg.SourceDir()); rel != "" {
-				completions = append(completions, rel)
-			}
 		}
 	}
 
@@ -387,19 +258,6 @@ func completeSourceDirs(cmd *cobra.Command, args []string, toComplete string) ([
 	return sources, cobra.ShellCompDirectiveNoFileComp
 }
 
-// resolveExtraFiles returns absolute paths of include and var_files from the config.
-// These files live outside the source tree but can be edited/encrypted/decrypted.
-func resolveExtraFiles(cfg *config.Config) []string {
-	var files []string
-	for _, f := range cfg.Include {
-		files = append(files, cfg.ResolveRelPath(f))
-	}
-	for _, f := range cfg.VarFiles {
-		files = append(files, cfg.ResolveRelPath(f))
-	}
-	return files
-}
-
 // cwdRelativeCompletion returns a relative path for the entry if cwd is within
 // the same source directory or target directory as the entry. Returns "" if no match.
 func cwdRelativeCompletion(e *source.Entry, cwd string, sourcePaths []string) string {
@@ -427,76 +285,10 @@ func cwdRelativeCompletion(e *source.Entry, cwd string, sourcePaths []string) st
 	return ""
 }
 
-// relativeToDir returns a path relative to cwd if the file is under cwd or
-// cwd is under sourceDir (so the file can be expressed relative to cwd without
-// leaving the source tree). Returns "" if no meaningful relative path exists.
-func relativeToDir(absPath, cwd, sourceDir string) string {
-	// File is directly under cwd
-	if strings.HasPrefix(absPath, cwd+"/") {
-		rel, err := filepath.Rel(cwd, absPath)
-		if err == nil {
-			return rel
-		}
-	}
-	// Cwd is under sourceDir (or is sourceDir), and so is the file
-	if (cwd == sourceDir || strings.HasPrefix(cwd, sourceDir+"/")) &&
-		strings.HasPrefix(absPath, sourceDir+"/") {
-		rel, err := filepath.Rel(cwd, absPath)
-		if err == nil {
-			return rel
-		}
-	}
-	return ""
-}
-
 // relativeTo returns path relative to base if path is under base, otherwise "".
 func relativeTo(path, base string) string {
 	if rel, ok := strings.CutPrefix(path, base+"/"); ok {
 		return rel
 	}
 	return ""
-}
-
-func completeFilesInSourceDir(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveDefault
-	}
-
-	sourceDir := cfg.SourceDir()
-	if sourceDir == "" {
-		return nil, cobra.ShellCompDirectiveDefault
-	}
-
-	if toComplete == "" {
-		toComplete = sourceDir
-	} else if !filepath.IsAbs(toComplete) {
-		toComplete = filepath.Join(sourceDir, toComplete)
-	}
-
-	dir := toComplete
-	if info, err := os.Stat(toComplete); err != nil || !info.IsDir() {
-		dir = filepath.Dir(toComplete)
-	}
-
-	if !strings.HasPrefix(dir, sourceDir) {
-		return nil, cobra.ShellCompDirectiveDefault
-	}
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveDefault
-	}
-
-	var completions []string
-	for _, e := range entries {
-		path := filepath.Join(dir, e.Name())
-		if e.IsDir() {
-			path += "/"
-		}
-		completions = append(completions, path)
-	}
-
-	return completions, cobra.ShellCompDirectiveNoSpace
 }

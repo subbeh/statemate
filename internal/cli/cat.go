@@ -21,7 +21,7 @@ Example:
   mate cat ~/.config/app/config.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runCat,
-	ValidArgsFunction: completeFilesInSourceDir,
+	ValidArgsFunction: completeFilePaths,
 }
 
 func init() {

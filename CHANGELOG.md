@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Tab completion for `mate encrypt`, `mate decrypt`, `mate eval`, `mate rename` and `mate cat` now completes any file path, like `mate edit` already did. These commands accept a path relative to the current directory, but completion offered a precomputed list of managed files and suppressed the shell's own file completion — so a valid argument such as `../../../.mate/theme.yaml` could not be completed, and in a directory whose files were all already encrypted `mate encrypt` offered nothing at all. `mate cat` additionally completed with absolute paths from the source directory while ignoring the current directory
 - Homebrew packages from a tap (e.g. `jamf/internal-tap/hermes`) are no longer reported as missing when they are installed. `brew list --formula` prints such a formula under its bare name (`hermes`) while `brew leaves` prints it fully qualified, so a package declared by its tap-qualified name never matched and `mate apply` offered to install it on every run — with `brew install` reporting it was already there, so it never converged. Either spelling is now accepted, in both the installed check and the `--all` extras listing (where the same mismatch also listed a declared package as an extra)
 
 ## [0.3.0] - 2026-08-18

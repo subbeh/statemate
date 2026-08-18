@@ -36,7 +36,7 @@ Examples:
   mate decrypt .matedata/secrets.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runDecrypt,
-	ValidArgsFunction: completeEncryptedSourceFiles,
+	ValidArgsFunction: completeFilePaths,
 }
 
 func init() {

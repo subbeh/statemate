@@ -25,7 +25,7 @@ Example:
   mate eval --profile work ~/.statemate/files/config.tmpl`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runEval,
-	ValidArgsFunction: completeSourceFiles,
+	ValidArgsFunction: completeFilePaths,
 }
 
 func init() {
