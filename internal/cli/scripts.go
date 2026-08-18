@@ -4,26 +4,45 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"strconv"
 
+	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 )
 
 var scriptsCmd = &cobra.Command{
 	Use:   "scripts",
 	Short: "Manage scripts",
-	Long:  "List and manage lifecycle scripts",
+	Long: `List and manage lifecycle scripts.
+
+A script can describe itself with a comment in its first 10 lines:
+
+  #!/usr/bin/env bash
+  # Description: Bootstrap the development environment
+
+The description is shown by 'scripts list', 'mate status', and the
+confirmation prompt during apply. Matching is case-insensitive.
+
+An '#onchange' script runs when its own source has pending changes -- the files
+'mate status' lists for the source the script lives in. A script in the
+repo-root .matescripts directory has no owning source, so any pending change
+triggers it. Editing the script itself does not trigger it; use
+'mate scripts run <name>' to run one on demand.`,
 }
 
 var scriptsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all scripts",
-	Long:  "List all discovered scripts and their status",
+	Long:  "List all discovered scripts and their status, including descriptions",
 	RunE:  runScriptsList,
 }
 
@@ -80,16 +99,25 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 
 	profileChain := profile.InheritanceChain(cfg, profileName)
 
-	fmt.Printf(" %-10s %-8s %-6s %-10s %-30s %s\n", "FREQUENCY", "TIMING", "ORDER", "SOURCE", "NAME", "STATUS")
-	fmt.Println(strings.Repeat("-", 90))
+	// #onchange scripts are scheduled by pending source changes, so compute them
+	// here too -- otherwise this listing would disagree with what apply will run.
+	// Failures are non-fatal: the listing degrades to "no source changes".
+	var changed scripts.ChangedSources
+	if scanner, err := newScanner(cfg, profileName); err == nil {
+		if tree, err := scanner.Scan(sourcePaths); err == nil {
+			if profileName != "" {
+				tree = tree.FilterByProfile(profileChain)
+			}
+			if res, err := target.ComputeChanges(tree, db); err == nil {
+				changed = changedSources(res.Changes)
+			}
+		}
+	}
+
+	var data [][]string
 
 	for _, script := range allScripts {
 		active := script.Profile == "" || matchesChain(script.Profile, profileChain)
-
-		marker := " "
-		if !active {
-			marker = "-"
-		}
 
 		var status string
 		if !active {
@@ -104,15 +132,16 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 					status = "pending"
 				}
 			case scripts.FreqOnchange:
-				if lastRun != nil {
-					hasRunWithHash, _ := db.HasScriptRunWithHash(script.Path, script.ContentHash)
-					if hasRunWithHash {
-						status = "unchanged (" + lastRun.RunAt.Format("2006-01-02 15:04") + ")"
-					} else {
-						status = "changed (" + lastRun.RunAt.Format("2006-01-02 15:04") + ")"
-					}
-				} else {
+				// Driven by pending changes to the script's source, so ask the
+				// shared scheduler rather than duplicating the rule here.
+				due, _, _ := scripts.ShouldRun(script, db, changed)
+				switch {
+				case due:
 					status = "pending"
+				case lastRun != nil:
+					status = "unchanged (" + lastRun.RunAt.Format("2006-01-02 15:04") + ")"
+				default:
+					status = "unchanged"
 				}
 			default:
 				if lastRun != nil {
@@ -134,18 +163,111 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			source = filepath.Base(script.SourceDir)
 		}
 
-		fmt.Printf("%s %-10s %-8s %-6d %-10s %-30s %s\n",
-			marker,
-			script.Frequency,
-			script.Timing,
-			script.Order,
-			source,
+		data = append(data, []string{
+			strconv.Itoa(script.Order),
 			name,
+			source,
+			script.Frequency.String(),
+			script.Timing.String(),
 			status,
-		)
+			script.Description,
+		})
 	}
 
+	// Fit the description to whatever the terminal leaves after the other
+	// columns. Letting tablewriter enforce a global MaxWidth instead would spread
+	// the shortfall across every column -- truncating names and shrinking the
+	// description to a few characters -- so trim just this column here.
+	//
+	// With no terminal (piped, redirected, CI) nothing is truncated: descriptions
+	// print in full rather than mangling data the caller is about to process.
+	headers := []string{"ORDER", "NAME", "SOURCE", "FREQUENCY", "TIMING", "STATUS", "DESCRIPTION"}
+
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+			truncateDescriptions(data, descriptionBudget(data, headers, w))
+		}
+	}
+
+	table := tablewriter.NewTable(os.Stdout,
+		tablewriter.WithHeader(headers),
+		// Truncate rather than wrap: wrapping would reintroduce the per-script
+		// continuation lines this column replaced.
+		tablewriter.WithRowAutoWrap(tw.WrapTruncate),
+		// ORDER is numeric, so it reads better right-aligned.
+		tablewriter.WithAlignment(tw.Alignment{
+			tw.AlignRight, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
+			tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
+		}),
+		tablewriter.WithRendition(tw.Rendition{
+			Borders: tw.BorderNone,
+			Settings: tw.Settings{
+				Separators: tw.SeparatorsNone,
+				Lines:      tw.LinesNone,
+			},
+		}),
+	)
+
+	_ = table.Bulk(data)
+	_ = table.Render()
 	return nil
+}
+
+// descriptionColumn is the index of the description in a scripts-list row.
+const descriptionColumn = 6
+
+// descriptionBudget returns how many characters the description column may use
+// so the widest row still fits termWidth. Returns 0 when there is no room.
+//
+// tablewriter pads every column to its widest cell -- header included -- so the
+// budget is the terminal minus those column widths and the padding around each
+// cell.
+func descriptionBudget(rows [][]string, headers []string, termWidth int) int {
+	used := 0
+	for i, h := range headers {
+		if i == descriptionColumn {
+			continue
+		}
+		w := len([]rune(h))
+		for _, r := range rows {
+			if i < len(r) {
+				if n := len([]rune(r[i])); n > w {
+					w = n
+				}
+			}
+		}
+		used += w
+	}
+
+	// Two padding characters per column, plus a leading and a trailing space.
+	overhead := 2 + 2*len(headers)
+
+	budget := termWidth - used - overhead
+	if budget < 0 {
+		return 0
+	}
+	return budget
+}
+
+// truncateDescriptions trims each description to budget runes, marking cut text
+// with an ellipsis. A budget of 0 clears them entirely -- better than a column of
+// bare ellipses.
+func truncateDescriptions(rows [][]string, budget int) {
+	for _, r := range rows {
+		if len(r) <= descriptionColumn {
+			continue
+		}
+		desc := []rune(r[descriptionColumn])
+		if len(desc) == 0 {
+			continue
+		}
+		switch {
+		case budget <= 1:
+			r[descriptionColumn] = ""
+		case len(desc) > budget:
+			r[descriptionColumn] = string(desc[:budget-1]) + "…"
+		}
+	}
 }
 
 func matchesChain(target string, chain []string) bool {

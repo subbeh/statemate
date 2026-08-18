@@ -22,8 +22,12 @@ var diffCmd = &cobra.Command{
 	Short:             "Show pending changes",
 	Long: `Show full unified diff of pending changes.
 
+The positional argument filters by file or path; use --source to limit the diff
+to a single source.
+
 Use --tool to specify an external diff tool (e.g., delta, difft, vimdiff).
 This can also be set in config with 'diff_tool'.`,
+	Args:              cobra.MaximumNArgs(1),
 	RunE:              runDiff,
 	ValidArgsFunction: completeManagedFiles,
 }
@@ -31,6 +35,7 @@ This can also be set in config with 'diff_tool'.`,
 func init() {
 	diffCmd.Flags().StringP("tool", "t", "", "external diff tool to use")
 	diffCmd.Flags().Bool("sudo", false, "use sudo to check files requiring elevated access")
+	addScopeFlag(diffCmd)
 	rootCmd.AddCommand(diffCmd)
 }
 
@@ -126,15 +131,18 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 	changes := result.Changes
 
-	var filterPath string
-	if len(args) > 0 {
-		filterPath = args[0]
+	scope, err := scopeFrom(cmd, args)
+	if err != nil {
+		return err
+	}
+	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
+		return err
 	}
 
-	if filterPath != "" {
+	if !scope.IsZero() {
 		var filtered []*target.Change
 		for _, c := range changes {
-			if matchesPath(c.Entry, filterPath, cfg.SourceDir()) {
+			if scope.Matches(c.Entry, cfg.SourceDir()) {
 				filtered = append(filtered, c)
 			}
 		}
@@ -161,7 +169,11 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		}
 
 		var diff string
-		if change.Entry.Generated {
+		if change.Status == target.StatusImport {
+			// The target is about to be written into the source, so show the diff
+			// that way round -- source as old, target as new.
+			diff, err = generateImportDiff(change.Entry, enc, diffTool)
+		} else if change.Entry.Generated {
 			diff, err = generateGeneratedDiff(change.Entry, diffTool)
 		} else if change.Entry.Attrs.Encrypted && change.Entry.Attrs.Template && enc != nil && enc.CanDecrypt() {
 			diff, err = generateEncryptedTemplateDiff(change.Entry, enc, tmplCtx, diffTool)
@@ -222,6 +234,43 @@ func generateEncryptedTemplateDiff(entry *source.Entry, enc *encrypt.AgeEncrypto
 	_ = tmpFile.Close()
 
 	return target.GenerateDiffWithTool(tmpFile.Name(), entry.TargetPath, diffTool)
+}
+
+// generateImportDiff shows what importing would change in the source: the source
+// is the old side and the target the new one, the reverse of a normal diff.
+//
+// An encrypted source is decrypted first, so the diff compares plaintext rather
+// than reporting that two ciphertexts differ.
+func generateImportDiff(entry *source.Entry, enc *encrypt.AgeEncryptor, diffTool string) (string, error) {
+	oldPath := entry.SourcePath
+
+	if entry.Attrs.Encrypted {
+		if enc == nil || !enc.CanDecrypt() {
+			return "", fmt.Errorf("cannot show diff: source is encrypted and no decryption key is available")
+		}
+		ciphertext, err := os.ReadFile(entry.SourcePath)
+		if err != nil {
+			return "", err
+		}
+		plaintext, err := enc.Decrypt(ciphertext)
+		if err != nil {
+			return "", fmt.Errorf("decrypting source: %w", err)
+		}
+
+		tmpFile, err := os.CreateTemp("", "mate-diff-*")
+		if err != nil {
+			return "", err
+		}
+		defer func() { _ = os.Remove(tmpFile.Name()) }()
+		if _, err := tmpFile.Write(plaintext); err != nil {
+			_ = tmpFile.Close()
+			return "", err
+		}
+		_ = tmpFile.Close()
+		oldPath = tmpFile.Name()
+	}
+
+	return target.GenerateDiffBetween(oldPath, entry.TargetPath, diffTool)
 }
 
 func generateDecryptedDiff(entry *source.Entry, enc *encrypt.AgeEncryptor, diffTool string) (string, error) {

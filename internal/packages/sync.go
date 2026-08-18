@@ -11,16 +11,31 @@ import (
 type SyncResult struct {
 	Manager  string
 	Statuses []PackageStatus
+
+	// extrasComputed records whether extras were looked for at all, so Extra()
+	// can distinguish "none installed" from "never asked".
+	extrasComputed bool
 }
 
 type syncOptions struct {
 	verbose bool
+	extras  bool
 }
 
 type SyncOption func(*syncOptions)
 
 func WithVerbose(v bool) SyncOption {
 	return func(o *syncOptions) { o.verbose = v }
+}
+
+// WithExtras enables detection of installed packages that no source declares.
+//
+// It is off by default because it costs a full list of explicitly-installed
+// packages from every manager, and `brew leaves` alone takes about a second --
+// which used to dominate the runtime of `mate status` and `mate apply`, neither
+// of which reports extras.
+func WithExtras(v bool) SyncOption {
+	return func(o *syncOptions) { o.extras = v }
 }
 
 func (r *SyncResult) Missing() []string {
@@ -33,6 +48,8 @@ func (r *SyncResult) Missing() []string {
 	return result
 }
 
+// Extra lists installed packages that no source declares. It is always empty
+// unless ComputeSync was called with WithExtras.
 func (r *SyncResult) Extra() []string {
 	var result []string
 	for _, s := range r.Statuses {
@@ -42,6 +59,19 @@ func (r *SyncResult) Extra() []string {
 	}
 	return result
 }
+
+// ExtrasComputed reports whether extras were looked for, so a caller can tell an
+// empty Extra() apart from one that was never populated.
+func (r *SyncResult) ExtrasComputed() bool {
+	return r.extrasComputed
+}
+
+// Indirection so tests can supply fake managers instead of shelling out to a
+// real brew or pacman.
+var (
+	getManager       = GetManager
+	availableManager = GetAvailableManagersWithHelper
+)
 
 func ComputeSync(cfg *config.Config, profileName string, sources []string, opts ...SyncOption) ([]SyncResult, error) {
 	var o syncOptions
@@ -129,7 +159,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 	}
 
 	// Ensure all available managers are included
-	for _, m := range GetAvailableManagersWithHelper(cfg.AURHelper) {
+	for _, m := range availableManager(cfg.AURHelper) {
 		if _, ok := managerPkgs[m.Name()]; !ok {
 			managerPkgs[m.Name()] = nil
 		}
@@ -138,7 +168,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 	var results []SyncResult
 
 	for managerName, pkgs := range managerPkgs {
-		manager, err := GetManager(managerName, cfg.AURHelper)
+		manager, err := getManager(managerName, cfg.AURHelper)
 		if err != nil {
 			continue
 		}
@@ -166,7 +196,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 			queriedMap[p.Name] = p
 		}
 
-		result := SyncResult{Manager: managerName}
+		result := SyncResult{Manager: managerName, extrasComputed: o.extras}
 
 		for name, e := range wantedMap {
 			_, version := ParsePackageSpec(e.spec)
@@ -192,18 +222,22 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 			}
 		}
 
-		// List explicitly installed for extras detection
-		installed, err := manager.ListInstalled()
-		if err != nil {
-			return nil, err
-		}
-		for _, inst := range installed {
-			if _, ok := wantedMap[inst.Name]; !ok {
-				result.Statuses = append(result.Statuses, PackageStatus{
-					Name:      inst.Name,
-					Status:    StatusExtra,
-					Installed: inst.Version,
-				})
+		// Listing every explicitly-installed package is the expensive part of a
+		// sync (about a second for brew), so only do it when the caller wants
+		// extras reported.
+		if o.extras {
+			installed, err := manager.ListInstalled()
+			if err != nil {
+				return nil, err
+			}
+			for _, inst := range installed {
+				if _, ok := wantedMap[inst.Name]; !ok {
+					result.Statuses = append(result.Statuses, PackageStatus{
+						Name:      inst.Name,
+						Status:    StatusExtra,
+						Installed: inst.Version,
+					})
+				}
 			}
 		}
 

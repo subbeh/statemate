@@ -3,6 +3,7 @@ package source
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -52,6 +53,16 @@ func TestParseAttrs(t *testing.T) {
 			wantName: "link",
 			wantAttr: Attrs{Symlink: true},
 		},
+		{
+			input:    "settings.json#import",
+			wantName: "settings.json",
+			wantAttr: Attrs{Import: true},
+		},
+		{
+			input:    "settings.json#profile:work#encrypted#import",
+			wantName: "settings.json",
+			wantAttr: Attrs{Profile: "work", Encrypted: true, Import: true},
+		},
 	}
 
 	for _, tt := range tests {
@@ -64,6 +75,31 @@ func TestParseAttrs(t *testing.T) {
 				t.Errorf("attrs: got %+v, want %+v", attrs, tt.wantAttr)
 			}
 		})
+	}
+}
+
+// AttrNames is hand-maintained and drives the documentation test, so a name that
+// no longer parses would silently document a feature that does not exist.
+func TestAttrNamesAreParsed(t *testing.T) {
+	for _, attr := range AttrNames {
+		// Value-taking attributes need a value to have any effect.
+		suffix := attr
+		if strings.HasSuffix(attr, ":") {
+			switch attr {
+			case "perm:", "perm-r:":
+				suffix += "600"
+			default:
+				suffix += "x"
+			}
+		}
+
+		name, attrs := ParseAttrs("f#" + suffix)
+		if name != "f" {
+			t.Errorf("#%s: base name is %q, want \"f\"", suffix, name)
+		}
+		if attrs == (Attrs{}) {
+			t.Errorf("#%s parses to no attributes -- AttrNames is out of step with ParseAttrs", suffix)
+		}
 	}
 }
 

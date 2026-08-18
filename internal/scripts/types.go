@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -69,6 +70,7 @@ type Script struct {
 	Order       int
 	SourceDir   string
 	ContentHash string
+	Description string
 }
 
 func (s *Script) IsExecutable() bool {
@@ -132,6 +134,42 @@ func ParseScriptName(filename string) (name string, freq Frequency, timing Timin
 	}
 
 	return name, freq, timing, template, profile, order
+}
+
+// ChangedSources names the source directories that have pending changes, and is
+// what decides whether an #onchange script runs.
+//
+// Callers build this from the change set they already compute (mate status and
+// mate apply both call ComputeChanges), so ShouldRun does not have to rescan the
+// tree once per script.
+type ChangedSources struct {
+	// names holds the base name of each source directory with pending changes.
+	names map[string]bool
+}
+
+// NewChangedSources builds a set from source directory paths or names.
+func NewChangedSources(sources ...string) ChangedSources {
+	c := ChangedSources{names: make(map[string]bool, len(sources))}
+	for _, s := range sources {
+		if s != "" {
+			c.names[filepath.Base(s)] = true
+		}
+	}
+	return c
+}
+
+// Has reports whether the given source directory has pending changes.
+func (c ChangedSources) Has(sourceDir string) bool {
+	if c.names == nil || sourceDir == "" {
+		return false
+	}
+	return c.names[filepath.Base(sourceDir)]
+}
+
+// Any reports whether any source has pending changes. Repo-root scripts, which
+// have no owning source, use this.
+func (c ChangedSources) Any() bool {
+	return len(c.names) > 0
 }
 
 type Scripts []*Script

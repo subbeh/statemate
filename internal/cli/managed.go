@@ -16,9 +16,22 @@ import (
 )
 
 var managedCmd = &cobra.Command{
-	Use:               "managed [path]",
-	Short:             "List all managed files",
-	Long:              "List all files in source directories that are managed by mate. Optionally filter by path.",
+	Use:   "managed [path]",
+	Short: "List all managed files",
+	Long: `List all files in source directories that are managed by mate.
+
+With no argument, lists every managed file. With an argument, filters the list:
+
+  - A path to an existing file (absolute, or relative to the current directory)
+    matches only that file, whether you give its target or its source path.
+  - Anything else is treated as a name fragment, so 'mate managed nvim' lists
+    every file in the nvim source.
+
+Examples:
+  mate managed                    # all managed files
+  mate managed ~/.ssh/config      # just that file
+  mate managed config             # that file if it exists here, else all matches
+  mate managed nvim               # everything in the nvim source`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runManaged,
 	ValidArgsFunction: completeSourceDirs,
@@ -106,7 +119,21 @@ func runManaged(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// matchesManagedFilter reports whether an entry matches the user's filter.
+//
+// A filter that resolves to a real path (absolute, or relative to the current
+// directory) matches only the entry with that exact target or source path. This
+// makes a path an unambiguous lookup -- "mate managed ~/.ssh/config" from any
+// directory returns exactly that file rather than every target ending in
+// "/config".
+//
+// Anything else is treated as a name fragment and matched loosely, which keeps
+// "mate managed nvim" listing a whole source.
 func matchesManagedFilter(e *source.Entry, srcPath, filter string) bool {
+	if abs, ok := resolveFilterPath(filter); ok {
+		return resolveSymlinks(e.TargetPath) == abs || resolveSymlinks(e.SourcePath) == abs
+	}
+
 	// Match against source relative path
 	if strings.HasPrefix(srcPath, filter) || strings.HasSuffix(srcPath, "/"+filter) {
 		return true
@@ -120,6 +147,23 @@ func matchesManagedFilter(e *source.Entry, srcPath, filter string) bool {
 		return true
 	}
 	return false
+}
+
+// resolveFilterPath resolves a filter to an absolute path when it names an
+// existing file, reporting false when it should be treated as a name fragment.
+//
+// A bare name like "config" is only treated as a path when it exists in the
+// current directory; otherwise it stays a fragment so loose matching still works
+// from unrelated directories.
+func resolveFilterPath(filter string) (string, bool) {
+	abs, err := expandToAbs(filter)
+	if err != nil {
+		return "", false
+	}
+	if _, err := os.Lstat(abs); err != nil {
+		return "", false
+	}
+	return resolveSymlinks(abs), true
 }
 
 func isActiveForProfile(e *source.Entry, profileName string, activeSources map[string]bool, sourceDir string) bool {

@@ -187,6 +187,74 @@ func TestRenderWithDefault(t *testing.T) {
 	}
 }
 
+// Sprig provides the bulk of the function library. This is the exact expression
+// that failed in a real config: splitList and first are sprig functions, and
+// text/template has no string-splitting function of its own.
+func TestRenderWithSprigFuncs(t *testing.T) {
+	ctx, _ := NewContext(&config.Config{
+		Variables: map[string]any{"user": "u123456-sub1"},
+	}, "")
+
+	content := []byte(`{{ (splitList "-" .Vars.user) | first }}.your-storagebox.de`)
+	result, err := Render(content, ctx)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	if string(result) != "u123456.your-storagebox.de" {
+		t.Errorf("got %q", string(result))
+	}
+}
+
+// Statemate's functions must override sprig's on a name clash, or existing
+// templates break. env is the one that matters: sprig's reads the live process
+// environment, statemate's reads the rendering context.
+func TestMateFuncsOverrideSprig(t *testing.T) {
+	ctx, _ := NewContext(&config.Config{}, "")
+	ctx.Env = map[string]string{"FROM_CONTEXT": "context-value"}
+
+	result, err := Render([]byte(`{{ env "FROM_CONTEXT" }}`), ctx)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+	if string(result) != "context-value" {
+		t.Errorf("statemate's env must win over sprig's, got %q", string(result))
+	}
+
+	// indent takes (spaces, string) here; sprig's has the same shape, but only
+	// statemate's leaves blank lines unpadded (sprig gives "  a\n  \n  b").
+	result, err = Render([]byte(`{{ indent 2 "a\n\nb" }}`), ctx)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+	if string(result) != "  a\n\n  b" {
+		t.Errorf("statemate's indent must win over sprig's, got %q", string(result))
+	}
+
+	// Statemate's default substitutes only for nil and ""; sprig's also replaces
+	// 0 and false, which would silently rewrite a legitimate zero in a config.
+	result, err = Render([]byte(`{{ default "fb" 0 }}`), ctx)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+	if string(result) != "0" {
+		t.Errorf("default must leave 0 alone, got %q", string(result))
+	}
+}
+
+// required is statemate's own (sprig has no such function), but sprig's library
+// is large enough that a future version could add one -- this pins the signature.
+func TestRenderRequired(t *testing.T) {
+	ctx, _ := NewContext(&config.Config{}, "")
+
+	if _, err := Render([]byte(`{{ required .Vars.missing }}`), ctx); err == nil {
+		t.Error("expected an error for a missing required value")
+	}
+	if _, err := Render([]byte(`{{ required "present" }}`), ctx); err != nil {
+		t.Errorf("unexpected error for a present value: %v", err)
+	}
+}
+
 func TestLoadVarFile(t *testing.T) {
 	dir := t.TempDir()
 	varFile := dir + "/vars.yaml"

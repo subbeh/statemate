@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/packages"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
@@ -22,8 +23,18 @@ import (
 // Note: source import is still needed for source.Entry type
 
 var statusCmd = &cobra.Command{
-	Use:               "status [path]",
-	Short:             "Show files that would change on apply",
+	Use:   "status [path]",
+	Short: "Show files that would change on apply",
+	Long: `Show pending changes that would be made on apply.
+
+Reports files to be created, modified, or in conflict, plus orphaned files,
+missing packages, pending scripts, and secrets needing refresh.
+
+Markers: '+' new, '~' modified, '!' conflict, '<' will be imported into the
+source (an '#import' file whose target changed).
+
+The positional argument filters by file or path; use --source to limit the
+report to a single source.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runStatus,
 	ValidArgsFunction: completeManagedFiles,
@@ -31,8 +42,9 @@ var statusCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(statusCmd)
-	statusCmd.Flags().Bool("short", false, "compact output for statuslines (format: +N ~N !N ?N *N sN)")
+	statusCmd.Flags().Bool("short", false, "compact output for statuslines (format: +N ~N !N <N ?N *N sN)")
 	statusCmd.Flags().Bool("sudo", false, "use sudo to check files requiring elevated access")
+	addScopeFlag(statusCmd)
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
@@ -128,7 +140,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	profileChain := profile.InheritanceChain(cfg, profileName)
-	pendingScripts, err := scripts.PendingScripts(allScripts.Automatic().ByProfile(profileChain), db)
+	pendingScripts, err := scripts.PendingScripts(
+		allScripts.Automatic().ByProfile(profileChain), db, changedSources(result.Changes))
 	if err != nil {
 		return fmt.Errorf("checking pending scripts: %w", err)
 	}
@@ -153,22 +166,45 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	var filterPath string
-	if len(args) > 0 {
-		filterPath = args[0]
+	// Missing packages are informational only -- a package manager being
+	// unavailable should never fail status.
+	type missingPkgs struct {
+		manager  string
+		packages []string
+	}
+	var pendingPackages []missingPkgs
+	if syncResults, err := packages.ComputeSync(cfg, profileName, sourcePaths); err == nil {
+		for _, r := range syncResults {
+			if missing := r.Missing(); len(missing) > 0 {
+				pendingPackages = append(pendingPackages, missingPkgs{manager: r.Manager, packages: missing})
+			}
+		}
+	}
+
+	scope, err := scopeFrom(cmd, args)
+	if err != nil {
+		return err
+	}
+	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
+		return err
 	}
 
 	var filteredChanges []*target.Change
 	for _, c := range changes {
-		if filterPath != "" && !matchesPath(c.Entry, filterPath, cfg.SourceDir()) {
+		if !scope.Matches(c.Entry, cfg.SourceDir()) {
 			continue
 		}
 		filteredChanges = append(filteredChanges, c)
 	}
 
+	// Orphans are no longer in any source, so they can only be matched by path.
+	// Under --source there is nothing to match against, so report none.
 	var filteredOrphans []string
 	for _, o := range orphans {
-		if filterPath != "" && !strings.Contains(o, filterPath) && !strings.HasSuffix(o, "/"+filterPath) {
+		switch {
+		case scope.Source != "":
+			continue
+		case scope.Path != "" && !strings.Contains(o, scope.Path) && !strings.HasSuffix(o, "/"+scope.Path):
 			continue
 		}
 		filteredOrphans = append(filteredOrphans, o)
@@ -179,7 +215,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return printShortStatus(filteredChanges, filteredOrphans, pendingScripts, pendingSecrets)
 	}
 
-	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 && len(pendingScripts) == 0 && pendingSecrets == 0 {
+	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 && len(pendingScripts) == 0 &&
+		pendingSecrets == 0 && len(pendingPackages) == 0 {
 		fmt.Println("Everything is up to date")
 		return nil
 	}
@@ -203,6 +240,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				prefix = "~"
 			case target.StatusConflict:
 				prefix = "!"
+			case target.StatusImport:
+				// Points back at the source: this file moves the other way.
+				prefix = "<"
 			}
 			targetDisplay := util.ShortenPath(c.Entry.TargetPath)
 			sourceDir := extractSourceDir(c.Entry)
@@ -226,6 +266,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				timing = "after"
 			}
 			fmt.Printf("  %s (%s, %s)\n", s.Name, s.Frequency, timing)
+			if s.Description != "" {
+				fmt.Printf("      %s\n", s.Description)
+			}
+		}
+	}
+
+	if len(pendingPackages) > 0 {
+		fmt.Println("\nMissing packages:")
+		for _, p := range pendingPackages {
+			fmt.Printf("  %s: %s\n", p.manager, strings.Join(p.packages, ", "))
 		}
 	}
 
@@ -241,7 +291,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 }
 
 func printShortStatus(changes []*target.Change, orphans []string, pending scripts.Scripts, pendingSecrets int) error {
-	var added, modified, conflicts int
+	var added, modified, conflicts, imports int
 	for _, c := range changes {
 		switch c.Status {
 		case target.StatusNew:
@@ -250,11 +300,14 @@ func printShortStatus(changes []*target.Change, orphans []string, pending script
 			modified++
 		case target.StatusConflict:
 			conflicts++
+		case target.StatusImport:
+			imports++
 		}
 	}
 
 	// No changes = no output (for statusline to hide)
-	if added == 0 && modified == 0 && conflicts == 0 && len(orphans) == 0 && len(pending) == 0 && pendingSecrets == 0 {
+	if added == 0 && modified == 0 && conflicts == 0 && imports == 0 &&
+		len(orphans) == 0 && len(pending) == 0 && pendingSecrets == 0 {
 		return nil
 	}
 
@@ -267,6 +320,9 @@ func printShortStatus(changes []*target.Change, orphans []string, pending script
 	}
 	if conflicts > 0 {
 		parts = append(parts, fmt.Sprintf("!%d", conflicts))
+	}
+	if imports > 0 {
+		parts = append(parts, fmt.Sprintf("<%d", imports))
 	}
 	if len(orphans) > 0 {
 		parts = append(parts, fmt.Sprintf("?%d", len(orphans)))
@@ -285,6 +341,16 @@ func printShortStatus(changes []*target.Change, orphans []string, pending script
 func extractSourceDir(entry *source.Entry) string {
 	srcDir := strings.TrimSuffix(entry.SourcePath, "/"+entry.RelPath)
 	return filepath.Base(srcDir)
+}
+
+// changedSources collects the sources with pending changes, which is what
+// schedules #onchange scripts.
+func changedSources(changes []*target.Change) scripts.ChangedSources {
+	names := make([]string, 0, len(changes))
+	for _, c := range changes {
+		names = append(names, extractSourceDir(c.Entry))
+	}
+	return scripts.NewChangedSources(names...)
 }
 
 func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {

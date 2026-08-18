@@ -13,10 +13,27 @@ type Attrs struct {
 	Encrypted bool
 	Template  bool
 	Symlink   bool
+	// Import marks a file whose target is normally authoritative, because the
+	// application owns it and rewrites it (~/.claude/settings.json, say). A
+	// changed target is imported back into the source instead of prompting.
+	Import bool
 	// Recursive attributes (inherited by children)
 	PermR  uint32
 	OwnerR string
 	GroupR string
+}
+
+// AttrNames lists every attribute ParseAttrs understands. Value-taking
+// attributes keep their trailing colon, so the entries read as they appear in a
+// filename.
+//
+// This exists so the documentation test can enumerate attributes; keep it in step
+// with ParseAttrs below. TestAttrNamesAreParsed checks that every name here
+// actually parses, and the docs test checks that every name is documented.
+var AttrNames = []string{
+	"template", "tmpl", "encrypted", "symlink", "import",
+	"profile:", "perm:", "owner:", "group:",
+	"perm-r:", "owner-r:", "group-r:",
 }
 
 func ParseAttrs(name string) (baseName string, attrs Attrs) {
@@ -60,6 +77,8 @@ func ParseAttrs(name string) (baseName string, attrs Attrs) {
 				attrs.Template = true
 			case "symlink":
 				attrs.Symlink = true
+			case "import":
+				attrs.Import = true
 			}
 		}
 	}

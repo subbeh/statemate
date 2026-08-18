@@ -3,6 +3,7 @@ package target
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/subbeh/statemate/internal/source"
@@ -287,5 +288,151 @@ func TestApplier_PermFixOnApply(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0755 {
 		t.Errorf("expected 0755, got %o", info.Mode().Perm())
+	}
+}
+
+// Applying a source that maps a directory outside the user's writable tree
+// (e.g. targets: { etc: /etc }) must not fail with "permission denied" -- the
+// directory loop needs the same sudo fallback applyFile already has.
+func TestApplier_CreatesMappedDirectoriesWithAttrs(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	// A directory carrying a recursive perm attribute, as etc#perm-r:750 would.
+	nested := filepath.Join(sourceDir, "app", "etc#perm-r:750", "restic")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "excludes"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	scanner := source.NewScanner(targetDir, "")
+	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
+	if err != nil {
+		t.Fatalf("scanning: %v", err)
+	}
+
+	applier := NewApplier(db, nil, nil, false, false, 0)
+	if _, err := applier.Apply(tree); err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	// The attribute must reach directories, not just files.
+	dir := filepath.Join(targetDir, "etc", "restic")
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("expected %s to be created: %v", dir, err)
+	}
+	if got := info.Mode().Perm(); got != 0750 {
+		t.Errorf("directory mode: got %o, want 750", got)
+	}
+}
+
+// An existing directory with no attributes must be left completely alone.
+// Otherwise a mapped root like /etc would get chmodded on every apply.
+func TestApplier_LeavesExistingUnattributedDirectoriesAlone(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	if err := os.MkdirAll(filepath.Join(sourceDir, "app", "sub"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "app", "sub", "f"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pre-create the target subdirectory with a deliberately unusual mode.
+	existing := filepath.Join(targetDir, "sub")
+	if err := os.MkdirAll(existing, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(existing, 0705); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	scanner := source.NewScanner(targetDir, "")
+	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
+	if err != nil {
+		t.Fatalf("scanning: %v", err)
+	}
+
+	applier := NewApplier(db, nil, nil, false, false, 0)
+	if _, err := applier.Apply(tree); err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	info, err := os.Stat(existing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0705 {
+		t.Errorf("existing directory mode changed: got %o, want 705 (untouched)", got)
+	}
+}
+
+// A file written via sudo (root-owned, or mode 0600 like a secret) usually
+// cannot be read back by the invoking user, so recording state after applying it
+// must not fail on the hash. When elevated access is unavailable too, the error
+// should name the path rather than surfacing a bare EACCES from inside HashFile.
+func TestHashTarget_UnreadableFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: mode 000 is still readable")
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret")
+	if err := os.WriteFile(path, []byte("s3cret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0000); err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := hashTarget(path)
+	if err == nil {
+		// sudo -n succeeded, so the fallback worked and we got a real hash.
+		if hash == "" {
+			t.Error("expected a hash when the sudo fallback succeeds")
+		}
+		return
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("error should name the unreadable path, got: %v", err)
+	}
+}
+
+func TestHashTarget_ReadableFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plain")
+	if err := os.WriteFile(path, []byte("hello\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	hash, err := hashTarget(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want, err := state.HashFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hash != want {
+		t.Errorf("got %q, want %q", hash, want)
 	}
 }

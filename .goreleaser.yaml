@@ -33,14 +33,12 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# Release notes come from CHANGELOG.md, passed via --release-notes by the release
+# workflow. Generating them from commit subjects both leaked implementation detail
+# and dropped whole categories: the exclude filters below would have hidden the
+# entire documentation rewrite in 0.3.0 because its commit was prefixed "docs:".
 changelog:
-  use: github
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^ci:"
-      - "^chore:"
+  disable: true
 
 release:
   github:

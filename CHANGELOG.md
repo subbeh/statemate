@@ -7,8 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-18
+
 ### Fixed
+- `mate apply --dry-run` now counts files it would import in its summary, instead of reporting them as "0 files would be applied"
+- Importing a file (via `#import` or the conflict prompt's `[i]mport`) now reads targets requiring elevated access, instead of failing with "permission denied"
+- Secret discovery now renders templates with the same functions as `mate apply`. A template using a function discovery did not know about failed to parse there and was skipped silently, so its secrets were never fetched and the apply failed on a cache miss
+- `mate apply` can now record state for files it wrote via sudo. A root-owned or `0600` target (such as a rendered secret) is unreadable as the invoking user, so the apply failed on hashing the file it had just written successfully
+- `mate apply` now uses sudo to create directories outside your writable tree, so a source mapping `targets: { etc: /etc }` no longer fails with `creating directory /etc/restic: permission denied`. Directory `owner`/`group` attributes are also applied now, which they previously were not. An existing directory with no perm/owner/group attribute is left completely untouched, so mapped roots like `/etc` are never chmodded
+- `mate apply -s <source>` no longer fetches secrets or discovers scripts belonging to other sources. Secret discovery walks the source directories directly, so a scoped run could fail trying to fetch a secret referenced only by a source it was not applying
 - `mate packages status` no longer shows AUR packages as extras under pacman (uses `-Qen` for native-only)
+- `mate packages status` now detects virtual/provides packages as installed (e.g. `man` provided by `man-db`)
+- `mate clean` now uses sudo to remove files requiring elevated access instead of failing with "permission denied"
+- `mate status`, `mate diff`, and `mate check` now correctly detect permission errors on wrapped errors, and always attempt non-interactive sudo for restricted files
+- Tab completion for `--source` now lists sources from all profiles, not just the detected one
+- `mate edit` now works on `include`/`var_files` (e.g. `.matedata/secrets.yaml#encrypted`), which previously failed with "file not found"
+- `mate edit` tab completion now offers real filesystem paths instead of a computed list that could suggest unopenable files
+- `mate edit` preserves the original file permissions when re-encrypting, and writes the plaintext temp file as `0600`
+- `mate add` source picker now lists profile-provided sources, not just the top-level `sources:` list. Previously the picker showed a different list than it indexed, so a selection could map to the wrong source
+
+### Added
+- **Full documentation in [`docs/`](docs/README.md)**, covering the file formats that command help cannot: [file attributes](docs/attributes.md), [configuration keys](docs/configuration.md), [templates](docs/templates.md), [secrets](docs/secrets.md), [scripts](docs/scripts.md), and [packages](docs/packages.md), plus a [concepts](docs/concepts.md) guide explaining how statemate decides a file changed. Previously the only reference for any of this was a section of README.md, and several features (`variable_commands`, `generate`, the `var` and `bitwardenAttachment` template functions, every script environment variable) were documented nowhere at all
+- **`#import` file attribute** for files an application owns and rewrites, such as `~/.claude/settings.json`. When only the target changed, it is copied back into the source without prompting, instead of raising a conflict on every apply. A source edit still deploys normally, a missing target is still created (so it works for bootstrapping), and if *both* sides changed the conflict prompt still appears rather than silently discarding your edit. `mate status` marks a pending import with `<` (`<N` in `--short`) and `mate diff` shows the diff in the import direction. Cannot be combined with `#template`, which would overwrite the template with its rendered output
+- Templates now have the [sprig](https://masterminds.github.io/sprig/) function library (~200 functions: `splitList`, `trimSuffix`, `upper`, `join`, `ternary`, `regexReplaceAll`, and so on). Previously only 9 functions existed, so a template using anything else failed with `function "splitList" not defined`. Statemate's own functions take precedence where a name collides — `env` still reads the rendering context rather than the live process environment, `default` still substitutes only for `nil` and `""` (sprig's also replaces `0` and `false`), and `indent` still leaves blank lines unpadded
+- `mate apply` can now be scoped: `mate apply <path>` applies only matching files (no scripts, packages, or secret fetch), and `mate apply -s <source>` applies that source's files, runs its scripts, and prompts for its packages. Repo-root scripts are not run under `--source`, since they apply to the whole repository
+- `--source`/`-s` flag for `mate status` and `mate diff` to limit output to a single source, matching the flag `mate add` already uses
+- `mate config source-dir` prints the resolved source directory as a bare path, for use in scripts and editor integrations (`cd "$(mate config source-dir)"`)
+- `mate status` now reports missing packages (declared in config but not installed), grouped by package manager
+- `mate apply` now asks for confirmation before running each script, with `[y]es / [n]o / [s]kip / [a]ll / [q]uit`. `[n]o` skips this time only, so the script is offered again on the next apply; `[s]kip` marks it as done without running so it is not offered again. `[s]kip` is not offered for `always` scripts, whose runs are never recorded. A script marked as done still appears in `mate scripts list` and can be run manually with `mate scripts run`
+- Scripts can describe themselves with a `# Description: <text>` comment in their first 10 lines. Descriptions are shown in the confirmation prompt, `mate scripts list`, and `mate status`
+- `--no-scripts` flag for `mate apply` to skip all scripts (intended for automated runs)
+
+### Changed
+- **Documentation is now published in the repository and kept in sync automatically.** `docs/commands/` is generated from the command definitions and committed, so it is browsable on GitHub and cannot silently drift — CI and a pre-commit hook both fail when it is out of date. A test additionally fails when a new file attribute, config key, template function, script frequency, or environment variable is not documented at all. README.md is now a quick start that links into `docs/`
+- **`mate status` and `mate apply` are much faster** — measured on real repos, 1.10s → 0.10s with brew (11x) and 1.15s → 0.48s with pacman/AUR (2.4x). Both commands computed the list of installed-but-undeclared packages and then discarded it: neither reports extras. That cost a `brew leaves` call (~1.0s, 95% of total runtime) on macOS, or `pacman -Qen` plus `paru -Qmtt` (~0.7s) on Arch. Extras are now only computed by the commands that report them
+- `mate packages status` no longer counts extra packages unless `--all` is given (1.05s → 0.38s on Arch, 1.02s → 0.06s with brew). Without `--all` it prints a static `Use --all to also show packages not in config` hint instead of `(N extra brew packages not in config…)`, since producing the count is the expensive part
+- **The positional argument to `mate status` and `mate diff` is now a file/path filter only.** Previously a bare word also prefix-matched a whole source, so `mate status nvim` filtered by source; use `mate status -s nvim` instead. A positional that names a source now errors with that suggestion rather than silently matching files
+- `mate scripts list` column order is now `ORDER, NAME, SOURCE, FREQUENCY, TIMING, STATUS, DESCRIPTION`, leading with what identifies a script rather than how often it runs
+- `mate scripts list` shows descriptions in a `DESCRIPTION` column instead of an unaligned line under each row, so there is one row per script. Long descriptions are truncated with `…` to fit the terminal; when the output is piped or redirected they are printed in full. Column widths now size to their content, and the `-` marker for profile-inactive scripts is gone since those rows already show `n/a`
+- **`#onchange` scripts now trigger on changes to their source, not to the script itself.** A script in `<source>/.matescripts/` runs when `<source>` has pending changes (the files `mate status` lists); one in the repo-root `.matescripts/` runs when any source has pending changes. Editing an `#onchange` script no longer reruns it — use `mate scripts run <name>` to run it on demand. Previously `#onchange` compared the script's own content hash, so a script like `arch/.matescripts/00-env_reload.sh#onchange#after` only fired when you edited the reload script, which meant it effectively never ran
+- `mate managed <path>` now matches exactly one file when given a path to an existing file (target or source), instead of every file with the same basename. Bare names that do not resolve to a file still match loosely, so `mate managed nvim` continues to list a whole source
+- `mate apply --force` now also auto-confirms scripts, in addition to overwriting modified targets
+- `mate apply` skips scripts with a warning when there is no terminal to confirm on. **Automated runs that relied on scripts executing must now pass `--force` (to run them) or `--no-scripts` (to skip silently)**
+- `mate edit` resolves paths strictly like other CLI tools (absolute or relative to the current directory). Fuzzy suffix matching is no longer supported — `mate edit nvim/init.lua` must be run from the directory containing `nvim/`
+- `mate edit` accepts any file under the source directory, and resolves target paths to their source file
+- `mate edit` prints a reminder to run `mate apply` after editing a managed source file
+
+### Removed
+- **Man pages are no longer generated.** They were never shipped in any release archive, Homebrew formula, or AUR package, so `man mate` never worked for installed users, and their content only duplicated `mate <command> --help`. `make docs` now writes just the markdown command reference. Use `mate <command> --help` in the terminal, or read [`docs/`](docs/README.md)
 
 ## [0.2.1] - 2026-08-02
 

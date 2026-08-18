@@ -20,23 +20,60 @@ import (
 )
 
 var applyCmd = &cobra.Command{
-	Use:   "apply",
+	Use:   "apply [path]",
 	Short: "Apply configuration to target",
-	Long:  "Apply files from source directories to their targets",
-	RunE:  runApply,
+	Long: `Apply files from source directories to their targets.
+
+With no argument, applies everything. Otherwise the run is narrowed:
+
+  mate apply <path>        apply matching files only -- no scripts, no
+                           packages, no secret fetch
+  mate apply -s <source>   apply that source's files, run its scripts, and
+                           prompt for its packages
+
+The positional argument is always a file or path filter; --source is the only
+way to select a source. Repo-root scripts are not run under --source, since
+they apply to the whole repository.
+
+Scripts due to run are confirmed individually before executing:
+
+  [y]es    run the script
+  [n]o     skip this time; ask again on the next apply
+  [s]kip   mark as done without running, so it is not offered again
+           (not available for 'always' scripts, whose runs are never recorded)
+  [a]ll    run this and auto-confirm the rest
+  [q]uit   abort the apply
+
+A script marked as done still appears in 'mate scripts list' and can be run
+manually with 'mate scripts run'.
+
+Use --force to auto-confirm all scripts, or --no-scripts to skip them entirely
+(useful for automated runs). Without a terminal to prompt on, scripts are
+skipped with a warning.
+
+A file marked '#import' is not prompted about when only its target changed: the
+target is treated as authoritative and copied back into the source. Use it for
+files an application rewrites, such as ~/.claude/settings.json. If the source
+changed too, the conflict prompt still appears.`,
+	Args:              cobra.MaximumNArgs(1),
+	RunE:              runApply,
+	ValidArgsFunction: completeManagedFiles,
 }
 
 var (
-	dryRun  bool
-	force   bool
-	verbose int
+	dryRun    bool
+	force     bool
+	noScripts bool
+	verbose   int
 )
 
 func init() {
 	rootCmd.AddCommand(applyCmd)
 	applyCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
-	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite modified targets without prompting")
+	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite modified targets and auto-confirm scripts")
+	applyCmd.Flags().BoolVar(&noScripts, "no-scripts", false, "skip all scripts")
 	applyCmd.Flags().CountVarP(&verbose, "verbose", "V", "increase verbosity (can be repeated)")
+	addScopeFlag(applyCmd)
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
@@ -84,6 +121,22 @@ func runApply(cmd *cobra.Command, args []string) error {
 		tree = tree.FilterByProfile(profileChain)
 	}
 
+	// Narrow the run before anything is applied, so every later phase (files,
+	// scripts, packages, orphans) sees the same scope.
+	scope, err := scopeFrom(cmd, args)
+	if err != nil {
+		return err
+	}
+	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
+		return err
+	}
+	tree = scope.FilterTree(tree, cfg.SourceDir())
+
+	// Narrow the source paths too. Secret discovery and script discovery both
+	// walk these directly, so leaving them unfiltered would make a scoped run
+	// fetch secrets for templates it is never going to render.
+	sourcePaths = scope.FilterSourcePaths(sourcePaths)
+
 	db, err := state.Open("")
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
@@ -119,8 +172,13 @@ func runApply(cmd *cobra.Command, args []string) error {
 			return mgr.Get(key)
 		}
 
-		if err := fetchMissingSecrets(cfg, mgr, enc, profileName, sourcePaths, dryRun, verbose); err != nil {
-			return err
+		// A file-scoped run deploys files and nothing else, so it does not reach
+		// out to fetch secrets. Source scope still does, since its templates may
+		// need them.
+		if scope.Path == "" {
+			if err := fetchMissingSecrets(cfg, mgr, enc, profileName, sourcePaths, dryRun, verbose); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -129,8 +187,19 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
+	allScripts = scopedScripts(allScripts, scope)
 
-	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0)
+	// Compute pending changes before applying anything, so #onchange scripts see
+	// the same set whether they run #before or #after -- once apply has written
+	// the files there are no pending changes left to detect.
+	pending, err := target.ComputeChanges(tree, db, target.ComputeOpts{TmplCtx: tmplCtx, Enc: enc})
+	if err != nil {
+		return fmt.Errorf("computing changes: %w", err)
+	}
+
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0).
+		WithConfirmation(force, noScripts).
+		WithChangedSources(changedSources(pending.Changes))
 
 	beforeScripts := allScripts.Automatic().ByProfile(profileChain).ByTiming(scripts.TimingBefore)
 	beforeScripts.Sort()
@@ -139,9 +208,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 		if verbose > 0 || dryRun {
 			fmt.Println("Running before scripts...")
 		}
-		if _, err := executor.Execute(beforeScripts); err != nil {
+		res, err := executor.Execute(beforeScripts)
+		if err != nil {
 			return err
 		}
+		warnSkippedScripts(res)
 
 		// Reload config and template context after before scripts
 		// (scripts may generate var_files like secrets)
@@ -169,7 +240,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := promptMissingPackages(cfg, profileName, sourcePaths, dryRun, force); err != nil {
+	if err := promptMissingPackages(cfg, profileName, sourcePaths, dryRun, force, scope); err != nil {
 		return err
 	}
 
@@ -180,13 +251,19 @@ func runApply(cmd *cobra.Command, args []string) error {
 		if verbose > 0 || dryRun {
 			fmt.Println("Running after scripts...")
 		}
-		if _, err := executor.Execute(afterScripts); err != nil {
+		res, err := executor.Execute(afterScripts)
+		if err != nil {
 			return err
 		}
+		warnSkippedScripts(res)
 	}
 
 	if dryRun {
-		fmt.Printf("\nDry run: %d files would be applied, %d unchanged\n", result.Applied, result.Skipped)
+		fmt.Printf("\nDry run: %d files would be applied", result.Applied)
+		if result.Imported > 0 {
+			fmt.Printf(", %d imported", result.Imported)
+		}
+		fmt.Printf(", %d unchanged\n", result.Skipped)
 	} else {
 		parts := []string{}
 		if result.Applied > 0 {
@@ -264,14 +341,34 @@ func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.
 	return nil
 }
 
-func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, dryRun bool, autoConfirm bool) error {
+// warnSkippedScripts reports scripts that were due but could not be confirmed
+// because there was no terminal to prompt on.
+func warnSkippedScripts(res *scripts.ExecuteResult) {
+	if res == nil || len(res.SkippedNoTTY) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\nWarning: %d script(s) skipped (no terminal to confirm on):\n", len(res.SkippedNoTTY))
+	for _, s := range res.SkippedNoTTY {
+		fmt.Fprintf(os.Stderr, "  - %s\n", s)
+	}
+	fmt.Fprintln(os.Stderr, "Use --force to run them, or --no-scripts to silence this warning.")
+}
+
+func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, dryRun bool, autoConfirm bool, scope Scope) error {
+	// A file-scoped run touches files only.
+	if scope.Path != "" {
+		return nil
+	}
+
 	results, err := packages.ComputeSync(cfg, profileName, sourcePaths)
 	if err != nil {
 		return nil
 	}
 
 	for _, result := range results {
-		missing := result.Missing()
+		// Under --source, install only what that source declares. Filter the
+		// statuses (which carry the contributing source) rather than the names.
+		missing := missingNames(scopedPackages(result.Statuses, scope))
 		if len(missing) == 0 {
 			continue
 		}

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   test:
@@ -42,3 +42,34 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.6
+
+  # docs/commands/ is generated from the cobra command tree and committed, so a
+  # help-text change must be regenerated in the same commit. Without this, the
+  # reference drifts silently -- it once documented commands that no longer
+  # existed.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Regenerate command reference
+        run: make docs
+
+      # --exit-code covers modified and deleted files; the untracked check covers
+      # a newly added command, which produces a file git does not yet know about.
+      - name: Check for drift
+        run: |
+          if ! git diff --exit-code -- docs/commands/ || \
+             [ -n "$(git ls-files --others --exclude-standard docs/commands/)" ]; then
+            echo
+            echo "✗ docs/commands/ is out of date."
+            echo "  Run 'make docs' and commit the result."
+            git status --short -- docs/commands/
+            exit 1
+          fi

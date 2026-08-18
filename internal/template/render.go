@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"maps"
 	"os"
+	"sort"
 	"text/template"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/subbeh/statemate/internal/util"
 )
 
@@ -32,7 +35,39 @@ func RenderFile(path string, ctx *Context) ([]byte, error) {
 	return Render(content, ctx)
 }
 
+// funcMap builds the function set available to templates: sprig's library as a
+// base, with statemate's own functions layered on top.
+//
+// Statemate wins on a name clash, keeping existing templates working. Three
+// names collide: env, default and indent. env matters most -- statemate's reads
+// the rendering context, while sprig's reads the live process environment.
+// Statemate's default also leaves 0 and false alone, where sprig's replaces them.
 func funcMap(ctx *Context) template.FuncMap {
+	fm := sprig.TxtFuncMap()
+	maps.Copy(fm, mateFuncs(ctx))
+	return fm
+}
+
+// FuncMap exposes the rendering function set so other packages render with the
+// same functions Render does. Secret discovery in particular must parse every
+// template Render can, or it silently skips the file and never fetches its
+// secrets.
+func FuncMap(ctx *Context) template.FuncMap {
+	return funcMap(ctx)
+}
+
+// MateFuncNames lists statemate's own template functions, as opposed to the sprig
+// ones underneath. The documentation test uses it to check each is documented.
+func MateFuncNames() []string {
+	names := make([]string, 0, len(mateFuncs(nil)))
+	for name := range mateFuncs(nil) {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func mateFuncs(ctx *Context) template.FuncMap {
 	return template.FuncMap{
 		"env": func(name string) string {
 			return ctx.Env[name]

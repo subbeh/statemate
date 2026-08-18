@@ -10,6 +10,7 @@ import (
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
 	"golang.org/x/term"
 )
 
@@ -40,6 +41,7 @@ const (
 	StatusConflict
 	StatusStateOnly // content matches but state DB needs update
 	StatusSkipped   // cannot access file (permission denied, no sudo)
+	StatusImport    // #import file whose target changed: copy target back to source
 )
 
 func (s ChangeStatus) String() string {
@@ -54,6 +56,10 @@ func (s ChangeStatus) String() string {
 		return "conflict"
 	case StatusStateOnly:
 		return "state-only"
+	case StatusSkipped:
+		return "skipped"
+	case StatusImport:
+		return "import"
 	default:
 		return "unknown"
 	}
@@ -81,12 +87,44 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 		if dir.Attrs.Perm != 0 {
 			dirMode = os.FileMode(dir.Attrs.Perm)
 		}
+
+		// An existing directory needs no work unless an attribute asks for it.
+		// This matters most for mapped roots like etc: /etc -- creating them is a
+		// no-op, but chmodding a system directory the user never asked about is
+		// not.
+		if info, err := os.Stat(dir.TargetPath); err == nil && info.IsDir() {
+			if dir.Attrs.Perm == 0 && dir.Attrs.Owner == "" && dir.Attrs.Group == "" {
+				continue
+			}
+		}
+
+		// Directories outside the user's writable tree (e.g. a source mapping
+		// etc: /etc) need elevated access, the same way applyFile handles the
+		// parent directories of individual files.
+		if needsSudo(dir.TargetPath) {
+			// sudoMkdir chmods after creating, so this covers both steps.
+			if err := sudoMkdir(dir.TargetPath, dirMode); err != nil {
+				return nil, fmt.Errorf("creating directory %s: %w", dir.TargetPath, err)
+			}
+			if dir.Attrs.Owner != "" || dir.Attrs.Group != "" {
+				if err := sudoChown(dir.TargetPath, dir.Attrs.Owner, dir.Attrs.Group); err != nil {
+					return nil, fmt.Errorf("setting ownership on %s: %w", dir.TargetPath, err)
+				}
+			}
+			continue
+		}
+
 		if err := os.MkdirAll(dir.TargetPath, dirMode); err != nil {
 			return nil, fmt.Errorf("creating directory %s: %w", dir.TargetPath, err)
 		}
 		if dir.Attrs.Perm != 0 {
 			if err := os.Chmod(dir.TargetPath, dirMode); err != nil {
 				return nil, fmt.Errorf("setting permissions on %s: %w", dir.TargetPath, err)
+			}
+		}
+		if dir.Attrs.Owner != "" || dir.Attrs.Group != "" {
+			if err := chownFile(dir.TargetPath, dir.Attrs.Owner, dir.Attrs.Group); err != nil {
+				return nil, fmt.Errorf("setting ownership on %s: %w", dir.TargetPath, err)
 			}
 		}
 	}
@@ -110,6 +148,20 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				}
 			}
 			result.Skipped++
+			continue
+
+		case StatusImport:
+			// An #import file whose target moved on its own: the target is
+			// authoritative, so copy it back into the source without asking.
+			if a.dryRun {
+				fmt.Printf("Would import %s -> %s\n", util.ShortenPath(entry.TargetPath), entry.SourcePath)
+			} else {
+				if err := a.importFile(entry); err != nil {
+					return nil, fmt.Errorf("importing %s: %w", entry.TargetPath, err)
+				}
+				fmt.Printf("← %s (imported)\n", util.ShortenPath(entry.TargetPath))
+			}
+			result.Imported++
 			continue
 
 		case StatusConflict:
@@ -252,7 +304,7 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 		}
 	}
 
-	targetHash, err := state.HashFile(entry.TargetPath)
+	targetHash, err := hashTarget(entry.TargetPath)
 	if err != nil {
 		return err
 	}
@@ -381,7 +433,7 @@ func (a *Applier) showConflictDiff(entry *source.Entry) error {
 }
 
 func (a *Applier) importFile(entry *source.Entry) error {
-	content, err := os.ReadFile(entry.TargetPath)
+	content, err := readTarget(entry.TargetPath)
 	if err != nil {
 		return fmt.Errorf("reading target: %w", err)
 	}
@@ -402,7 +454,7 @@ func (a *Applier) importFile(entry *source.Entry) error {
 		return err
 	}
 
-	targetHash, err := state.HashFile(entry.TargetPath)
+	targetHash, err := hashTarget(entry.TargetPath)
 	if err != nil {
 		return err
 	}
@@ -417,8 +469,50 @@ func (a *Applier) importFile(entry *source.Entry) error {
 }
 
 
+// readTarget reads a deployed file, falling back to elevated access when it is
+// unreadable as the invoking user -- the same reason hashTarget does.
+func readTarget(path string) ([]byte, error) {
+	content, err := os.ReadFile(path)
+	if err == nil {
+		return content, nil
+	}
+	if !isPermissionDenied(err) {
+		return nil, err
+	}
+
+	content, sudoErr := sudoReadFile(path)
+	if sudoErr != nil {
+		// Report the original permission error, which is the actionable one.
+		return nil, fmt.Errorf("reading %s: %w", path, err)
+	}
+	return content, nil
+}
+
+// hashTarget hashes a deployed file, falling back to elevated access when it is
+// unreadable as the invoking user.
+//
+// Files written via sudo -- root-owned, or mode 0600 like a secret -- generally
+// cannot be read back by the user who ran mate, so recording state after
+// applying them would fail on the hash rather than the write.
+func hashTarget(path string) (string, error) {
+	hash, err := state.HashFile(path)
+	if err == nil {
+		return hash, nil
+	}
+	if !isPermissionDenied(err) {
+		return "", err
+	}
+
+	hash, sudoErr := sudoHashFile(path)
+	if sudoErr != nil {
+		// Report the original permission error, which is the actionable one.
+		return "", fmt.Errorf("reading %s: %w", path, err)
+	}
+	return hash, nil
+}
+
 func (a *Applier) recordState(entry *source.Entry, sourceHash string) error {
-	targetHash, err := state.HashFile(entry.TargetPath)
+	targetHash, err := hashTarget(entry.TargetPath)
 	if err != nil {
 		return err
 	}
@@ -446,6 +540,8 @@ func (a *Applier) printChange(change *Change) {
 		prefix = "~"
 	case StatusConflict:
 		prefix = "!"
+	case StatusImport:
+		prefix = "<"
 	}
 	fmt.Printf("%s %s\n", prefix, change.Entry.TargetPath)
 }

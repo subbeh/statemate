@@ -5,7 +5,6 @@
 
 # Build artifacts
 /dist/
-/docs/
 
 # Test coverage
 coverage.out
@@ -26,6 +25,7 @@ Thumbs.db
 .statemate/
 
 # Misc
+.claude/specs/
 SPEC.md
 IMPLEMENTATION.md
 TODO.md

@@ -3,11 +3,9 @@ package secrets
 import (
 	"bytes"
 	"os"
-	"strings"
 	"text/template"
 
 	tmpl "github.com/subbeh/statemate/internal/template"
-	"github.com/subbeh/statemate/internal/util"
 )
 
 // DiscoverByRendering renders templates and collects all bitwarden() calls made.
@@ -65,46 +63,20 @@ func DiscoverByRendering(paths []string, ctx *tmpl.Context, decryptFn func([]byt
 	return all
 }
 
+// discoveryFuncMap is the normal rendering function set with the side effects
+// removed. It must stay a superset of what Render accepts: a template that fails
+// to parse here is skipped entirely, so its secrets are never fetched.
 func discoveryFuncMap(ctx *tmpl.Context) template.FuncMap {
-	return template.FuncMap{
-		"env": func(name string) string {
-			return ctx.Env[name]
-		},
-		"var": func(name string) any {
-			return ctx.Vars[name]
-		},
-		"cmd": func(cmd string) string {
-			return ""
-		},
-		"default": func(def, val any) any {
-			if val == nil || val == "" {
-				return def
-			}
-			return val
-		},
-		"required": func(val any) (any, error) {
-			if val == nil || val == "" {
-				return "", nil
-			}
-			return val, nil
-		},
-		"base64Decode": func(val string) (string, error) {
-			return val, nil
-		},
-		"bitwarden": func(item, typ, field string) (string, error) {
-			return ctx.SecretLookup(item, typ, field)
-		},
-		"bitwardenAttachment": func(item, filename string) (string, error) {
-			return ctx.SecretLookup(item, "attachment", filename)
-		},
-		"indent": util.IndentLines,
-		"contains":  strings.Contains,
-		"hasPrefix": strings.HasPrefix,
-		"hasSuffix": strings.HasSuffix,
-		"join":      strings.Join,
-		"lower":     strings.ToLower,
-		"upper":     strings.ToUpper,
-		"trim":      strings.TrimSpace,
-		"replace":   strings.ReplaceAll,
-	}
+	fm := tmpl.FuncMap(ctx)
+
+	// Shelling out during discovery is a side effect, and its output is not
+	// needed to find which secrets a template asks for.
+	fm["cmd"] = func(cmd string) string { return "" }
+
+	// Discovery renders with placeholder secrets, so anything that validates a
+	// value would abort on them. Nothing here should stop the walk.
+	fm["required"] = func(val any) (any, error) { return val, nil }
+	fm["base64Decode"] = func(val string) (string, error) { return val, nil }
+
+	return fm
 }

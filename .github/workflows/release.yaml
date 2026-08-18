@@ -30,27 +30,53 @@ jobs:
           ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
           echo -e "Host aur.archlinux.org\n  IdentityFile ~/.ssh/aur\n  User aur" >> ~/.ssh/config
 
+      # Release notes are the CHANGELOG's section for this tag, not generated from
+      # commit subjects -- see the changelog block in .goreleaser.yaml.
+      - name: Extract release notes
+        run: |
+          ./scripts/changelog-section.sh "${GITHUB_REF_NAME}" > /tmp/release-notes.md
+          echo "--- release notes ---"
+          cat /tmp/release-notes.md
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
-          args: release --clean
+          args: release --clean --release-notes=/tmp/release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
 
+      # v0.2.1 failed here: goreleaser published the GitHub release and Homebrew
+      # formula, then aborted because the AUR was down for maintenance. The steps
+      # below never ran, so the `latest` tag stayed pointing at an older version.
+      # Run them even when goreleaser failed, since the release itself may well
+      # have been published before the failing step.
       - name: Prepare latest release assets
+        id: latest_assets
+        if: always()
         run: |
+          # A late goreleaser failure (a package registry being down) still leaves
+          # usable archives. A genuine build failure leaves none, so check rather
+          # than assuming either way.
+          if ! ls dist/*.tar.gz >/dev/null 2>&1; then
+            echo "No archives in dist/; skipping latest-tag update."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           mkdir -p latest
           for f in dist/*.tar.gz; do
-            # statemate_1.0.0_linux_amd64.tar.gz -> mate_linux_amd64.tar.gz
+            # statemate_0.3.0_linux_amd64.tar.gz -> mate_linux_amd64.tar.gz
             name=$(basename "$f" | sed 's/statemate_[^_]*_/mate_/')
             cp "$f" "latest/$name"
           done
           cp dist/checksums.txt latest/
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Update latest release
+        if: always() && steps.latest_assets.outputs.ready == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
