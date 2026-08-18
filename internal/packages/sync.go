@@ -230,14 +230,27 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 			if err != nil {
 				return nil, err
 			}
+
+			// Compare on the unqualified name as well. brew reports a tap formula
+			// as jamf/internal-tap/hermes here but hermes elsewhere, so matching
+			// only the exact string would list a declared package as an extra.
+			wantedShort := make(map[string]bool, len(wantedMap))
+			for name := range wantedMap {
+				wantedShort[unqualifiedName(name)] = true
+			}
+
 			for _, inst := range installed {
-				if _, ok := wantedMap[inst.Name]; !ok {
-					result.Statuses = append(result.Statuses, PackageStatus{
-						Name:      inst.Name,
-						Status:    StatusExtra,
-						Installed: inst.Version,
-					})
+				if _, ok := wantedMap[inst.Name]; ok {
+					continue
 				}
+				if wantedShort[unqualifiedName(inst.Name)] {
+					continue
+				}
+				result.Statuses = append(result.Statuses, PackageStatus{
+					Name:      inst.Name,
+					Status:    StatusExtra,
+					Installed: inst.Version,
+				})
 			}
 		}
 

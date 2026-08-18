@@ -15,6 +15,20 @@ type Manager interface {
 	Uninstall(pkgs []string) error
 }
 
+// unqualifiedName strips a source prefix from a package name, turning
+// jamf/internal-tap/hermes into hermes. Names without a prefix are returned
+// unchanged, so this is a no-op for managers that have no equivalent of a tap.
+//
+// Homebrew is inconsistent about which form it prints -- `brew list --formula`
+// gives the bare name while `brew leaves` gives the qualified one -- so both
+// spellings have to compare equal.
+func unqualifiedName(name string) string {
+	if i := strings.LastIndex(name, "/"); i != -1 {
+		return name[i+1:]
+	}
+	return name
+}
+
 type Package struct {
 	Name        string
 	Version     string

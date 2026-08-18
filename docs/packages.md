@@ -36,6 +36,29 @@ packages:
 If the same package is also listed under a specific manager, the two entries merge
 rather than duplicating.
 
+### Homebrew taps
+
+A formula from a third-party tap can be declared either by its fully-qualified
+name or bare, and both are recognised as installed:
+
+```yaml
+packages:
+  brew:
+    - jamf/internal-tap/hermes    # fully qualified
+    - hermes                      # equivalent for an installed formula
+```
+
+Prefer the qualified form: `brew install` needs it to find a formula that is not
+already tapped, whereas the bare name only works once the tap is added.
+
+Statemate accepts either because Homebrew itself is inconsistent — `brew list
+--formula` reports a tap formula under its bare name while `brew leaves` reports it
+fully qualified. One consequence is that two taps providing the same formula name
+cannot be told apart when comparing bare names.
+
+Statemate does not add taps for you. Run `brew tap <owner>/<name>` yourself, or add
+it to a [script](scripts.md).
+
 ### AUR helper
 
 Set explicitly, or leave it to be detected:

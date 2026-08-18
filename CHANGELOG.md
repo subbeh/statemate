@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Homebrew packages from a tap (e.g. `jamf/internal-tap/hermes`) are no longer reported as missing when they are installed. `brew list --formula` prints such a formula under its bare name (`hermes`) while `brew leaves` prints it fully qualified, so a package declared by its tap-qualified name never matched and `mate apply` offered to install it on every run — with `brew install` reporting it was already there, so it never converged. Either spelling is now accepted, in both the installed check and the `--all` extras listing (where the same mismatch also listed a declared package as an extra)
+
 ## [0.3.0] - 2026-08-18
 
 ### Fixed

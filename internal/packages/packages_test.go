@@ -29,6 +29,25 @@ func TestParsePackageSpec(t *testing.T) {
 	}
 }
 
+func TestUnqualifiedName(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"jamf/internal-tap/hermes", "hermes"},
+		{"atlassian/acli/acli", "acli"},
+		{"ripgrep", "ripgrep"},
+		{"", ""},
+		{"a/b", "b"},
+		// Managers with no tap concept must be unaffected.
+		{"base-devel", "base-devel"},
+		{"node@20", "node@20"},
+	}
+
+	for _, tc := range tests {
+		if got := unqualifiedName(tc.in); got != tc.want {
+			t.Errorf("unqualifiedName(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestPackageString(t *testing.T) {
 	tests := []struct {
 		pkg  Package
