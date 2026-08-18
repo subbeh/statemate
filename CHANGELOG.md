@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-18
+
 ### Fixed
 - `mate apply --dry-run` now counts files it would import in its summary, instead of reporting them as "0 files would be applied"
 - Importing a file (via `#import` or the conflict prompt's `[i]mport`) now reads targets requiring elevated access, instead of failing with "permission denied"
