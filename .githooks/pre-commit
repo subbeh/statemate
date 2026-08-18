@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 #
-# Blocks commits that change user-visible behavior without a CHANGELOG.md entry.
+# Two guards on commits that change user-visible behavior:
+#   1. a CHANGELOG.md entry is present
+#   2. docs/commands/ matches the current help text
 #
-# Rationale: CHANGELOG updates were repeatedly forgotten, leaving released
-# versions with missing entries that had to be backfilled from git log.
+# Rationale: both were repeatedly forgotten. CHANGELOG entries had to be
+# backfilled from git log, and the generated command reference drifted far enough
+# to document commands that no longer existed.
 #
 # Bypass for genuinely non-user-facing changes (internal refactors, tests):
 #   git commit --no-verify
@@ -22,11 +25,16 @@ if [ -z "$non_test_code" ]; then
   exit 0
 fi
 
-if printf '%s\n' "$staged" | grep -qx 'CHANGELOG.md'; then
-  exit 0
-fi
+fail() {
+  cat >&2
+  exit 1
+}
 
-cat >&2 <<'EOF'
+# --- 1. CHANGELOG ------------------------------------------------------------
+
+if ! printf '%s\n' "$staged" | grep -qx 'CHANGELOG.md'; then
+  {
+    cat <<'EOF'
 ✗ Commit blocked: CHANGELOG.md not updated
 
 Staged changes touch internal/ or cmd/ but CHANGELOG.md is not staged.
@@ -45,7 +53,35 @@ If this change is genuinely not user-facing (internal refactor, tests only):
 
 Staged code files:
 EOF
+    printf '%s\n' "$non_test_code" | sed 's/^/  /'
+  } | fail
+fi
 
-printf '%s\n' "$non_test_code" | sed 's/^/  /' >&2
+# --- 2. Generated command reference -----------------------------------------
 
-exit 1
+# Only worth checking when the CLI definitions changed; regenerating costs a `go
+# run`, and nothing else feeds docs/commands/.
+cli_changed=$(printf '%s\n' "$non_test_code" | grep -E '^(internal/cli/|cmd/gendocs/)' || true)
+
+if [ -n "$cli_changed" ]; then
+  if ! make docs >/dev/null 2>&1; then
+    echo "⚠ Skipping docs check: 'make docs' failed" >&2
+    exit 0
+  fi
+
+  if ! git diff --quiet -- docs/commands/ || \
+     [ -n "$(git ls-files --others --exclude-standard docs/commands/)" ]; then
+    {
+      cat <<'EOF'
+✗ Commit blocked: docs/commands/ is out of date
+
+Command help text changed, so the generated reference no longer matches. It has
+just been regenerated for you -- stage it:
+
+  git add docs/commands
+
+If the help text change was unintentional, revert it instead.
+EOF
+    } | fail
+  fi
+fi

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"sort"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
@@ -53,6 +54,17 @@ func funcMap(ctx *Context) template.FuncMap {
 // secrets.
 func FuncMap(ctx *Context) template.FuncMap {
 	return funcMap(ctx)
+}
+
+// MateFuncNames lists statemate's own template functions, as opposed to the sprig
+// ones underneath. The documentation test uses it to check each is documented.
+func MateFuncNames() []string {
+	names := make([]string, 0, len(mateFuncs(nil)))
+	for name := range mateFuncs(nil) {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func mateFuncs(ctx *Context) template.FuncMap {

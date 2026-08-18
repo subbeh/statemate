@@ -36,6 +36,7 @@ git checkout -b feat/your-feature-name
 - Make your changes in small, logical commits
 - Follow the existing code style
 - Update CHANGELOG.md under `[Unreleased]` with user-facing changes
+- Update documentation — see [Documentation](#documentation) below
 - Run tests locally: `make test`
 - Run linter locally: `make lint`
 
@@ -82,6 +83,48 @@ Then create a PR on GitHub with:
 PRs require passing checks before merge:
 - `make test` - all tests must pass
 - `make lint` - no linting errors
+- `make docs` - the generated command reference must be up to date
+
+## Documentation
+
+Documentation lives in two places, with different rules.
+
+**`docs/commands/` is generated.** It comes from the cobra command definitions, so
+the source of truth is the `Short` and `Long` fields in `internal/cli/*.go`. Never
+edit these files by hand:
+
+```bash
+make docs          # regenerate after changing help text
+git add docs/commands
+```
+
+CI fails if they are out of sync, and the pre-commit hook regenerates them for you
+when you touch `internal/cli/`.
+
+**Everything else in `docs/` is hand-written.** These are the guides covering file
+formats, which cobra cannot see: attributes, config keys, templates, secrets,
+scripts, packages.
+
+A test enforces that new features reach them. `internal/cli/docs_test.go` fails
+when a file attribute, config key, template function, script frequency, or
+environment variable is not mentioned anywhere in the guides:
+
+```
+--- FAIL: TestFileAttributesAreDocumented
+    docs_test.go:77: file attribute #readonly is not mentioned in docs/
+                     -- add it to docs/attributes.md
+```
+
+It checks only that a name appears somewhere, deliberately — a stricter test would
+fail on wording changes and end up disabled. Mentioning a feature is the floor, not
+the goal.
+
+When adding a feature, the checklist is:
+
+1. Update the command's `Short`/`Long` if the CLI changed, then `make docs`
+2. Document it in the relevant `docs/*.md` guide
+3. Add a CHANGELOG entry
+4. Link any new guide from `docs/README.md` (also enforced by a test)
 
 ### 6. Merge
 
@@ -148,6 +191,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 | Create branch | `git checkout -b feat/name` |
 | Run tests | `make test` |
 | Run linter | `make lint` |
+| Regenerate docs | `make docs` |
 | Code review | `/code-review` in Claude Code |
 | Push branch | `git push -u origin feat/name` |
 | Create PR | GitHub UI or `gh pr create` |

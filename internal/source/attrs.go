@@ -23,6 +23,19 @@ type Attrs struct {
 	GroupR string
 }
 
+// AttrNames lists every attribute ParseAttrs understands. Value-taking
+// attributes keep their trailing colon, so the entries read as they appear in a
+// filename.
+//
+// This exists so the documentation test can enumerate attributes; keep it in step
+// with ParseAttrs below. TestAttrNamesAreParsed checks that every name here
+// actually parses, and the docs test checks that every name is documented.
+var AttrNames = []string{
+	"template", "tmpl", "encrypted", "symlink", "import",
+	"profile:", "perm:", "owner:", "group:",
+	"perm-r:", "owner-r:", "group-r:",
+}
+
 func ParseAttrs(name string) (baseName string, attrs Attrs) {
 	parts := strings.Split(name, "#")
 	baseName = parts[0]

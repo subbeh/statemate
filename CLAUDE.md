@@ -7,7 +7,7 @@ Declarative system configuration management tool. Binary is `mate`.
 ```bash
 make build-all  # Build for all platforms (use this, not `make build`)
 make test       # Run tests with race detection
-make docs       # Generate man pages and markdown docs
+make docs       # Regenerate docs/commands/ from the cobra command tree
 make lint       # Run golangci-lint
 ```
 
@@ -28,17 +28,31 @@ make lint       # Run golangci-lint
 
 ## Documentation
 
-- **Command help text** is the source of truth - update `Short` and `Long` fields in cobra commands
-- **Man pages and markdown** are generated from code via `make docs`
-- **README.md** is a quick start only - don't duplicate command reference there
+Documentation is committed under `docs/` and split by who writes it:
+
+- **`docs/commands/` is GENERATED** by `make docs` from the cobra `Short`/`Long`
+  fields. Never edit these files — change the help text in `internal/cli/*.go` and
+  regenerate. CI and the pre-commit hook both fail on drift.
+- **`docs/*.md` are HAND-WRITTEN** guides for what cobra cannot see: file
+  attributes, config keys, templates, secrets, scripts, packages. Cobra only knows
+  about commands and flags, so these formats have no other home.
+- **README.md** is a quick start that links into `docs/` - don't duplicate the
+  reference there
 - **CHANGELOG.md** tracks user-facing changes
+
+`internal/cli/docs_test.go` fails when a new attribute, config key, template
+function, script frequency, or env var is not mentioned in the guides. If it
+fails, the fix is to document the feature, not to relax the test. Man pages were
+removed — they were never actually shipped to users, and cobra's roff output only
+duplicated `--help`.
 
 ## When Making Changes
 
 1. Update command help text in `internal/cli/*.go` if changing CLI behavior
 2. **Update CHANGELOG.md** — see the mandatory rule below
-3. Run `make test` before finishing
-4. Run `make docs` if command help changed (docs are gitignored, generated at release)
+3. Document new features in the relevant `docs/*.md` guide
+4. Run `make docs` if command help changed, and stage `docs/commands/`
+5. Run `make test` and `make lint` before finishing
 
 ## CHANGELOG is Mandatory
 
@@ -48,6 +62,8 @@ This is not optional and is repeatedly forgotten. Treat it as part of the change
 
 **This is enforced by a pre-commit hook** (`.githooks/pre-commit`). Commits that stage
 non-test files under `internal/` or `cmd/` without staging `CHANGELOG.md` are rejected.
+The same hook regenerates `docs/commands/` when `internal/cli/` changes, and rejects
+the commit if the result is not staged.
 
 One-time setup after cloning (`core.hooksPath` is local git config, not version-controlled):
 

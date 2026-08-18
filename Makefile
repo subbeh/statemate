@@ -27,11 +27,11 @@ install: build
 clean:
 	rm -f $(BINARY)
 	rm -f coverage.out coverage.html
-	rm -rf docs/ dist/
+	rm -rf dist/
 
 coverage:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out -o coverage.html
 
 docs:
-	go run ./cmd/gendocs docs/
+	go run ./cmd/gendocs docs/commands
