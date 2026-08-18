@@ -30,6 +30,9 @@ var statusCmd = &cobra.Command{
 Reports files to be created, modified, or in conflict, plus orphaned files,
 missing packages, pending scripts, and secrets needing refresh.
 
+Markers: '+' new, '~' modified, '!' conflict, '<' will be imported into the
+source (an '#import' file whose target changed).
+
 The positional argument filters by file or path; use --source to limit the
 report to a single source.`,
 	Args:              cobra.MaximumNArgs(1),
@@ -39,7 +42,7 @@ report to a single source.`,
 
 func init() {
 	rootCmd.AddCommand(statusCmd)
-	statusCmd.Flags().Bool("short", false, "compact output for statuslines (format: +N ~N !N ?N *N sN)")
+	statusCmd.Flags().Bool("short", false, "compact output for statuslines (format: +N ~N !N <N ?N *N sN)")
 	statusCmd.Flags().Bool("sudo", false, "use sudo to check files requiring elevated access")
 	addScopeFlag(statusCmd)
 }
@@ -237,6 +240,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				prefix = "~"
 			case target.StatusConflict:
 				prefix = "!"
+			case target.StatusImport:
+				// Points back at the source: this file moves the other way.
+				prefix = "<"
 			}
 			targetDisplay := util.ShortenPath(c.Entry.TargetPath)
 			sourceDir := extractSourceDir(c.Entry)
@@ -285,7 +291,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 }
 
 func printShortStatus(changes []*target.Change, orphans []string, pending scripts.Scripts, pendingSecrets int) error {
-	var added, modified, conflicts int
+	var added, modified, conflicts, imports int
 	for _, c := range changes {
 		switch c.Status {
 		case target.StatusNew:
@@ -294,11 +300,14 @@ func printShortStatus(changes []*target.Change, orphans []string, pending script
 			modified++
 		case target.StatusConflict:
 			conflicts++
+		case target.StatusImport:
+			imports++
 		}
 	}
 
 	// No changes = no output (for statusline to hide)
-	if added == 0 && modified == 0 && conflicts == 0 && len(orphans) == 0 && len(pending) == 0 && pendingSecrets == 0 {
+	if added == 0 && modified == 0 && conflicts == 0 && imports == 0 &&
+		len(orphans) == 0 && len(pending) == 0 && pendingSecrets == 0 {
 		return nil
 	}
 
@@ -311,6 +320,9 @@ func printShortStatus(changes []*target.Change, orphans []string, pending script
 	}
 	if conflicts > 0 {
 		parts = append(parts, fmt.Sprintf("!%d", conflicts))
+	}
+	if imports > 0 {
+		parts = append(parts, fmt.Sprintf("<%d", imports))
 	}
 	if len(orphans) > 0 {
 		parts = append(parts, fmt.Sprintf("?%d", len(orphans)))

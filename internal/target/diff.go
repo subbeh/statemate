@@ -105,6 +105,13 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) (*Comp
 func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Change, error) {
 	change := &Change{Entry: entry}
 
+	// Importing a template would overwrite the template with its own rendered
+	// output, destroying the source. The conflict prompt already refuses this;
+	// as an attribute it is a mistake worth naming.
+	if entry.Attrs.Import && entry.Attrs.Template {
+		return nil, fmt.Errorf("%s: #import cannot be combined with #template -- importing would overwrite the template with its rendered output", entry.SourcePath)
+	}
+
 	var sourceHash string
 	var err error
 	if entry.Generated {
@@ -240,6 +247,10 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 			} else {
 				change.Status = StatusUnchanged
 			}
+		} else if entry.Attrs.Import {
+			// The application owns this file and changed it, while the source
+			// stood still. Take the target as truth rather than prompting.
+			change.Status = StatusImport
 		} else {
 			change.Status = StatusConflict
 		}
@@ -247,6 +258,8 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 	}
 
 	if targetHash != existing.AppliedHash {
+		// Both sides moved. Even for #import this is a real divergence, so ask
+		// rather than silently discarding the source edit.
 		change.Status = StatusConflict
 	} else {
 		change.Status = StatusModified
@@ -318,6 +331,8 @@ func GenerateDiff(sourcePath, targetPath string) (string, error) {
 	return GenerateDiffWithTool(sourcePath, targetPath, "")
 }
 
+// GenerateDiffWithTool diffs a deployed target against its source, showing what
+// applying would do: the target is the old side, the source the new one.
 func GenerateDiffWithTool(sourcePath, targetPath, diffTool string) (string, error) {
 	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
 		content, err := os.ReadFile(sourcePath)
@@ -327,11 +342,18 @@ func GenerateDiffWithTool(sourcePath, targetPath, diffTool string) (string, erro
 		return fmt.Sprintf("+++ %s (new file)\n%s", targetPath, content), nil
 	}
 
+	return GenerateDiffBetween(targetPath, sourcePath, diffTool)
+}
+
+// GenerateDiffBetween diffs two paths in an explicit direction. #import reverses
+// the usual one, since for those files the target is what will be written into
+// the source.
+func GenerateDiffBetween(oldPath, newPath, diffTool string) (string, error) {
 	tool := "diff"
-	args := []string{"-u", targetPath, sourcePath}
+	args := []string{"-u", oldPath, newPath}
 	if diffTool != "" {
 		tool = diffTool
-		args = []string{targetPath, sourcePath}
+		args = []string{oldPath, newPath}
 	}
 
 	cmd := exec.Command(tool, args...)

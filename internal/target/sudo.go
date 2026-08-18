@@ -223,11 +223,14 @@ func (s *sudoFileInfo) Sys() any           { return nil }
 func (s *sudoFileInfo) ModTime() (t time.Time) { return }
 
 func sudoHashFile(path string) (string, error) {
-	cmd := exec.Command("sudo", "-n", "cat", path)
-	out, err := cmd.Output()
+	out, err := sudoReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	h := sha256.Sum256(out)
 	return hex.EncodeToString(h[:]), nil
+}
+
+func sudoReadFile(path string) ([]byte, error) {
+	return exec.Command("sudo", "-n", "cat", path).Output()
 }

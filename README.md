@@ -91,8 +91,35 @@ Use `#` suffixes to control behavior (stripped from target filename):
 | `#encrypted` | File is age-encrypted |
 | `#template` | Process as Go template |
 | `#symlink` | Create symlink instead of copy |
+| `#import` | Target is authoritative: changes to it are pulled back into the source |
 
 Example: `.ssh/config#encrypted#perm:600`
+
+### `#import`
+
+Some files are owned by the application that reads them — `~/.claude/settings.json`
+gets rewritten whenever you change a setting. Without `#import`, every `mate apply`
+stops and asks whether to overwrite or import the drifted target.
+
+`#import` makes the target authoritative:
+
+```
+claude/.claude/settings.json#encrypted#import
+```
+
+| Source | Target | Result |
+|--------|--------|--------|
+| unchanged | unchanged | nothing to do |
+| changed | unchanged | source deployed to target, as usual |
+| unchanged | changed | **target imported into the source, no prompt** |
+| changed | changed | conflict prompt — a real divergence is never resolved silently |
+
+A missing target is still created from the source, so `#import` works for
+bootstrapping a new machine. `mate status` marks a pending import with `<`
+(`<N` in `--short`), and `mate diff` shows the diff in the import direction.
+
+`#import` cannot be combined with `#template`: importing would overwrite the
+template with its own rendered output.
 
 ## Source Directory Config
 

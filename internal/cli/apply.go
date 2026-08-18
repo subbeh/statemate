@@ -49,7 +49,12 @@ manually with 'mate scripts run'.
 
 Use --force to auto-confirm all scripts, or --no-scripts to skip them entirely
 (useful for automated runs). Without a terminal to prompt on, scripts are
-skipped with a warning.`,
+skipped with a warning.
+
+A file marked '#import' is not prompted about when only its target changed: the
+target is treated as authoritative and copied back into the source. Use it for
+files an application rewrites, such as ~/.claude/settings.json. If the source
+changed too, the conflict prompt still appears.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runApply,
 	ValidArgsFunction: completeManagedFiles,
@@ -254,7 +259,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	if dryRun {
-		fmt.Printf("\nDry run: %d files would be applied, %d unchanged\n", result.Applied, result.Skipped)
+		fmt.Printf("\nDry run: %d files would be applied", result.Applied)
+		if result.Imported > 0 {
+			fmt.Printf(", %d imported", result.Imported)
+		}
+		fmt.Printf(", %d unchanged\n", result.Skipped)
 	} else {
 		parts := []string{}
 		if result.Applied > 0 {

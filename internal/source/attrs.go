@@ -13,6 +13,10 @@ type Attrs struct {
 	Encrypted bool
 	Template  bool
 	Symlink   bool
+	// Import marks a file whose target is normally authoritative, because the
+	// application owns it and rewrites it (~/.claude/settings.json, say). A
+	// changed target is imported back into the source instead of prompting.
+	Import bool
 	// Recursive attributes (inherited by children)
 	PermR  uint32
 	OwnerR string
@@ -60,6 +64,8 @@ func ParseAttrs(name string) (baseName string, attrs Attrs) {
 				attrs.Template = true
 			case "symlink":
 				attrs.Symlink = true
+			case "import":
+				attrs.Import = true
 			}
 		}
 	}

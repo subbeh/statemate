@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `mate apply --dry-run` now counts files it would import in its summary, instead of reporting them as "0 files would be applied"
+- Importing a file (via `#import` or the conflict prompt's `[i]mport`) now reads targets requiring elevated access, instead of failing with "permission denied"
 - Secret discovery now renders templates with the same functions as `mate apply`. A template using a function discovery did not know about failed to parse there and was skipped silently, so its secrets were never fetched and the apply failed on a cache miss
 - `mate apply` can now record state for files it wrote via sudo. A root-owned or `0600` target (such as a rendered secret) is unreadable as the invoking user, so the apply failed on hashing the file it had just written successfully
 - `mate apply` now uses sudo to create directories outside your writable tree, so a source mapping `targets: { etc: /etc }` no longer fails with `creating directory /etc/restic: permission denied`. Directory `owner`/`group` attributes are also applied now, which they previously were not. An existing directory with no perm/owner/group attribute is left completely untouched, so mapped roots like `/etc` are never chmodded
@@ -23,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate add` source picker now lists profile-provided sources, not just the top-level `sources:` list. Previously the picker showed a different list than it indexed, so a selection could map to the wrong source
 
 ### Added
+- **`#import` file attribute** for files an application owns and rewrites, such as `~/.claude/settings.json`. When only the target changed, it is copied back into the source without prompting, instead of raising a conflict on every apply. A source edit still deploys normally, a missing target is still created (so it works for bootstrapping), and if *both* sides changed the conflict prompt still appears rather than silently discarding your edit. `mate status` marks a pending import with `<` (`<N` in `--short`) and `mate diff` shows the diff in the import direction. Cannot be combined with `#template`, which would overwrite the template with its rendered output
 - Templates now have the [sprig](https://masterminds.github.io/sprig/) function library (~200 functions: `splitList`, `trimSuffix`, `upper`, `join`, `ternary`, `regexReplaceAll`, and so on). Previously only 9 functions existed, so a template using anything else failed with `function "splitList" not defined`. Statemate's own functions take precedence where a name collides — `env` still reads the rendering context rather than the live process environment, `default` still substitutes only for `nil` and `""` (sprig's also replaces `0` and `false`), and `indent` still leaves blank lines unpadded
 - `mate apply` can now be scoped: `mate apply <path>` applies only matching files (no scripts, packages, or secret fetch), and `mate apply -s <source>` applies that source's files, runs its scripts, and prompts for its packages. Repo-root scripts are not run under `--source`, since they apply to the whole repository
 - `--source`/`-s` flag for `mate status` and `mate diff` to limit output to a single source, matching the flag `mate add` already uses

@@ -52,6 +52,16 @@ func TestParseAttrs(t *testing.T) {
 			wantName: "link",
 			wantAttr: Attrs{Symlink: true},
 		},
+		{
+			input:    "settings.json#import",
+			wantName: "settings.json",
+			wantAttr: Attrs{Import: true},
+		},
+		{
+			input:    "settings.json#profile:work#encrypted#import",
+			wantName: "settings.json",
+			wantAttr: Attrs{Profile: "work", Encrypted: true, Import: true},
+		},
 	}
 
 	for _, tt := range tests {
