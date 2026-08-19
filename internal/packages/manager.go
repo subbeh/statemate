@@ -10,9 +10,38 @@ type Manager interface {
 	IsAvailable() bool
 	ListInstalled() ([]Package, error)
 	QueryInstalled(pkgs []string) ([]Package, error)
-	Describe(pkgs []string) (map[string]string, error)
+	Describe(pkgs []string) (Descriptions, error)
 	Install(pkgs []string) error
 	Uninstall(pkgs []string) error
+}
+
+// Descriptions holds the one-line descriptions a manager could look up.
+//
+// Unknown is reported separately rather than inferred from a missing ByName entry,
+// because absence means different things per manager: brew can say a name matches
+// no formula or cask at all, while `pacman -Qi` only describes installed packages
+// and says nothing about whether a missing one exists. Guessing from absence would
+// label every not-yet-installed pacman package as nonexistent.
+type Descriptions struct {
+	ByName map[string]string
+
+	// Unknown lists requested names the manager positively could not resolve.
+	Unknown map[string]bool
+}
+
+// Lookup returns the description for a name and whether the manager resolved it at
+// all. A resolved package with nothing to say about itself yields ("", true).
+func (d Descriptions) Lookup(name string) (desc string, resolved bool) {
+	if d.Unknown[name] {
+		return "", false
+	}
+	desc, ok := d.ByName[name]
+	if !ok {
+		// Not resolved and not positively unknown: the manager had no opinion, so
+		// treat it as a package with no description rather than a bad name.
+		return "", true
+	}
+	return desc, true
 }
 
 // unqualifiedName strips a source prefix from a package name, turning
@@ -49,6 +78,11 @@ type PackageStatus struct {
 	Sources     []string
 	Installed   string
 	Description string
+
+	// DescriptionUnknown records that the package manager does not recognise this
+	// name at all, as opposed to recognising it and having no description. Only set
+	// when descriptions were requested.
+	DescriptionUnknown bool
 }
 
 type Status int

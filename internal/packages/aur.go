@@ -116,17 +116,20 @@ func (a *AURManager) QueryInstalled(pkgs []string) ([]Package, error) {
 	return packages, nil
 }
 
-func (a *AURManager) Describe(pkgs []string) (map[string]string, error) {
+// Describe returns descriptions for the installed packages among pkgs. Like
+// PacmanManager.Describe it reports nothing as Unknown, since `pacman -Qi` only
+// knows what is installed.
+func (a *AURManager) Describe(pkgs []string) (Descriptions, error) {
 	if len(pkgs) == 0 {
-		return nil, nil
+		return Descriptions{}, nil
 	}
 	args := append([]string{"-Qi"}, pkgs...)
 	cmd := exec.Command("pacman", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
+	// Not-installed packages make pacman -Qi exit non-zero while still printing
+	// the ones it found; see PacmanManager.Describe.
+	_ = cmd.Run()
 
 	result := make(map[string]string)
 	var currentName string
@@ -142,7 +145,7 @@ func (a *AURManager) Describe(pkgs []string) (map[string]string, error) {
 			}
 		}
 	}
-	return result, scanner.Err()
+	return Descriptions{ByName: result}, scanner.Err()
 }
 
 func (a *AURManager) Install(pkgs []string) error {

@@ -135,6 +135,26 @@ Use --all to also show packages not in config.
 
 For the same reason `mate status` and `mate apply` never compute extras.
 
+### `-v` and `<unknown>`
+
+`-v` adds a DESCRIPTION column. Two kinds of empty look different on purpose:
+
+```
+ ✓  font-hack-nerd-font    brew   macos
+ +  github-cli             brew   git     <unknown>
+```
+
+An **empty** description means the package manager knows the package but publishes
+no description for it (common for font casks). **`<unknown>`** means the manager
+matched no such package at all, which usually points at a mistake in your config —
+a typo (`github-cli` where Homebrew calls it `gh`), a name that only exists on
+another platform (`man`, `sudo` in a `common:` list on macOS), or a package that
+has since been renamed or removed. Such a package can never be installed, so
+`mate packages apply` will keep trying and failing until the name is corrected.
+
+Homebrew aliases are also reported as `<unknown>`, because only the canonical name
+is matched — declare `node` rather than `npm`.
+
 ### `--prune`
 
 `--prune` uninstalls anything not declared in your configuration. Since "not

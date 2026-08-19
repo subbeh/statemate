@@ -81,3 +81,77 @@ func TestBrewNameIndexIgnoresBlanks(t *testing.T) {
 	}
 }
 
+// A tap formula must be findable by whichever spelling the caller declared, or
+// `packages status -v` shows a blank description for every tap package.
+func TestParseBrewDescriptionsKeysBothSpellings(t *testing.T) {
+	descs, err := parseBrewDescriptions([]byte(`{
+		"formulae": [
+			{"name": "hermes", "full_name": "jamf/internal-tap/hermes", "desc": "Hermes CLI"},
+			{"name": "ripgrep", "full_name": "ripgrep", "desc": "Search tool"}
+		],
+		"casks": [
+			{"token": "slack", "full_token": "slack", "desc": "Team communication"}
+		]
+	}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, tc := range []struct{ name, want string }{
+		{"jamf/internal-tap/hermes", "Hermes CLI"},
+		{"hermes", "Hermes CLI"},
+		{"ripgrep", "Search tool"},
+		{"slack", "Team communication"},
+	} {
+		if got := descs[tc.name]; got != tc.want {
+			t.Errorf("desc for %q = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// brew reports a null desc for some packages (many font casks). Such a package must
+// still be recorded, with an empty description: it exists, so it must not be
+// reported as an unresolvable name.
+func TestParseBrewDescriptionsKeepsPackagesWithNoDesc(t *testing.T) {
+	descs, err := parseBrewDescriptions([]byte(`{
+		"casks": [{"token": "font-hack-nerd-font", "full_token": "font-hack-nerd-font", "desc": null}]
+	}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	desc, ok := descs["font-hack-nerd-font"]
+	if !ok {
+		t.Fatal("a package brew knows must be recorded even with no description")
+	}
+	if desc != "" {
+		t.Errorf("desc = %q, want empty", desc)
+	}
+}
+
+// Lookup is what separates "this package has no description" from "there is no such
+// package", which the two render differently.
+func TestDescriptionsLookup(t *testing.T) {
+	d := Descriptions{
+		ByName:  map[string]string{"git": "Distributed revision control system", "font-hack-nerd-font": ""},
+		Unknown: map[string]bool{"man": true},
+	}
+
+	for _, tc := range []struct {
+		name         string
+		wantDesc     string
+		wantResolved bool
+		why          string
+	}{
+		{"git", "Distributed revision control system", true, "known, has a description"},
+		{"font-hack-nerd-font", "", true, "known, brew reports no description"},
+		{"man", "", false, "brew matched no formula or cask"},
+		{"never-asked", "", true, "no verdict either way is not a bad name"},
+	} {
+		desc, resolved := d.Lookup(tc.name)
+		if desc != tc.wantDesc || resolved != tc.wantResolved {
+			t.Errorf("Lookup(%q) = (%q, %v), want (%q, %v) -- %s",
+				tc.name, desc, resolved, tc.wantDesc, tc.wantResolved, tc.why)
+		}
+	}
+}
+

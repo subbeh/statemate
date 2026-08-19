@@ -139,38 +139,97 @@ func (b *BrewManager) QueryInstalled(pkgs []string) ([]Package, error) {
 	return result, nil
 }
 
-func (b *BrewManager) Describe(pkgs []string) (map[string]string, error) {
+// Describe returns one-line descriptions for the names the caller asked for, and
+// reports which of them match no formula or cask.
+//
+// `brew info` fails as a whole when any single argument is not a known formula or
+// cask, so a package that does not exist -- a Linux-only name like man or sudo
+// declared in a shared list, or a typo like github-cli for gh -- would otherwise
+// blank the description of every other package. Filtering the arguments against the
+// known-name lists first means an unresolvable name costs only its own description,
+// and identifies the bad names so they can be reported as such.
+//
+// The name lists come from brew's local cache and cover tap-qualified spellings, so
+// this costs no network access and little time.
+func (b *BrewManager) Describe(pkgs []string) (Descriptions, error) {
 	if len(pkgs) == 0 {
-		return nil, nil
+		return Descriptions{}, nil
 	}
-	args := append([]string{"info", "--json=v2"}, pkgs...)
+
+	known := newBrewIndex(append(listNames("formulae"), listNames("casks")...))
+	query := make([]string, 0, len(pkgs))
+	unknown := make(map[string]bool)
+	for _, name := range pkgs {
+		if known.has(name) {
+			query = append(query, name)
+		} else {
+			unknown[name] = true
+		}
+	}
+
+	// brew info with no arguments dumps the entire catalogue, which is slow and
+	// useless here, so skip the call when nothing resolved.
+	if len(query) == 0 {
+		return Descriptions{Unknown: unknown}, nil
+	}
+
+	args := append([]string{"info", "--json=v2"}, query...)
 	cmd := exec.Command("brew", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
-		return nil, err
+		return Descriptions{}, err
 	}
 
+	byName, err := parseBrewDescriptions(out.Bytes())
+	if err != nil {
+		return Descriptions{}, err
+	}
+	return Descriptions{ByName: byName, Unknown: unknown}, nil
+}
+
+// parseBrewDescriptions maps `brew info --json=v2` output to descriptions keyed by
+// every name the package answers to.
+//
+// brew reports a tap formula as name=hermes with
+// full_name=jamf/internal-tap/hermes, and a package may be declared either way, so
+// keying on only one spelling leaves tap packages with a blank description.
+//
+// A package brew knows but has no description for (desc is null, common for font
+// casks) is still recorded, with an empty value. Callers distinguish "no
+// description" from "no such package" by key presence, so dropping the key would
+// make a real package look unresolvable.
+func parseBrewDescriptions(data []byte) (map[string]string, error) {
 	var info struct {
 		Formulae []struct {
-			Name string `json:"name"`
-			Desc string `json:"desc"`
+			Name     string `json:"name"`
+			FullName string `json:"full_name"`
+			Desc     string `json:"desc"`
 		} `json:"formulae"`
 		Casks []struct {
-			Token string `json:"token"`
-			Desc  string `json:"desc"`
+			Token     string `json:"token"`
+			FullToken string `json:"full_token"`
+			Desc      string `json:"desc"`
 		} `json:"casks"`
 	}
-	if err := json.Unmarshal(out.Bytes(), &info); err != nil {
+	if err := json.Unmarshal(data, &info); err != nil {
 		return nil, err
 	}
 
 	result := make(map[string]string)
+	put := func(name, fullName, desc string) {
+		if name != "" {
+			result[name] = desc
+		}
+		if fullName != "" {
+			result[fullName] = desc
+		}
+	}
 	for _, f := range info.Formulae {
-		result[f.Name] = f.Desc
+		put(f.Name, f.FullName, f.Desc)
 	}
 	for _, c := range info.Casks {
-		result[c.Token] = c.Desc
+		put(c.Token, c.FullToken, c.Desc)
 	}
 	return result, nil
 }

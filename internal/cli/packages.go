@@ -36,7 +36,10 @@ Packages can be defined in:
 Use --all to show extra packages not in config. Detecting extras means listing
 every installed package, which is noticeably slower, so it is only done when
 --all is given.
-Use --verbose to show package descriptions.`,
+Use --verbose to show package descriptions. A description of <unknown> means the
+package manager does not recognise the name at all, usually a typo or a package
+that only exists on another platform; an empty description means the package
+exists but publishes none.`,
 	RunE: runPackagesStatus,
 }
 
@@ -117,7 +120,15 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 			source := strings.Join(s.Sources, ", ")
 			row := []string{indicator, s.Name, result.Manager, source}
 			if packagesVerbose {
-				row = append(row, s.Description)
+				// A package the manager does not recognise is called out, since a
+				// blank description would look like the package merely has none --
+				// hiding a name that can never be installed, such as a typo or a
+				// Linux-only package declared for every platform.
+				desc := s.Description
+				if s.DescriptionUnknown {
+					desc = color.YellowString("<unknown>")
+				}
+				row = append(row, desc)
 			}
 			data = append(data, row)
 		}

@@ -15,7 +15,10 @@ Packages can be defined in:
 Use --all to show extra packages not in config. Detecting extras means listing
 every installed package, which is noticeably slower, so it is only done when
 --all is given.
-Use --verbose to show package descriptions.
+Use --verbose to show package descriptions. A description of <unknown> means the
+package manager does not recognise the name at all, usually a typo or a package
+that only exists on another platform; an empty description means the package
+exists but publishes none.
 
 ```
 mate packages status [flags]

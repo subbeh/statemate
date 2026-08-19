@@ -261,7 +261,9 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 			}
 			if descs, err := manager.Describe(names); err == nil {
 				for i := range result.Statuses {
-					result.Statuses[i].Description = descs[result.Statuses[i].Name]
+					desc, resolved := descs.Lookup(result.Statuses[i].Name)
+					result.Statuses[i].Description = desc
+					result.Statuses[i].DescriptionUnknown = !resolved
 				}
 			}
 		}

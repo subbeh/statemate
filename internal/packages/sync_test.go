@@ -16,6 +16,11 @@ type fakeManager struct {
 	installed        []Package
 	listInstalledHit int
 	queryReportsBare bool
+
+	// descriptions is what Describe reports; names in descUnknown are reported as
+	// not recognised by the manager at all.
+	descriptions map[string]string
+	descUnknown  map[string]bool
 }
 
 func (f *fakeManager) Name() string      { return "brew" }
@@ -49,9 +54,11 @@ func (f *fakeManager) QueryInstalled(pkgs []string) ([]Package, error) {
 	return out, nil
 }
 
-func (f *fakeManager) Describe([]string) (map[string]string, error) { return nil, nil }
-func (f *fakeManager) Install([]string) error                       { return nil }
-func (f *fakeManager) Uninstall([]string) error                     { return nil }
+func (f *fakeManager) Describe([]string) (Descriptions, error) {
+	return Descriptions{ByName: f.descriptions, Unknown: f.descUnknown}, nil
+}
+func (f *fakeManager) Install([]string) error   { return nil }
+func (f *fakeManager) Uninstall([]string) error { return nil }
 
 // withFakeManager swaps in a fake for the duration of a test, so no test shells
 // out to a real package manager.
@@ -215,5 +222,73 @@ func TestComputeSync_UnrelatedPackagesStillClassified(t *testing.T) {
 	extra := results[0].Extra()
 	if len(extra) != 1 || extra[0] != "some/tap/undeclared" {
 		t.Errorf("extra: got %v, want [some/tap/undeclared]", extra)
+	}
+}
+
+// A name the manager cannot resolve has to be distinguishable from one it resolved
+// but has no description for. The first is a config error worth surfacing (a typo,
+// or a Linux-only package declared for every platform); the second is normal.
+func TestComputeSync_VerboseMarksUnresolvableNames(t *testing.T) {
+	f := &fakeManager{
+		installed:    []Package{{Name: "git"}, {Name: "ripgrep"}},
+		descriptions: map[string]string{"git": "Distributed revision control system", "ripgrep": ""},
+		descUnknown:  map[string]bool{"man": true},
+	}
+	withFakeManager(t, f)
+
+	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"git", "ripgrep", "man"}}}
+	results, err := ComputeSync(cfg, "", nil, WithVerbose(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := make(map[string]PackageStatus)
+	for _, s := range results[0].Statuses {
+		got[s.Name] = s
+	}
+
+	for _, tc := range []struct {
+		name        string
+		wantDesc    string
+		wantUnknown bool
+		why         string
+	}{
+		{"git", "Distributed revision control system", false, "resolved with a description"},
+		{"ripgrep", "", false, "resolved, but the manager has no description"},
+		{"man", "", true, "no such package"},
+	} {
+		s, ok := got[tc.name]
+		if !ok {
+			t.Errorf("%s missing from statuses", tc.name)
+			continue
+		}
+		if s.Description != tc.wantDesc {
+			t.Errorf("%s description = %q, want %q (%s)", tc.name, s.Description, tc.wantDesc, tc.why)
+		}
+		if s.DescriptionUnknown != tc.wantUnknown {
+			t.Errorf("%s DescriptionUnknown = %v, want %v (%s)", tc.name, s.DescriptionUnknown, tc.wantUnknown, tc.why)
+		}
+	}
+}
+
+// Without --verbose no descriptions are looked up, so nothing may be flagged as
+// unresolvable -- otherwise every package would render as <unknown>.
+func TestComputeSync_NonVerboseLeavesDescriptionsUnflagged(t *testing.T) {
+	f := &fakeManager{
+		installed:   []Package{{Name: "git"}},
+		descUnknown: map[string]bool{"man": true},
+	}
+	withFakeManager(t, f)
+
+	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"git", "man"}}}
+	results, err := ComputeSync(cfg, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, s := range results[0].Statuses {
+		if s.DescriptionUnknown {
+			t.Errorf("%s flagged unknown without WithVerbose", s.Name)
+		}
 	}
 }
