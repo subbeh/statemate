@@ -428,3 +428,45 @@ func TestScannerProfileInheritance(t *testing.T) {
 		t.Errorf("expected profile=work (inherited), got %q", files[0].Attrs.Profile)
 	}
 }
+
+// A directory holding nothing is the only way to declare an empty directory, so
+// it has to be distinguishable from the directories that merely hold files.
+func TestEmptyDirTargets(t *testing.T) {
+	dir := t.TempDir()
+
+	sourceDir := filepath.Join(dir, "ssh")
+	if err := os.MkdirAll(filepath.Join(sourceDir, ".cache", "ssh", "controlmasters"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(sourceDir, ".ssh"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, ".ssh", "config"), []byte("Host *\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner("/home/testuser", "")
+	tree, err := scanner.Scan([]string{sourceDir})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	empty := tree.EmptyDirTargets()
+
+	want := "/home/testuser/.cache/ssh/controlmasters"
+	if !empty[want] {
+		t.Errorf("expected %s to be reported as empty, got %v", want, empty)
+	}
+	for _, notEmpty := range []string{
+		"/home/testuser/.cache",     // holds the controlmasters directory
+		"/home/testuser/.cache/ssh", // same
+		"/home/testuser/.ssh",       // holds a file
+	} {
+		if empty[notEmpty] {
+			t.Errorf("%s holds something and must not be reported as empty", notEmpty)
+		}
+	}
+	if len(empty) != 1 {
+		t.Errorf("expected exactly 1 empty directory, got %v", empty)
+	}
+}

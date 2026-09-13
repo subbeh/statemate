@@ -30,6 +30,10 @@ var statusCmd = &cobra.Command{
 Reports files to be created, modified, or in conflict, plus orphaned files,
 missing packages, pending scripts, and secrets needing refresh.
 
+An empty directory in a source -- one with no files under it -- is reported until
+it exists on the target. Directories that hold files are not listed separately;
+they arrive with those files.
+
 Markers: '+' new, '~' modified, '!' conflict, '<' will be imported into the
 source (an '#import' file whose target changed).
 

@@ -2,6 +2,7 @@ package source
 
 import (
 	"os"
+	"path/filepath"
 )
 
 type Entry struct {
@@ -91,4 +92,28 @@ func (t *Tree) Dirs() []*Entry {
 		}
 	}
 	return dirs
+}
+
+// EmptyDirTargets returns the target paths of directories with nothing beneath
+// them in the tree. A directory holding files is created as a side effect of
+// applying those files, so it needs no reporting of its own; a directory holding
+// nothing exists in the source purely to be created, which is the only way to
+// declare an empty directory.
+func (t *Tree) EmptyDirTargets() map[string]bool {
+	empty := make(map[string]bool)
+	for _, d := range t.Dirs() {
+		empty[d.TargetPath] = true
+	}
+	// Every ancestor of an entry holds something, so it is not empty.
+	for _, e := range t.Entries {
+		for p := filepath.Dir(e.TargetPath); ; {
+			delete(empty, p)
+			parent := filepath.Dir(p)
+			if parent == p {
+				break
+			}
+			p = parent
+		}
+	}
+	return empty
 }

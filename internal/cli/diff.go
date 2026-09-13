@@ -163,6 +163,12 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, change := range changes {
+		if change.Entry.IsDir {
+			// Directories have no content to compare; status reports them.
+			fmt.Printf("=== %s ===\n(directory)\n", util.ShortenPath(change.Entry.TargetPath))
+			continue
+		}
+
 		if !change.Entry.Generated && target.IsBinaryFile(change.Entry.SourcePath) {
 			fmt.Printf("Binary files differ: %s\n", util.ShortenPath(change.Entry.TargetPath))
 			continue

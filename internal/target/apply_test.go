@@ -436,3 +436,143 @@ func TestHashTarget_ReadableFile(t *testing.T) {
 		t.Errorf("got %q, want %q", hash, want)
 	}
 }
+
+// An empty directory in a source is created by apply, so status has to report it
+// while it is missing -- otherwise "everything is up to date" is a lie.
+func TestComputeChanges_MissingEmptyDirIsNew(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source", "ssh")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	if err := os.MkdirAll(filepath.Join(sourceDir, ".cache", "ssh", "controlmasters"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	scanner := source.NewScanner(targetDir, "")
+	tree, err := scanner.Scan([]string{sourceDir})
+	if err != nil {
+		t.Fatalf("scanning: %v", err)
+	}
+
+	result, err := ComputeChanges(tree, db)
+	if err != nil {
+		t.Fatalf("ComputeChanges: %v", err)
+	}
+
+	if len(result.Changes) != 1 {
+		t.Fatalf("expected 1 change (the empty directory), got %d", len(result.Changes))
+	}
+	change := result.Changes[0]
+	if change.Status != StatusNew {
+		t.Errorf("expected StatusNew, got %v", change.Status)
+	}
+	want := filepath.Join(targetDir, ".cache", "ssh", "controlmasters")
+	if change.Entry.TargetPath != want {
+		t.Errorf("expected %s, got %s", want, change.Entry.TargetPath)
+	}
+
+	// Once applied it is no longer pending, and it counts towards the summary the
+	// same way --dry-run counts it.
+	applier := NewApplier(db, nil, nil, false, false, 0)
+	applyResult, err := applier.Apply(tree)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if applyResult.Applied != 1 {
+		t.Errorf("expected 1 applied (the directory), got %d", applyResult.Applied)
+	}
+	result, err = ComputeChanges(tree, db)
+	if err != nil {
+		t.Fatalf("ComputeChanges: %v", err)
+	}
+	if len(result.Changes) != 0 {
+		t.Errorf("expected no changes after apply, got %d", len(result.Changes))
+	}
+}
+
+// Directories that hold files are created as a side effect of applying those
+// files, so reporting them as well would double up every status line.
+func TestComputeChanges_DirWithFilesIsNotReported(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source", "app")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	if err := os.MkdirAll(filepath.Join(sourceDir, ".config", "app"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, ".config", "app", "config"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	scanner := source.NewScanner(targetDir, "")
+	tree, err := scanner.Scan([]string{sourceDir})
+	if err != nil {
+		t.Fatalf("scanning: %v", err)
+	}
+
+	result, err := ComputeChanges(tree, db)
+	if err != nil {
+		t.Fatalf("ComputeChanges: %v", err)
+	}
+
+	if len(result.Changes) != 1 {
+		t.Fatalf("expected 1 change (the file alone), got %d", len(result.Changes))
+	}
+	if result.Changes[0].Entry.IsDir {
+		t.Errorf("expected the file to be reported, got directory %s", result.Changes[0].Entry.TargetPath)
+	}
+}
+
+// Dry-run has to list the empty directory it would create, and create nothing.
+func TestApplier_DryRunReportsEmptyDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source", "ssh")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	if err := os.MkdirAll(filepath.Join(sourceDir, ".cache", "ssh", "controlmasters"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	scanner := source.NewScanner(targetDir, "")
+	tree, err := scanner.Scan([]string{sourceDir})
+	if err != nil {
+		t.Fatalf("scanning: %v", err)
+	}
+
+	applier := NewApplier(db, nil, nil, true, false, 0)
+	result, err := applier.Apply(tree)
+	if err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+
+	if result.Applied != 1 {
+		t.Errorf("expected 1 would-create directory, got %d", result.Applied)
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, ".cache")); !os.IsNotExist(err) {
+		t.Error("dry-run must not create directories")
+	}
+}
