@@ -151,6 +151,18 @@ respected, so a file marked `#profile:base` also applies under a profile that
 Under any other profile the file is skipped entirely — not deployed, not reported
 as a change.
 
+Several files may therefore claim the same target, one per profile:
+
+```
+.claude/settings.json#profile:personal
+.claude/settings.json#profile:work
+```
+
+Only variants that deploy together count as a
+[conflict](concepts.md#sources-and-targets) — which happens when inheritance brings
+two of them into the same profile chain, such as a `#profile:base` variant next to
+a `#profile:work` one under a profile that `extends: base`.
+
 ## `#perm:600`
 
 Sets the file mode, in octal.

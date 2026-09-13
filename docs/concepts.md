@@ -17,7 +17,9 @@ defaults to your home directory:
 The path inside the source is preserved verbatim; only the source's own name is
 stripped. Nothing is deployed by directory name, so two sources can contribute to
 the same subtree. If two sources claim the *same* target, that is a conflict and
-statemate refuses to apply until you resolve it.
+statemate refuses to apply until you resolve it. Files excluded by
+[`#profile:`](attributes.md#profilename) do not count — a target may have one
+variant per profile.
 
 A source can deploy somewhere other than home with `target_base` or `targets` in
 its [`.mate.yaml`](configuration.md#source-directory-config) — this is how system

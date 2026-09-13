@@ -62,6 +62,11 @@ func (t *Tree) FilterByProfile(profileChain []string) *Tree {
 			filtered.Entries = append(filtered.Entries, e)
 		}
 	}
+	// Two files claiming one target only conflict if both are actually deployed.
+	// Per-profile variants of the same target -- settings.json#profile:work next
+	// to settings.json#profile:personal -- are the whole point of #profile:, so
+	// conflicts are recomputed against the entries that survived filtering.
+	filtered.CheckConflicts()
 	return filtered
 }
 

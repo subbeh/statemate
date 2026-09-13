@@ -226,6 +226,46 @@ func TestScannerConflictDetection(t *testing.T) {
 	}
 }
 
+// Per-profile variants of one target are what #profile: is for, so only the
+// variants that survive filtering can conflict with each other.
+func TestConflictsAreProfileAware(t *testing.T) {
+	dir := t.TempDir()
+
+	appDir := filepath.Join(dir, "app", ".claude")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{
+		"settings.json#profile:personal",
+		"settings.json#profile:work",
+		"settings.json#profile:base",
+	} {
+		if err := os.WriteFile(filepath.Join(appDir, name), []byte("{}"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	scanner := NewScanner("/home/testuser", "")
+	tree, err := scanner.Scan([]string{filepath.Join(dir, "app")})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	if filtered := tree.FilterByProfile([]string{"work"}); filtered.HasConflicts() {
+		t.Errorf("mutually exclusive profiles must not conflict, got %v", filtered.Conflicts)
+	}
+
+	// Inheritance is different: both entries deploy under a profile extending
+	// base, so that is a real conflict.
+	filtered := tree.FilterByProfile([]string{"work", "base"})
+	if !filtered.HasConflicts() {
+		t.Fatal("expected a conflict between an inherited and an own variant")
+	}
+	if len(filtered.Conflicts[0].Sources) != 2 {
+		t.Errorf("expected 2 conflicting sources, got %v", filtered.Conflicts[0].Sources)
+	}
+}
+
 func TestScannerWithDirConfig(t *testing.T) {
 	dir := t.TempDir()
 
