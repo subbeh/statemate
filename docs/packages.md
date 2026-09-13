@@ -152,8 +152,10 @@ another platform (`man`, `sudo` in a `common:` list on macOS), or a package that
 has since been renamed or removed. Such a package can never be installed, so
 `mate packages apply` will keep trying and failing until the name is corrected.
 
-Homebrew aliases are also reported as `<unknown>`, because only the canonical name
-is matched — declare `node` rather than `npm`.
+A Homebrew alias is described under the formula it is installed as, so `kubectl`
+shows the description of `kubernetes-cli`. An alias of a formula that is *not*
+installed is still reported as `<unknown>`, because the local name lists brew
+publishes contain no aliases — declaring the canonical name avoids the ambiguity.
 
 ### `--prune`
 
@@ -170,3 +172,8 @@ because removing that other package would take it with it.
 
 Virtual packages and provides are resolved, so declaring `man` is satisfied by
 `man-db`.
+
+Homebrew aliases count as installed: declaring `kubectl` is satisfied by
+`kubernetes-cli`, and `az` by `azure-cli`. Only the canonical name appears in
+`brew list`, so the alias is resolved through the `opt/` link Homebrew creates for
+it.

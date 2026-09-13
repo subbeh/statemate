@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -70,6 +71,48 @@ func (i *brewIndex) has(name string) bool {
 	return i.short[unqualifiedName(name)]
 }
 
+// brewPrefix returns Homebrew's install prefix, or "" when brew cannot say.
+func brewPrefix() string {
+	out, err := exec.Command("brew", "--prefix").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// canonicalOptName maps a declared name to the formula Homebrew has installed it
+// as, or "" when nothing is installed under that name.
+//
+// Many formulae are known by an alias -- kubectl for kubernetes-cli, az for
+// azure-cli -- and the alias is usually the command name people know, so that is
+// what they declare. No `brew list` output ever mentions it, so such a package
+// looked missing on every run: status offered to install it and brew answered
+// "already installed and up-to-date". Homebrew does symlink every alias of an
+// installed formula into opt/ next to its canonical name (opt/kubectl and
+// opt/kubernetes-cli both point at Cellar/kubernetes-cli/<version>), so reading
+// the link resolves the alias for free. The alternative, `brew info --json=v2
+// --installed`, carries the same information but takes seconds and would slow down
+// every mate status.
+func canonicalOptName(prefix, name string) string {
+	name = unqualifiedName(strings.TrimSpace(name))
+	// An empty prefix means brew could not say where it lives; resolving a relative
+	// path from the working directory instead would be nonsense.
+	if prefix == "" || name == "" {
+		return ""
+	}
+	link, err := os.Readlink(filepath.Join(prefix, "opt", name))
+	if err != nil {
+		return ""
+	}
+	// The link points at Cellar/<formula>/<version>, so the formula is the
+	// second-to-last element.
+	parts := strings.Split(filepath.ToSlash(filepath.Clean(link)), "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[len(parts)-2]
+}
+
 // listNames runs a `brew list`-style command and returns the names it printed.
 func listNames(args ...string) []string {
 	cmd := exec.Command("brew", args...)
@@ -131,9 +174,26 @@ func (b *BrewManager) QueryInstalled(pkgs []string) ([]Package, error) {
 	installed := newBrewIndex(names)
 
 	var result []Package
+	var unmatched []string
 	for _, name := range pkgs {
 		if installed.has(name) {
 			result = append(result, Package{Name: name})
+		} else {
+			unmatched = append(unmatched, name)
+		}
+	}
+
+	// A name brew never listed may still be an alias of something installed. Only
+	// look then: locating the prefix costs a brew call, and cross-checking the
+	// resolved name against the list keeps `brew list` the authority on what is
+	// installed.
+	if len(unmatched) > 0 {
+		if prefix := brewPrefix(); prefix != "" {
+			for _, name := range unmatched {
+				if canonical := canonicalOptName(prefix, name); installed.has(canonical) {
+					result = append(result, Package{Name: name})
+				}
+			}
 		}
 	}
 	return result, nil
@@ -150,21 +210,36 @@ func (b *BrewManager) QueryInstalled(pkgs []string) ([]Package, error) {
 // and identifies the bad names so they can be reported as such.
 //
 // The name lists come from brew's local cache and cover tap-qualified spellings, so
-// this costs no network access and little time.
+// this costs no network access and little time. They carry no aliases, so an alias
+// of an installed formula is looked up under the name it is installed as -- see
+// canonicalOptName. An alias of a formula that is not installed still reports as
+// unknown: nothing local knows the name at that point.
 func (b *BrewManager) Describe(pkgs []string) (Descriptions, error) {
 	if len(pkgs) == 0 {
 		return Descriptions{}, nil
 	}
 
 	known := newBrewIndex(append(listNames("formulae"), listNames("casks")...))
+	prefix := brewPrefix()
 	query := make([]string, 0, len(pkgs))
 	unknown := make(map[string]bool)
+	// aliases maps the name brew answers under to the name the caller asked about,
+	// so a description looked up by one is returned for the other.
+	aliases := make(map[string]string)
 	for _, name := range pkgs {
 		if known.has(name) {
 			query = append(query, name)
-		} else {
-			unknown[name] = true
+			continue
 		}
+		// The name lists hold no aliases, so an installed alias such as kubectl looks
+		// unresolvable. Reporting <unknown> for a package already marked installed
+		// contradicts itself, so ask what it is installed as first.
+		if canonical := canonicalOptName(prefix, name); canonical != "" && known.has(canonical) {
+			query = append(query, canonical)
+			aliases[canonical] = name
+			continue
+		}
+		unknown[name] = true
 	}
 
 	// brew info with no arguments dumps the entire catalogue, which is slow and
@@ -184,6 +259,9 @@ func (b *BrewManager) Describe(pkgs []string) (Descriptions, error) {
 	byName, err := parseBrewDescriptions(out.Bytes())
 	if err != nil {
 		return Descriptions{}, err
+	}
+	for canonical, declared := range aliases {
+		byName[declared] = byName[canonical]
 	}
 	return Descriptions{ByName: byName, Unknown: unknown}, nil
 }

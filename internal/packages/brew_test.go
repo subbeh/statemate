@@ -1,8 +1,73 @@
 package packages
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+// Aliases are how people usually know a formula -- kubectl, not kubernetes-cli --
+// but no `brew list` output mentions them, so a package declared by its alias was
+// reported missing on every run and reinstalled forever. The opt/ symlink farm is
+// what makes the alias resolvable without a slow `brew info`.
+func TestCanonicalOptName(t *testing.T) {
+	prefix := t.TempDir()
+
+	// What Homebrew leaves behind for an installed formula: a Cellar directory, an
+	// opt link under the canonical name, and one per alias.
+	install := func(formula, version string, names ...string) {
+		if err := os.MkdirAll(filepath.Join(prefix, "Cellar", formula, version), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(prefix, "opt"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range names {
+			target := filepath.Join("..", "Cellar", formula, version)
+			if err := os.Symlink(target, filepath.Join(prefix, "opt", name)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	install("kubernetes-cli", "1.37.0", "kubernetes-cli", "kubectl")
+	install("hermes", "2.1.0", "hermes")
+
+	// Not a symlink at all: brew puts nothing like this in opt, but a stray file
+	// must not be mistaken for an install.
+	if err := os.WriteFile(filepath.Join(prefix, "opt", "stray"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		declared string
+		want     string
+		why      string
+	}{
+		{"kubectl", "kubernetes-cli", "the alias people actually type"},
+		{"kubernetes-cli", "kubernetes-cli", "canonical name resolves to itself"},
+		{"jamf/internal-tap/hermes", "hermes", "tap-qualified declaration, bare opt link"},
+		{"notinstalled", "", "nothing in opt answers to it"},
+		{"stray", "", "not a symlink into the Cellar"},
+		{"", "", "empty name"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.declared, func(t *testing.T) {
+			if got := canonicalOptName(prefix, tc.declared); got != tc.want {
+				t.Errorf("canonicalOptName(%q) = %q, want %q (%s)", tc.declared, got, tc.want, tc.why)
+			}
+		})
+	}
+}
+
+// Without a prefix there is nothing to resolve against, and joining onto an empty
+// path would read from the working directory instead.
+func TestCanonicalOptNameWithoutPrefix(t *testing.T) {
+	if got := canonicalOptName("", "kubectl"); got != "" {
+		t.Errorf("canonicalOptName with no prefix = %q, want empty", got)
+	}
+}
 
 // A tap formula is reported by `brew list --formula` under its bare name
 // (`hermes`), but users declare it by the fully-qualified name they installed it
