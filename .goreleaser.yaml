@@ -35,10 +35,16 @@ checksum:
 
 # Release notes come from CHANGELOG.md, passed via --release-notes by the release
 # workflow. Generating them from commit subjects both leaked implementation detail
-# and dropped whole categories: the exclude filters below would have hidden the
-# entire documentation rewrite in 0.3.0 because its commit was prefixed "docs:".
+# and dropped whole categories: the old exclude filters (^docs:, ^test:, ^ci:,
+# ^chore:) hid the entire documentation rewrite in 0.3.0, whose commit was prefixed
+# "docs:".
+#
+# Do NOT set `changelog: disable: true` here. --release-notes works by *replacing*
+# the changelog stage's output, so disabling that stage leaves the body empty --
+# which is how v0.3.0 shipped with no release notes at all. The filters are gone
+# because the flag makes them irrelevant, not because commit-based notes are wanted.
 changelog:
-  disable: true
+  use: github
 
 release:
   github:

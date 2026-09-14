@@ -79,8 +79,16 @@ func NewApplier(db *state.DB, tmplCtx *template.Context, enc *encrypt.AgeEncrypt
 func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 	result := &ApplyResult{DryRun: a.dryRun}
 
+	emptyDirs := tree.EmptyDirTargets()
+
 	for _, dir := range tree.Dirs() {
 		if a.dryRun {
+			// Only an empty directory is worth reporting: the rest come along with
+			// the files inside them, which are listed separately.
+			if _, err := os.Stat(dir.TargetPath); os.IsNotExist(err) && emptyDirs[dir.TargetPath] {
+				fmt.Printf("+ %s\n", dir.TargetPath)
+				result.Applied++
+			}
 			continue
 		}
 		dirMode := os.FileMode(0755)
@@ -92,10 +100,15 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 		// This matters most for mapped roots like etc: /etc -- creating them is a
 		// no-op, but chmodding a system directory the user never asked about is
 		// not.
+		created := false
 		if info, err := os.Stat(dir.TargetPath); err == nil && info.IsDir() {
 			if dir.Attrs.Perm == 0 && dir.Attrs.Owner == "" && dir.Attrs.Group == "" {
 				continue
 			}
+		} else if os.IsNotExist(err) && emptyDirs[dir.TargetPath] {
+			// Creating this is the whole point of the entry, so it counts towards
+			// the summary -- as it already does under --dry-run.
+			created = true
 		}
 
 		// Directories outside the user's writable tree (e.g. a source mapping
@@ -110,6 +123,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				if err := sudoChown(dir.TargetPath, dir.Attrs.Owner, dir.Attrs.Group); err != nil {
 					return nil, fmt.Errorf("setting ownership on %s: %w", dir.TargetPath, err)
 				}
+			}
+			if created {
+				result.Applied++
 			}
 			continue
 		}
@@ -126,6 +142,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			if err := chownFile(dir.TargetPath, dir.Attrs.Owner, dir.Attrs.Group); err != nil {
 				return nil, fmt.Errorf("setting ownership on %s: %w", dir.TargetPath, err)
 			}
+		}
+		if created {
+			result.Applied++
 		}
 	}
 

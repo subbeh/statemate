@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
@@ -25,7 +26,7 @@ Example:
   mate eval --profile work ~/.statemate/files/config.tmpl`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runEval,
-	ValidArgsFunction: completeSourceFiles,
+	ValidArgsFunction: completeFilePaths,
 }
 
 func init() {
@@ -99,6 +100,12 @@ func runEval(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// isEncrypted reports whether content is an age file in armored form, which is what
+// mate encrypt writes.
+//
+// The comparison has to be a prefix test: comparing a fixed-length slice of the
+// content against a shorter string never matched, so mate cat printed ciphertext and
+// mate eval tried to render it as a template.
 func isEncrypted(content []byte) bool {
-	return len(content) > 0 && string(content[:min(len(content), 20)]) == "-----BEGIN AGE ENCR"
+	return bytes.HasPrefix(content, []byte("-----BEGIN AGE ENCRYPTED FILE-----"))
 }

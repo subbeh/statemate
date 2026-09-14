@@ -63,8 +63,13 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) (*Comp
 
 	result := &ComputeResult{}
 
+	emptyDirs := tree.EmptyDirTargets()
+
 	for _, dir := range tree.Dirs() {
-		if dir.Attrs.Perm == 0 {
+		// A directory with files under it is covered by those files, and one with
+		// no perm attribute has nothing to compare -- but an empty directory is
+		// only ever created by apply, so its absence is a pending change.
+		if dir.Attrs.Perm == 0 && !emptyDirs[dir.TargetPath] {
 			continue
 		}
 		info, err := os.Lstat(dir.TargetPath)
@@ -73,13 +78,16 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) (*Comp
 				info, err = sudoLstat(dir.TargetPath)
 			}
 			if err != nil {
-				if isPermissionDenied(err) {
+				switch {
+				case isPermissionDenied(err):
 					result.Skipped = append(result.Skipped, dir.TargetPath)
+				case os.IsNotExist(err) && emptyDirs[dir.TargetPath]:
+					result.Changes = append(result.Changes, &Change{Entry: dir, Status: StatusNew})
 				}
 				continue
 			}
 		}
-		if info.Mode().Perm() != os.FileMode(dir.Attrs.Perm) {
+		if dir.Attrs.Perm != 0 && info.Mode().Perm() != os.FileMode(dir.Attrs.Perm) {
 			result.Changes = append(result.Changes, &Change{Entry: dir, Status: StatusModified})
 		}
 	}

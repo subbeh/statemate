@@ -151,6 +151,18 @@ respected, so a file marked `#profile:base` also applies under a profile that
 Under any other profile the file is skipped entirely — not deployed, not reported
 as a change.
 
+Several files may therefore claim the same target, one per profile:
+
+```
+.claude/settings.json#profile:personal
+.claude/settings.json#profile:work
+```
+
+Only variants that deploy together count as a
+[conflict](concepts.md#sources-and-targets) — which happens when inheritance brings
+two of them into the same profile chain, such as a `#profile:base` variant next to
+a `#profile:work` one under a profile that `extends: base`.
+
 ## `#perm:600`
 
 Sets the file mode, in octal.
@@ -209,3 +221,33 @@ restic/
 
 Note that directories which already exist and carry no perm/owner/group attribute
 are left completely untouched, so mapping a root like `/etc` never chmods it.
+
+## Empty directories
+
+Every directory in a source is created on the target, whether or not it contains
+files. That is how a directory which only needs to *exist* is declared — a
+socket directory, a cache directory some program refuses to create itself:
+
+```
+ssh/
+  .cache/ssh/controlmasters#perm:700/
+    .gitkeep                    ← so git stores the directory at all
+  .ssh/config#template
+```
+
+Git cannot store an empty directory, so the keep-file is unavoidable. Hide it
+from the target with an [`ignore`](configuration.md#source-directory-config)
+pattern in the source's `.mate.yaml`; ignoring a file does not remove its parent
+directory from the tree:
+
+```yaml
+ignore:
+  - .gitkeep
+```
+
+`mate status` lists a declared empty directory as `+` until it exists. Directories
+that contain files are not listed separately — they arrive with those files.
+
+Deleting the directory from the source stops it from being created, but does not
+remove it from the target: unlike files, directories are not tracked in the state
+database, so `mate status` will not report it as orphaned.

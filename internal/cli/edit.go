@@ -42,14 +42,9 @@ Examples:
   mate edit nvim/init.lua
   mate edit .matedata/secrets.yaml#encrypted
   mate edit ~/.config/nvim/init.lua`,
-	Args: cobra.ExactArgs(1),
-	RunE: runEdit,
-	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) > 0 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		return nil, cobra.ShellCompDirectiveDefault
-	},
+	Args:              cobra.ExactArgs(1),
+	RunE:              runEdit,
+	ValidArgsFunction: completeFilePaths,
 }
 
 func init() {

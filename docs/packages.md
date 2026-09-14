@@ -36,6 +36,29 @@ packages:
 If the same package is also listed under a specific manager, the two entries merge
 rather than duplicating.
 
+### Homebrew taps
+
+A formula from a third-party tap can be declared either by its fully-qualified
+name or bare, and both are recognised as installed:
+
+```yaml
+packages:
+  brew:
+    - jamf/internal-tap/hermes    # fully qualified
+    - hermes                      # equivalent for an installed formula
+```
+
+Prefer the qualified form: `brew install` needs it to find a formula that is not
+already tapped, whereas the bare name only works once the tap is added.
+
+Statemate accepts either because Homebrew itself is inconsistent — `brew list
+--formula` reports a tap formula under its bare name while `brew leaves` reports it
+fully qualified. One consequence is that two taps providing the same formula name
+cannot be told apart when comparing bare names.
+
+Statemate does not add taps for you. Run `brew tap <owner>/<name>` yourself, or add
+it to a [script](scripts.md).
+
 ### AUR helper
 
 Set explicitly, or leave it to be detected:
@@ -112,6 +135,28 @@ Use --all to also show packages not in config.
 
 For the same reason `mate status` and `mate apply` never compute extras.
 
+### `-v` and `<unknown>`
+
+`-v` adds a DESCRIPTION column. Two kinds of empty look different on purpose:
+
+```
+ ✓  font-hack-nerd-font    brew   macos
+ +  github-cli             brew   git     <unknown>
+```
+
+An **empty** description means the package manager knows the package but publishes
+no description for it (common for font casks). **`<unknown>`** means the manager
+matched no such package at all, which usually points at a mistake in your config —
+a typo (`github-cli` where Homebrew calls it `gh`), a name that only exists on
+another platform (`man`, `sudo` in a `common:` list on macOS), or a package that
+has since been renamed or removed. Such a package can never be installed, so
+`mate packages apply` will keep trying and failing until the name is corrected.
+
+A Homebrew alias is described under the formula it is installed as, so `kubectl`
+shows the description of `kubernetes-cli`. An alias of a formula that is *not*
+installed is still reported as `<unknown>`, because the local name lists brew
+publishes contain no aliases — declaring the canonical name avoids the ambiguity.
+
 ### `--prune`
 
 `--prune` uninstalls anything not declared in your configuration. Since "not
@@ -127,3 +172,8 @@ because removing that other package would take it with it.
 
 Virtual packages and provides are resolved, so declaring `man` is satisfied by
 `man-db`.
+
+Homebrew aliases count as installed: declaring `kubectl` is satisfied by
+`kubernetes-cli`, and `az` by `azure-cli`. Only the canonical name appears in
+`brew list`, so the alias is resolved through the `opt/` link Homebrew creates for
+it.

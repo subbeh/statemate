@@ -59,6 +59,10 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scanning sources: %w", err)
 	}
 
+	if profileName != "" {
+		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
+	}
+
 	if tree.HasConflicts() {
 		if !checkQuiet {
 			fmt.Fprintln(os.Stderr, "Error: conflicting targets detected")
@@ -70,10 +74,6 @@ func runCheck(cmd *cobra.Command, args []string) error {
 			}
 		}
 		os.Exit(1)
-	}
-
-	if profileName != "" {
-		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
 	}
 
 	db, err := state.Open("")

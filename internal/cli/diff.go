@@ -68,6 +68,10 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scanning sources: %w", err)
 	}
 
+	if profileName != "" {
+		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
+	}
+
 	if tree.HasConflicts() {
 		fmt.Fprintln(os.Stderr, "Error: conflicting targets detected")
 		for _, c := range tree.Conflicts {
@@ -77,10 +81,6 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			}
 		}
 		return fmt.Errorf("resolve conflicts before diffing")
-	}
-
-	if profileName != "" {
-		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
 	}
 
 	db, err := state.Open("")
@@ -163,6 +163,12 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, change := range changes {
+		if change.Entry.IsDir {
+			// Directories have no content to compare; status reports them.
+			fmt.Printf("=== %s ===\n(directory)\n", util.ShortenPath(change.Entry.TargetPath))
+			continue
+		}
+
 		if !change.Entry.Generated && target.IsBinaryFile(change.Entry.SourcePath) {
 			fmt.Printf("Binary files differ: %s\n", util.ShortenPath(change.Entry.TargetPath))
 			continue

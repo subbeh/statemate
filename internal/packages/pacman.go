@@ -108,17 +108,25 @@ func (p *PacmanManager) QueryInstalled(pkgs []string) ([]Package, error) {
 	return packages, nil
 }
 
-func (p *PacmanManager) Describe(pkgs []string) (map[string]string, error) {
+// Describe returns descriptions for the installed packages among pkgs.
+//
+// It reports nothing as Unknown: `pacman -Qi` queries the local database, so a name
+// it has no entry for is simply not installed, which says nothing about whether the
+// package exists. Only a manager that can consult the full catalogue (see
+// BrewManager.Describe) can make that claim.
+func (p *PacmanManager) Describe(pkgs []string) (Descriptions, error) {
 	if len(pkgs) == 0 {
-		return nil, nil
+		return Descriptions{}, nil
 	}
 	args := append([]string{"-Qi"}, pkgs...)
 	cmd := exec.Command("pacman", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		return nil, err
-	}
+	// pacman -Qi exits non-zero when any argument is not installed, but still
+	// prints the entries it did find. Status lists packages that are missing by
+	// definition, so treating that exit code as fatal would blank every
+	// description instead of just the ones pacman has nothing to say about.
+	_ = cmd.Run()
 
 	result := make(map[string]string)
 	var currentName string
@@ -134,7 +142,7 @@ func (p *PacmanManager) Describe(pkgs []string) (map[string]string, error) {
 			}
 		}
 	}
-	return result, scanner.Err()
+	return Descriptions{ByName: result}, scanner.Err()
 }
 
 func (p *PacmanManager) Install(pkgs []string) error {

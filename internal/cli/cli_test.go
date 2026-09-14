@@ -85,3 +85,33 @@ func TestExpandPath(t *testing.T) {
 		}
 	}
 }
+
+// mate cat and mate eval decide whether to decrypt by looking at the content, so a
+// header test that never matches makes cat print ciphertext and eval render it as a
+// template.
+func TestIsEncrypted(t *testing.T) {
+	armored := "-----BEGIN AGE ENCRYPTED FILE-----\n" +
+		"YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBvR1h5V2x4eWtCTTBSSXRz\n" +
+		"-----END AGE ENCRYPTED FILE-----\n"
+
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{"armored age file", armored, true},
+		{"header alone", "-----BEGIN AGE ENCRYPTED FILE-----", true},
+		{"plaintext script", "#!/bin/sh\nexport FOO=bar\n", false},
+		{"empty file", "", false},
+		{"truncated header", "-----BEGIN AGE ENCR", false},
+		{"another PEM block", "-----BEGIN CERTIFICATE-----\nMIIBkTCB+w==\n", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isEncrypted([]byte(tc.content)); got != tc.want {
+				t.Errorf("isEncrypted() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
