@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-14
+
 ### Fixed
 - `mate cat` now decrypts an age-encrypted file instead of printing the `-----BEGIN AGE ENCRYPTED FILE-----` block verbatim, and `mate eval` decrypts one before rendering it as a template instead of rendering the ciphertext. The check for the armor header compared a fixed 20-byte slice of the file against a 19-character string, so it never matched for any file long enough to be a real one — meaning neither command has ever decrypted anything
 - A Homebrew package declared by an alias is no longer reported missing when it is installed. `kubectl` is an alias for the `kubernetes-cli` formula (as `az` is for `azure-cli`), and the alias is usually the name people know, but no `brew list` output mentions it — so `mate status` listed it under "Missing packages" on every run, `mate apply` offered to install it, and brew answered "already installed and up-to-date" without installing anything. Aliases are now resolved through the `opt/` symlink Homebrew creates for every alias of an installed formula, which costs no extra time on a run where nothing looks missing. `mate packages status -v` describes such a package under the formula it is installed as, instead of the `<unknown>` that contradicted the ✓ next to it
