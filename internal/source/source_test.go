@@ -301,6 +301,85 @@ targets:
 	}
 }
 
+func TestScannerDirConfigTargetsExpandsHome(t *testing.T) {
+	dir := t.TempDir()
+
+	appDir := filepath.Join(dir, "app", "config", "agent-manager")
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "config.toml"), []byte("poll = 1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dirCfgContent := `
+targets:
+  config: "~/Library/Application Support"
+`
+	if err := os.WriteFile(filepath.Join(dir, "app", ".mate.yaml"), []byte(dirCfgContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner(home, "")
+	tree, err := scanner.Scan([]string{filepath.Join(dir, "app")})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	files := tree.Files()
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	want := filepath.Join(home, "Library", "Application Support", "agent-manager", "config.toml")
+	if files[0].TargetPath != want {
+		t.Errorf("expected target=%q, got %q", want, files[0].TargetPath)
+	}
+}
+
+func TestScannerGenerateTargetExpandsHome(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := os.MkdirAll(filepath.Join(dir, "app"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	dirCfgContent := `
+generate:
+  - target: "~/Library/Application Support/app.conf"
+    content: "key = value"
+`
+	if err := os.WriteFile(filepath.Join(dir, "app", ".mate.yaml"), []byte(dirCfgContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner(home, "")
+	tree, err := scanner.Scan([]string{filepath.Join(dir, "app")})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	files := tree.Files()
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+
+	want := filepath.Join(home, "Library", "Application Support", "app.conf")
+	if files[0].TargetPath != want {
+		t.Errorf("expected target=%q, got %q", want, files[0].TargetPath)
+	}
+}
+
 func TestScannerDirConfigIgnore(t *testing.T) {
 	dir := t.TempDir()
 
