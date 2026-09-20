@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `mate managed` now lists `import` in the ATTRIBUTES column. Every other attribute was shown, so a file such as `kubeconfig#import#encrypted` displayed only `encrypted` — indistinguishable from the attribute having been ignored, when in fact it was parsed and honoured all along
 - A `targets:` mapping in a source's `.mate.yaml` that starts with `~` now deploys to your home directory instead of creating a literal `~` directory. `targets: { config: "~/Library/Application Support" }` — the natural spelling when the path comes from a variable such as `{{ .Vars.configHome }}` — left the `~` unexpanded, producing a relative target path that landed under whatever directory `mate` happened to be run from, so the same file was written to `$HOME/~/Library/Application Support/...` and again to `<dotfiles>/~/Library/Application Support/...`. `mate add` already expanded `~` when mapping a file into the source, so the file was filed in the right place and then deployed to the wrong one, and `mate status` kept reporting it as pending forever. Absolute mappings such as `etc: /etc` are unaffected
 - A `generate:` directive whose `target` starts with `~` now writes to your home directory rather than to a literal `~` subdirectory of the target base, which had the same cause
 

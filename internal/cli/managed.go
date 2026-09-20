@@ -208,6 +208,9 @@ func formatAttrs(a source.Attrs) string {
 	if a.Symlink {
 		parts = append(parts, "symlink")
 	}
+	if a.Import {
+		parts = append(parts, "import")
+	}
 
 	return strings.Join(parts, ", ")
 }

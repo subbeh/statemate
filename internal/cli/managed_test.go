@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/subbeh/statemate/internal/source"
@@ -129,5 +130,32 @@ func TestManagedFilter_SourcePathMatches(t *testing.T) {
 	// The absolute source path is also an unambiguous lookup.
 	if !matchesManagedFilter(ssh, "ssh/.ssh/config#encrypted", ssh.SourcePath) {
 		t.Error("absolute source path should match its entry")
+	}
+}
+
+// formatAttrs is the only place the ATTRIBUTES column is built, and #import was
+// missing from it while every other attribute was listed -- which reads as the
+// attribute having been ignored entirely.
+func TestFormatAttrsListsEveryAttribute(t *testing.T) {
+	attrs := source.Attrs{
+		Profile:   "work",
+		Perm:      0600,
+		Owner:     "root",
+		Group:     "wheel",
+		Encrypted: true,
+		Template:  true,
+		Symlink:   true,
+		Import:    true,
+	}
+
+	got := formatAttrs(attrs)
+
+	for _, want := range []string{
+		"profile:work", "perm:0600", "owner:root", "group:wheel",
+		"encrypted", "template", "symlink", "import",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("formatAttrs() = %q, missing %q", got, want)
+		}
 	}
 }
