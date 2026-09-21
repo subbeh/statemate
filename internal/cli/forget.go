@@ -17,11 +17,16 @@ The files at target remain untouched. Only the tracking entries are removed.
 This is useful when you want statemate to stop managing files without
 deleting them.
 
-Supports wildcards (glob patterns) to forget multiple files at once.
+Paths are matched against the target, and may be absolute, start with ~, or be
+relative to the current directory.
+
+Supports wildcards (glob patterns) to forget multiple files at once. Quote a
+pattern so the shell does not expand it first.
 
 Example:
   mate forget ~/.config/nvim/init.lua
-  mate forget ~/.config/nvim/*.lua
+  mate forget '~/.config/nvim/*.lua'
+  mate forget .config/nvim/init.lua
   mate forget ~/.config/app/file1.conf ~/.config/app/file2.conf`,
 	Args:              cobra.MinimumNArgs(1),
 	RunE:              runForget,
@@ -46,7 +51,7 @@ func runForget(cmd *cobra.Command, args []string) error {
 
 	var toForget []string
 	for _, pattern := range args {
-		pattern = expandPath(pattern)
+		pattern = forgetPattern(pattern)
 
 		matches := matchTrackedFiles(tracked, pattern)
 		if len(matches) == 0 {
@@ -69,6 +74,23 @@ func runForget(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// forgetPattern resolves an argument to the absolute form the database stores.
+// A leading ~ becomes the home directory; anything else still relative is taken
+// as relative to the current directory, since a target path typed from the
+// directory holding it would otherwise match nothing.
+func forgetPattern(pattern string) string {
+	pattern = expandPath(pattern)
+	if filepath.IsAbs(pattern) {
+		return pattern
+	}
+
+	abs, err := filepath.Abs(pattern)
+	if err != nil {
+		return pattern
+	}
+	return abs
 }
 
 func matchTrackedFiles(tracked []*state.FileEntry, pattern string) []string {
