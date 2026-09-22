@@ -140,12 +140,12 @@ func runCommand(command string) bool {
 
 func ResolveSources(cfg *config.Config, profileName string) []string {
 	if profileName == "" || cfg.Profiles == nil {
-		return cfg.Sources
+		return dedupeSources(cfg.Sources)
 	}
 
 	profile := cfg.Profiles[profileName]
 	if profile == nil {
-		return cfg.Sources
+		return dedupeSources(cfg.Sources)
 	}
 
 	sources := make([]string, len(cfg.Sources))
@@ -160,7 +160,26 @@ func ResolveSources(cfg *config.Config, profileName string) []string {
 		}
 	}
 
-	return sources
+	return dedupeSources(sources)
+}
+
+// dedupeSources drops repeated names, keeping first-occurrence order. Naming a
+// source both globally and under a profile is a reasonable way to say "always,
+// and explicitly here too", but scanning it twice reports every file in it as
+// conflicting with itself and offers its scripts twice.
+func dedupeSources(sources []string) []string {
+	seen := make(map[string]bool, len(sources))
+	unique := make([]string, 0, len(sources))
+
+	for _, s := range sources {
+		if seen[s] {
+			continue
+		}
+		seen[s] = true
+		unique = append(unique, s)
+	}
+
+	return unique
 }
 
 // InheritanceChain returns the full chain of profiles from ancestors to the

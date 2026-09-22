@@ -245,3 +245,52 @@ func TestMatchPattern(t *testing.T) {
 		})
 	}
 }
+
+// A source named both globally and by the active profile was returned twice, so
+// every file in it was scanned twice -- reported as conflicting with itself, and
+// listed twice in status, with its scripts offered twice.
+func TestResolveSourcesDedupes(t *testing.T) {
+	cfg := &config.Config{
+		Sources: []string{"core", "syncthing", "zsh"},
+		Profiles: map[string]*config.Profile{
+			"linux": {},
+			"personal": {
+				Extends: "linux",
+				Sources: []string{"arch", "syncthing"},
+			},
+		},
+	}
+
+	sources := ResolveSources(cfg, "personal")
+
+	counts := make(map[string]int)
+	for _, s := range sources {
+		counts[s]++
+	}
+	if counts["syncthing"] != 1 {
+		t.Errorf("expected syncthing once, got %d: %v", counts["syncthing"], sources)
+	}
+
+	// Dropping the duplicate must not drop the source itself, nor reorder the
+	// entries that were already unique.
+	want := []string{"core", "syncthing", "zsh", "arch"}
+	if len(sources) != len(want) {
+		t.Fatalf("expected %v, got %v", want, sources)
+	}
+	for i, s := range want {
+		if sources[i] != s {
+			t.Errorf("index %d: expected %q, got %q (full: %v)", i, s, sources[i], sources)
+		}
+	}
+}
+
+func TestResolveSourcesDedupesGlobalList(t *testing.T) {
+	cfg := &config.Config{Sources: []string{"core", "zsh", "core"}}
+
+	sources := ResolveSources(cfg, "")
+
+	want := []string{"core", "zsh"}
+	if len(sources) != len(want) || sources[0] != want[0] || sources[1] != want[1] {
+		t.Errorf("expected %v, got %v", want, sources)
+	}
+}
