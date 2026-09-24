@@ -2,6 +2,7 @@ package target
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -382,6 +383,79 @@ func TestApplier_LeavesExistingUnattributedDirectoriesAlone(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0705 {
 		t.Errorf("existing directory mode changed: got %o, want 705 (untouched)", got)
+	}
+}
+
+// An existing directory whose attributes already hold must not be touched.
+// Otherwise a mapped root like etc#owner-r:root: /etc prompts for sudo on every
+// apply, even when nothing has changed.
+func TestApplier_SkipsExistingDirectoriesWhoseAttrsMatch(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: every directory is writable")
+	}
+	u, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	// A fake sudo that records being called, so the test never prompts.
+	binDir := filepath.Join(tmpDir, "bin")
+	marker := filepath.Join(tmpDir, "sudo-called")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	fakeSudo := "#!/bin/sh\ntouch " + marker + "\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(binDir, "sudo"), []byte(fakeSudo), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	nested := filepath.Join(sourceDir, "app", "etc#owner-r:"+u.Username+"#perm-r:555", "sub")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "f"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The target already matches, but is not writable -- so any attempt to
+	// reapply the attributes would go through sudo.
+	existing := filepath.Join(targetDir, "etc", "sub")
+	if err := os.MkdirAll(existing, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(existing, "f"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{existing, filepath.Dir(existing)} {
+		if err := os.Chmod(d, 0555); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(d, 0755) })
+	}
+
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	scanner := source.NewScanner(targetDir, "")
+	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
+	if err != nil {
+		t.Fatalf("scanning: %v", err)
+	}
+
+	applier := NewApplier(db, nil, nil, false, false, 0)
+	if _, err := applier.Apply(tree); err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("sudo was invoked for directories whose attributes already match")
 	}
 }
 
