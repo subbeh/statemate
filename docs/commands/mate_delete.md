@@ -9,6 +9,9 @@ Delete a file from both source and target.
 This deletes the source file and optionally the target file,
 and removes the tracking entry from the database.
 
+Hooks matching the removed target run afterwards (see 'mate hooks'); --force
+also confirms them. Nothing runs with --keep-target.
+
 Example:
   mate delete ~/.config/nvim/init.lua
 

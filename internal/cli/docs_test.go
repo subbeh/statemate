@@ -133,6 +133,17 @@ func TestScriptEnvVarsAreDocumented(t *testing.T) {
 	}
 }
 
+func TestHookEnvVarsAreDocumented(t *testing.T) {
+	guides := readGuides(t)
+
+	// Set for every hook step by internal/hooks.Runner.
+	for _, v := range []string{"STATEMATE_HOOK_NAME", "STATEMATE_HOOK_FILES"} {
+		if !strings.Contains(guides, v) {
+			t.Errorf("hook environment variable %s is not mentioned in docs/ -- add it to docs/hooks.md", v)
+		}
+	}
+}
+
 func TestEnvVarsAreDocumented(t *testing.T) {
 	guides := readGuides(t)
 
@@ -181,6 +192,8 @@ func TestConfigKeysAreDocumented(t *testing.T) {
 		{".mate.yaml", config.DirConfig{}, "docs/configuration.md"},
 		{"generate", config.GenerateConfig{}, "docs/configuration.md"},
 		{"scripts", config.DirScripts{}, "docs/scripts.md"},
+		{"hook", config.Hook{}, "docs/hooks.md"},
+		{"hook step", config.HookStep{}, "docs/hooks.md"},
 	}
 
 	for _, c := range cases {

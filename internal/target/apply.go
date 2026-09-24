@@ -32,6 +32,10 @@ type ApplyResult struct {
 	Imported int
 	Errors   []error
 	DryRun   bool
+	// Written lists the files whose content was written (or, under dry-run,
+	// would be). Mode-only fixes are left out: nothing on disk changed that a
+	// hook would need to react to.
+	Written []*source.Entry
 }
 
 
@@ -216,6 +220,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 		if a.dryRun {
 			a.printChange(change)
 			result.Applied++
+			if !change.PermOnly {
+				result.Written = append(result.Written, entry)
+			}
 			continue
 		}
 
@@ -223,6 +230,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			return nil, fmt.Errorf("applying %s: %w", entry.SourcePath, err)
 		}
 		result.Applied++
+		if !change.PermOnly {
+			result.Written = append(result.Written, entry)
+		}
 	}
 
 	return result, nil

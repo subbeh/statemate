@@ -24,6 +24,9 @@ type Change struct {
 	Status  ChangeStatus
 	OldHash string
 	NewHash string
+	// PermOnly marks a modification that only fixes the mode: the content on
+	// disk already matches.
+	PermOnly bool
 }
 
 func desiredMode(entry *source.Entry) os.FileMode {
@@ -164,6 +167,7 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 				change.OldHash = targetHash
 			} else if permMismatch(entry, info) {
 				change.Status = StatusModified
+				change.PermOnly = true
 			} else {
 				change.Status = StatusStateOnly
 			}
@@ -196,6 +200,7 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 				change.OldHash = targetHash
 			} else if permMismatch(entry, info) {
 				change.Status = StatusModified
+				change.PermOnly = true
 			} else {
 				change.Status = StatusStateOnly
 			}
@@ -252,6 +257,7 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 				change.Status = StatusModified
 			} else if permMismatch(entry, info) {
 				change.Status = StatusModified
+				change.PermOnly = true
 			} else {
 				change.Status = StatusUnchanged
 			}

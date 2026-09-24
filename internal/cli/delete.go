@@ -23,6 +23,9 @@ var deleteCmd = &cobra.Command{
 This deletes the source file and optionally the target file,
 and removes the tracking entry from the database.
 
+Hooks matching the removed target run afterwards (see 'mate hooks'); --force
+also confirms them. Nothing runs with --keep-target.
+
 Example:
   mate delete ~/.config/nvim/init.lua`,
 	Args:              cobra.ExactArgs(1),
@@ -126,5 +129,8 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("removing from database: %w", err)
 	}
 
-	return nil
+	if deleteKeepTarget {
+		return nil
+	}
+	return runRemovalHooks(cfg, profileName, sourcePaths, scanner, db, hookChanges([]*source.Entry{entry}, sourcePaths), deleteForce)
 }

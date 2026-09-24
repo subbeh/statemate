@@ -27,6 +27,10 @@ type Context struct {
 	Env          map[string]string
 	SecretLookup SecretLookup
 	Decrypt      DecryptFunc
+
+	// Files lists the target paths that triggered a hook. Set only while
+	// rendering a hook's run step.
+	Files []string
 }
 
 type ContextOption func(*Context)

@@ -10,6 +10,9 @@ Orphans are files that were previously managed but are no longer defined
 in any source directory. By default, this command prompts for confirmation
 before each deletion.
 
+Hooks matching the removed files run afterwards (see 'mate hooks'); --force
+also confirms them.
+
 Flags:
   --force   Skip confirmation prompts
   --all     Remove all orphans (otherwise specify paths)

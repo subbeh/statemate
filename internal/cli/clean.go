@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
@@ -22,6 +23,9 @@ var cleanCmd = &cobra.Command{
 Orphans are files that were previously managed but are no longer defined
 in any source directory. By default, this command prompts for confirmation
 before each deletion.
+
+Hooks matching the removed files run afterwards (see 'mate hooks'); --force
+also confirms them.
 
 Flags:
   --force   Skip confirmation prompts
@@ -120,6 +124,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	var removed []hooks.Change
 	reader := bufio.NewReader(os.Stdin)
 	for _, path := range toRemove {
 		if !force {
@@ -142,12 +147,20 @@ func runClean(cmd *cobra.Command, args []string) error {
 			}
 		}
 
+		// Look up the source before the record goes, so the orphan still
+		// triggers hooks declared in the source it came from.
+		change := hooks.Change{Path: path}
+		if fe, _ := db.GetFile(path); fe != nil {
+			change.SourceDir = hooks.OwningSource(fe.SourcePath, sourcePaths)
+		}
+
 		if err := db.DeleteFile(path); err != nil {
 			return fmt.Errorf("removing %s from database: %w", path, err)
 		}
 
 		fmt.Printf("Removed %s\n", util.ShortenPath(path))
+		removed = append(removed, change)
 	}
 
-	return nil
+	return runRemovalHooks(cfg, profileName, sourcePaths, scanner, db, removed, force)
 }

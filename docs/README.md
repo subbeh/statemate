@@ -15,6 +15,7 @@ makes it so.
 | [Templates](templates.md) | Variables and functions available when rendering |
 | [Secrets](secrets.md) | Bitwarden references and the encrypted cache |
 | [Scripts](scripts.md) | Lifecycle scripts, frequency, timing |
+| [Hooks](hooks.md) | Commands run when files matching a pattern change |
 | [Packages](packages.md) | Declarative packages across brew, pacman, and the AUR |
 | [Command Reference](commands/mate.md) | Every command and flag |
 

@@ -206,3 +206,102 @@ target_base: "~"
 		t.Errorf("expected target_base=%s, got %s", home, cfg.TargetBase)
 	}
 }
+
+func TestLoadHooks(t *testing.T) {
+	dir := t.TempDir()
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+
+	repo := `
+hooks:
+  systemd:
+    match: "*.service"
+    do:
+      - run: sudo systemctl daemon-reload
+  tmux:
+    match: [.config/tmux/*.conf, .tmux.conf]
+    do:
+      - run: tmux source-file ~/.tmux.conf
+      - script: notify.sh
+  replaced:
+    match: "*"
+    description: from the repo
+    do:
+      - run: "true"
+`
+	local := `
+hooks:
+  systemd:
+    enabled: false
+  replaced:
+    match: /etc/*
+    do:
+      - run: echo local
+`
+	if err := os.WriteFile(filepath.Join(dir, "mate.yaml"), []byte(repo), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(xdg, "statemate"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(xdg, "statemate", "mate.yaml"), []byte(local), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(filepath.Join(dir, "mate.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+
+	if h := cfg.Hooks["systemd"]; h.IsEnabled() || !h.IsLocal() {
+		t.Errorf("local enabled: false should disable the repo hook, got %+v", h)
+	}
+	tmux := cfg.Hooks["tmux"]
+	if len(tmux.Match) != 2 || len(tmux.Do) != 2 || tmux.Do[1].Script != "notify.sh" || tmux.Dir() != dir {
+		t.Errorf("tmux hook parsed wrong: %+v", tmux)
+	}
+	// A local override replaces the whole hook rather than merging fields.
+	if r := cfg.Hooks["replaced"]; r.Description != "" || r.Match[0] != "/etc/*" || r.Dir() != filepath.Join(xdg, "statemate") {
+		t.Errorf("local override should replace the repo hook, got %+v", r)
+	}
+}
+
+func TestLoadHooksTOML(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	content := `
+[hooks.single]
+match = "*.service"
+[[hooks.single.do]]
+run = "true"
+
+[hooks.list]
+match = ["a", "b"]
+[[hooks.list.do]]
+script = "x.sh"
+`
+	if err := os.WriteFile(filepath.Join(dir, "mate.toml"), []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(filepath.Join(dir, "mate.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := cfg.Hooks["single"].Match; len(m) != 1 || m[0] != "*.service" {
+		t.Errorf("single match = %v", m)
+	}
+	if m := cfg.Hooks["list"].Match; len(m) != 2 || cfg.Hooks["list"].Do[0].Script != "x.sh" {
+		t.Errorf("list hook = %+v", cfg.Hooks["list"])
+	}
+}
+
+func TestValidateHooks(t *testing.T) {
+	cfg := &Config{Hooks: map[string]*Hook{"h": {Match: StringList{"*"}}}}
+	if err := cfg.Validate(); err == nil {
+		t.Error("a hook with no steps should fail validation")
+	}
+}

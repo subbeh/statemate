@@ -56,6 +56,10 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cfg != nil {
+		issues += checkHooks(cmd)
+	}
+
 	fmt.Println()
 	fmt.Println("Dependencies:")
 
@@ -92,4 +96,38 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// checkHooks reports hooks that fail to load, and warns about active hooks
+// whose patterns match none of the managed files -- usually a typo.
+func checkHooks(cmd *cobra.Command) int {
+	env, err := loadHookEnv(cmd)
+	if err != nil {
+		fmt.Println()
+		fmt.Println("Hooks:")
+		fmt.Printf("[ERROR] %v\n", err)
+		return 1
+	}
+	if len(env.set) == 0 {
+		return 0
+	}
+
+	fmt.Println()
+	fmt.Println("Hooks:")
+
+	matched := make(map[string]bool)
+	for _, t := range env.set.Trigger(hookChanges(env.files, env.sourcePaths), env.profileChain) {
+		matched[t.Name] = true
+	}
+	for _, h := range env.set {
+		switch {
+		case !h.IsEnabled(), !h.ActiveFor(env.profileChain):
+			continue
+		case matched[h.Name]:
+			fmt.Printf("[OK] %s\n", h.Name)
+		default:
+			fmt.Printf("[WARN] %s matches no managed files\n", h.Name)
+		}
+	}
+	return 0
 }

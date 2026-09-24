@@ -59,6 +59,9 @@ run one on demand.
 Pending changes are computed before any file is written, so an `onchange` script
 sees the same set whether its timing is `before` or `after`.
 
+To react to specific files rather than a whole source — `*.service`, say — use a
+[hook](hooks.md).
+
 ## Timing
 
 | Timing | When |
