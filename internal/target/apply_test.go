@@ -1,6 +1,7 @@
 package target
 
 import (
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -648,5 +649,82 @@ func TestApplier_DryRunReportsEmptyDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(targetDir, ".cache")); !os.IsNotExist(err) {
 		t.Error("dry-run must not create directories")
+	}
+}
+
+// captureStdout returns what fn printed to stdout.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	fn()
+
+	_ = w.Close()
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+// --verbose lists each file apply writes, with the same markers as --dry-run;
+// without it, only the summary the caller prints reports what happened.
+func TestApplier_VerboseListsWrittenFiles(t *testing.T) {
+	for _, verbose := range []int{0, 1} {
+		tmpDir := t.TempDir()
+		sourceDir := filepath.Join(tmpDir, "source")
+		targetDir := filepath.Join(tmpDir, "target")
+
+		if err := os.MkdirAll(filepath.Join(sourceDir, "app"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sourceDir, "app", "new.txt"), []byte("x\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sourceDir, "app", "same.txt"), []byte("same\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(targetDir, "same.txt"), []byte("same\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		tree, err := source.NewScanner(targetDir, "").Scan([]string{filepath.Join(sourceDir, "app")})
+		if err != nil {
+			t.Fatalf("scanning: %v", err)
+		}
+
+		applier := NewApplier(db, nil, nil, false, false, verbose)
+		out := captureStdout(t, func() {
+			if _, err := applier.Apply(tree); err != nil {
+				t.Errorf("apply failed: %v", err)
+			}
+		})
+		_ = db.Close()
+
+		newLine := "+ " + filepath.Join(targetDir, "new.txt")
+		if verbose > 0 {
+			if !strings.Contains(out, newLine) {
+				t.Errorf("verbose output missing %q:\n%s", newLine, out)
+			}
+			if strings.Contains(out, "same.txt") {
+				t.Errorf("verbose output lists an unchanged file:\n%s", out)
+			}
+		} else if out != "" {
+			t.Errorf("non-verbose apply printed per-file output:\n%s", out)
+		}
 	}
 }

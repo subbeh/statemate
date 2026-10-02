@@ -209,7 +209,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	beforeScripts.Sort()
 
 	if len(beforeScripts) > 0 {
-		if verbose > 0 || dryRun {
+		if dryRun {
 			fmt.Println("Running before scripts...")
 		}
 		res, err := executor.Execute(beforeScripts)
@@ -268,7 +268,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	afterScripts.Sort()
 
 	if len(afterScripts) > 0 {
-		if verbose > 0 || dryRun {
+		if dryRun {
 			fmt.Println("Running after scripts...")
 		}
 		res, err := executor.Execute(afterScripts)

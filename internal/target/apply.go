@@ -131,6 +131,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				}
 			}
 			if created {
+				if a.verbose > 0 {
+					fmt.Printf("+ %s\n", dir.TargetPath)
+				}
 				result.Applied++
 			}
 			continue
@@ -150,6 +153,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			}
 		}
 		if created {
+			if a.verbose > 0 {
+				fmt.Printf("+ %s\n", dir.TargetPath)
+			}
 			result.Applied++
 		}
 	}
@@ -227,6 +233,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 
 		if err := a.applyFile(entry, change.NewHash); err != nil {
 			return nil, fmt.Errorf("applying %s: %w", entry.SourcePath, err)
+		}
+		if a.verbose > 0 {
+			a.printChange(change)
 		}
 		result.Applied++
 		if !change.PermOnly {

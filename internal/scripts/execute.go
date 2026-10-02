@@ -237,19 +237,16 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 	}
 
 	for _, script := range scripts {
-		shouldRun, reason, err := e.shouldRun(script)
+		shouldRun, _, err := e.shouldRun(script)
 		if err != nil {
 			return nil, fmt.Errorf("checking script %s: %w", script.Name, err)
 		}
 
 		if shouldRun && e.ranAsHook[script.Path] {
-			shouldRun, reason = false, "already ran as a hook step"
+			shouldRun = false // already ran as a hook step
 		}
 
 		if !shouldRun {
-			if e.verbose {
-				fmt.Printf("  skip: %s (%s)\n", script.Name, reason)
-			}
 			result.Skipped++
 			continue
 		}

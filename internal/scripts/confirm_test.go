@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -297,5 +298,33 @@ func TestExecute_DryRunDoesNotPrompt(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Error("dry run must not execute the script")
+	}
+}
+
+// Scripts that are not due are skipped silently, even under --verbose: listing
+// every one on each apply buried the files that actually changed.
+func TestExecute_VerboseDoesNotListSkippedScripts(t *testing.T) {
+	e := newTestExecutor(t, false)
+	e.verbose = true
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdout
+	os.Stdout = w
+	res, err := e.Execute(Scripts{{Name: "setup.sh", Path: "/nonexistent/setup.sh", Frequency: FreqManual}})
+	os.Stdout = orig
+	_ = w.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, _ := io.ReadAll(r)
+	if len(out) != 0 {
+		t.Errorf("expected no output for a skipped script, got:\n%s", out)
+	}
+	if res.Skipped != 1 {
+		t.Errorf("Skipped: got %d, want 1", res.Skipped)
 	}
 }
