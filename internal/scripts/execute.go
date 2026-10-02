@@ -14,6 +14,7 @@ import (
 
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 func readShebang(path string) string {
@@ -76,7 +77,6 @@ type Executor struct {
 	noScripts bool
 	// confirmAll is set once the user answers "all" at a prompt.
 	confirmAll bool
-	stdin      *bufio.Reader
 	// changed names the sources with pending changes, used by #onchange scripts.
 	changed ChangedSources
 	// ranAsHook holds the paths of scripts a hook already ran in this
@@ -97,7 +97,6 @@ func NewExecutor(db *state.DB, tmplCtx *template.Context, dryRun, verbose bool) 
 		tmplCtx: tmplCtx,
 		dryRun:  dryRun,
 		verbose: verbose,
-		stdin:   bufio.NewReader(os.Stdin),
 	}
 }
 
@@ -198,25 +197,30 @@ func (e *Executor) ask(title string, details []string, markable bool) (scriptAct
 
 	for {
 		fmt.Print(prompt)
-		input, err := e.stdin.ReadString('\n')
+		key, err := util.ReadKey()
 		if err != nil {
-			// EOF with no answer -- treat as abort rather than assuming consent.
+			// EOF or Ctrl-C with no answer -- treat as abort rather than assuming
+			// consent.
+			fmt.Println()
 			return actionAbort, nil
 		}
 
-		switch strings.TrimSpace(strings.ToLower(input)) {
-		case "y", "yes":
+		input := strings.ToLower(string(key))
+		fmt.Println(strings.TrimSpace(input))
+
+		switch input {
+		case "y":
 			return actionRun, nil
-		case "n", "no":
+		case "n":
 			return actionSkip, nil
-		case "s", "skip":
+		case "s":
 			if markable {
 				return actionSkipMark, nil
 			}
-		case "a", "all":
+		case "a":
 			e.confirmAll = true
 			return actionRun, nil
-		case "q", "quit":
+		case "q":
 			return actionAbort, nil
 		}
 	}

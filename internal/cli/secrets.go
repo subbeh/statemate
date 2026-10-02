@@ -14,6 +14,7 @@ import (
 	"github.com/subbeh/statemate/internal/secrets"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 var secretsCmd = &cobra.Command{
@@ -91,10 +92,7 @@ func runSecretsFetch(cmd *cobra.Command, args []string) error {
 	result, err := mgr.Fetch(items)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		fmt.Print("Continue with cached secrets? [y/n]: ")
-		var answer string
-		_, _ = fmt.Scanln(&answer)
-		if strings.ToLower(answer) != "y" {
+		if ok, _ := util.Confirm("Continue with cached secrets? [y/n]: ", false); !ok {
 			return err
 		}
 		return nil

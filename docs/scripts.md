@@ -103,6 +103,9 @@ Run keyd-restart.sh (after, onchange)?
 | `a` | Run this and auto-confirm the rest |
 | `q` | Abort the apply |
 
+Each answer is a single keypress — there is no need to press Enter. Ctrl-C aborts
+like `q`.
+
 `[s]kip` is not offered for `always` scripts, whose runs are never recorded — there
 is no meaningful "never ask again" for a script that opted into running every time.
 

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -408,14 +407,11 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 
 		fmt.Printf("\nMissing %s packages: %s\n", result.Manager, strings.Join(missing, ", "))
 		if !autoConfirm {
-			fmt.Print("Install? [y/N] ")
-			reader := bufio.NewReader(os.Stdin)
-			input, err := reader.ReadString('\n')
+			ok, err := util.Confirm("Install? [y/N] ", false)
 			if err != nil {
 				return nil
 			}
-			input = strings.TrimSpace(strings.ToLower(input))
-			if input != "y" && input != "yes" {
+			if !ok {
 				continue
 			}
 		}

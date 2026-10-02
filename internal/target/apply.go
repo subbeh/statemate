@@ -14,7 +14,6 @@ import (
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
-	"golang.org/x/term"
 )
 
 type Applier struct {
@@ -393,13 +392,14 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 	fmt.Print(prompt)
 
 	for {
-		char, err := readSingleChar()
+		char, err := util.ReadKey()
 		if err != nil {
+			fmt.Println()
 			return "", err
 		}
 
 		input := strings.ToLower(string(char))
-		fmt.Println(input)
+		fmt.Println(strings.TrimSpace(input))
 
 		switch input {
 		case "o":
@@ -422,33 +422,6 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 			fmt.Print("\n" + prompt)
 		}
 	}
-}
-
-func readSingleChar() (byte, error) {
-	fd := int(os.Stdin.Fd())
-
-	if !term.IsTerminal(fd) {
-		b := make([]byte, 1)
-		_, err := os.Stdin.Read(b)
-		if err != nil {
-			return 0, err
-		}
-		return b[0], nil
-	}
-
-	oldState, err := term.MakeRaw(fd)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = term.Restore(fd, oldState) }()
-
-	b := make([]byte, 1)
-	_, err = os.Stdin.Read(b)
-	if err != nil {
-		return 0, err
-	}
-
-	return b[0], nil
 }
 
 func (a *Applier) showConflictDiff(entry *source.Entry) error {

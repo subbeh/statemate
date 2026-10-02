@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
@@ -93,15 +91,11 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		if !deleteKeepTarget {
 			fmt.Printf("  Target: %s\n", util.ShortenPath(entry.TargetPath))
 		}
-		fmt.Print("Continue? [y/N] ")
-
-		reader := bufio.NewReader(os.Stdin)
-		input, err := reader.ReadString('\n')
+		ok, err := util.Confirm("Continue? [y/N] ", false)
 		if err != nil {
 			return err
 		}
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input != "y" && input != "yes" {
+		if !ok {
 			fmt.Println("Aborted")
 			return nil
 		}

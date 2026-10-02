@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
@@ -125,13 +123,13 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 
 	var removed []hooks.Change
-	reader := bufio.NewReader(os.Stdin)
 	for _, path := range toRemove {
 		if !force {
-			fmt.Printf("Remove %s? [y/N] ", util.ShortenPath(path))
-			response, _ := reader.ReadString('\n')
-			response = strings.TrimSpace(strings.ToLower(response))
-			if response != "y" && response != "yes" {
+			ok, err := util.Confirm(fmt.Sprintf("Remove %s? [y/N] ", util.ShortenPath(path)), false)
+			if err != nil {
+				return err
+			}
+			if !ok {
 				fmt.Println("  Skipped")
 				continue
 			}

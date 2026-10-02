@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -14,6 +13,7 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/packages"
 	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 var packagesCmd = &cobra.Command{
@@ -245,14 +245,11 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 			if hasExtra {
 				prompt = "This will REMOVE packages. Continue? [y/N] "
 			}
-			fmt.Print(prompt)
-			reader := bufio.NewReader(os.Stdin)
-			input, err := reader.ReadString('\n')
+			ok, err := util.Confirm(prompt, false)
 			if err != nil {
 				return err
 			}
-			input = strings.TrimSpace(strings.ToLower(input))
-			if input != "y" && input != "yes" {
+			if !ok {
 				fmt.Println("Skipped")
 				continue
 			}
