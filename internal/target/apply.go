@@ -395,7 +395,9 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 	fmt.Printf("\nConflict: %s\n", change.Entry.TargetPath)
 	fmt.Printf("  Target has been modified since last apply\n")
 
-	canImport := !change.Entry.Attrs.Template
+	// Importing a #symlink would write the target's content through the source
+	// link, into whatever it points at.
+	canImport := !change.Entry.Attrs.Template && !change.Entry.Attrs.Symlink
 	var prompt string
 	if canImport {
 		prompt = "  [o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort: "
@@ -564,6 +566,17 @@ func hashTarget(path string) (string, error) {
 }
 
 func (a *Applier) recordState(entry *source.Entry, sourceHash string) error {
+	if entry.Attrs.Symlink {
+		// The target is already the same link, and hashing it would follow it.
+		return a.db.SaveFile(&state.FileEntry{
+			SourcePath:  entry.SourcePath,
+			TargetPath:  entry.TargetPath,
+			SourceHash:  sourceHash,
+			AppliedHash: sourceHash,
+			Mode:        0777,
+		})
+	}
+
 	targetHash, err := hashTarget(entry.TargetPath)
 	if err != nil {
 		return err

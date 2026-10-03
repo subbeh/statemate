@@ -165,6 +165,14 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		if change.Entry.Attrs.Symlink {
+			// What changes is the link text; diffing what it points at would fail
+			// for a directory or a destination that does not exist.
+			fmt.Printf("=== %s ===\n", util.ShortenPath(change.Entry.TargetPath))
+			fmt.Println(target.ColorizeDiff(symlinkDiff(change.Entry)))
+			continue
+		}
+
 		if !change.Entry.Generated && target.IsBinaryFile(change.Entry.SourcePath) {
 			fmt.Printf("Binary files differ: %s\n", util.ShortenPath(change.Entry.TargetPath))
 			continue
@@ -205,6 +213,21 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// symlinkDiff describes a pending #symlink change as the link the target has
+// now and the one apply will create.
+func symlinkDiff(entry *source.Entry) string {
+	var lines []string
+	if old, err := os.Readlink(entry.TargetPath); err == nil {
+		lines = append(lines, "- -> "+old)
+	} else if _, err := os.Lstat(entry.TargetPath); err == nil {
+		lines = append(lines, "- (not a symlink)")
+	}
+	if dest, err := os.Readlink(entry.SourcePath); err == nil {
+		lines = append(lines, "+ -> "+dest)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func generateEncryptedTemplateDiff(entry *source.Entry, enc *encrypt.AgeEncryptor, tmplCtx *template.Context, diffTool string) (string, error) {

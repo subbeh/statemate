@@ -123,6 +123,10 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 		return nil, fmt.Errorf("%s: #import cannot be combined with #template -- importing would overwrite the template with its rendered output", entry.SourcePath)
 	}
 
+	if entry.Attrs.Symlink {
+		return computeSymlinkChange(entry, db)
+	}
+
 	// Without an identity the source can only be compared and deployed as
 	// ciphertext, which status would then report as up to date.
 	if entry.Attrs.Encrypted && (opts.Enc == nil || !opts.Enc.CanDecrypt()) {
@@ -285,6 +289,72 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 		change.Status = StatusModified
 	}
 
+	return change, nil
+}
+
+// computeSymlinkChange compares a #symlink entry by link text. What the link
+// points at is irrelevant -- apply copies the link verbatim -- and following it
+// fails outright for a directory or a destination that does not exist.
+func computeSymlinkChange(entry *source.Entry, db *state.DB) (*Change, error) {
+	change := &Change{Entry: entry}
+
+	sourceHash, err := state.HashLink(entry.SourcePath)
+	if err != nil {
+		return nil, err
+	}
+	change.NewHash = sourceHash
+
+	existing, err := db.GetFile(entry.TargetPath)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		change.OldHash = existing.AppliedHash
+	}
+
+	info, err := os.Lstat(entry.TargetPath)
+	if os.IsNotExist(err) {
+		if existing == nil {
+			change.Status = StatusNew
+		} else {
+			change.Status = StatusModified
+		}
+		return change, nil
+	}
+	if isPermissionDenied(err) {
+		change.Status = StatusSkipped
+		return change, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// A regular file or directory in the link's place never matches.
+	var targetHash string
+	if info.Mode()&os.ModeSymlink != 0 {
+		if targetHash, err = state.HashLink(entry.TargetPath); err != nil {
+			return nil, err
+		}
+	}
+
+	if targetHash == sourceHash {
+		// The link already says the right thing, whatever the state DB holds --
+		// including content hashes recorded before links were hashed this way.
+		if existing != nil && existing.SourceHash == sourceHash && existing.AppliedHash == sourceHash {
+			change.Status = StatusUnchanged
+		} else {
+			change.Status = StatusStateOnly
+		}
+		return change, nil
+	}
+
+	// Same rules as files: the source moved and the target is as last applied,
+	// so deploy; anything else in the target's place is a conflict.
+	if existing != nil && targetHash == existing.AppliedHash {
+		change.Status = StatusModified
+	} else {
+		change.Status = StatusConflict
+	}
 	return change, nil
 }
 

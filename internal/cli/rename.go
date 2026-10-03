@@ -101,7 +101,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 	}
 
 	targetMoved := false
-	if _, err := os.Stat(entry.TargetPath); err == nil {
+	if _, err := os.Lstat(entry.TargetPath); err == nil {
 		if err := os.Rename(entry.TargetPath, newTargetPath); err != nil {
 			return fmt.Errorf("renaming target: %w", err)
 		}
@@ -114,12 +114,18 @@ func runRename(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("updating database: %w", err)
 		}
 
-		targetHash, err := state.HashFile(newTargetPath)
+		// A #symlink is tracked by its link text, as status compares it.
+		hashFn := state.HashFile
+		if entry.Attrs.Symlink {
+			hashFn = state.HashLink
+		}
+
+		targetHash, err := hashFn(newTargetPath)
 		if err != nil {
 			return fmt.Errorf("hashing new target: %w", err)
 		}
 
-		sourceHash, err := state.HashFile(newSourcePath)
+		sourceHash, err := hashFn(newSourcePath)
 		if err != nil {
 			return fmt.Errorf("hashing new source: %w", err)
 		}
