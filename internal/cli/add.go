@@ -241,7 +241,12 @@ func promptSourceSelection(sources []string) (int, error) {
 }
 
 func resolveTargetBaseForAdd(sourceDir, targetPath, globalTargetBase string, tree *source.Tree, renderer config.TemplateRenderer) (string, error) {
-	dirCfg, _ := config.LoadDirConfigRaw(sourceDir, renderer)
+	dirCfg, err := config.LoadDirConfigRaw(sourceDir, renderer)
+	if err != nil {
+		// Treating a broken .mate.yaml as absent would offer to create one,
+		// overwriting it.
+		return "", fmt.Errorf("loading .mate.yaml in %s: %w", sourceDir, err)
+	}
 
 	// Check if file is under global target base
 	globalBase := expandPath(globalTargetBase)

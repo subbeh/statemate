@@ -286,6 +286,53 @@ func TestConflictsAreProfileAware(t *testing.T) {
 	}
 }
 
+// A .mate.yaml that does not parse must fail the scan. Skipping it dropped its
+// target_base, so a source meant for / deployed its files under ~ instead.
+func TestScannerInvalidDirConfigFails(t *testing.T) {
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "etc")
+	if err := os.MkdirAll(filepath.Join(srcDir, "etc"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "etc", "hosts"), []byte("127.0.0.1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".mate.yaml"), []byte("target_base: /\n  bad: indent\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	render := func(data []byte) ([]byte, error) { return data, nil }
+	scanner := NewScannerWithRenderer("/home/user", dir, render)
+	_, err := scanner.Scan([]string{srcDir})
+	if err == nil {
+		t.Fatal("expected Scan to fail on an invalid .mate.yaml")
+	}
+	if !strings.Contains(err.Error(), filepath.Join(srcDir, ".mate.yaml")) {
+		t.Errorf("error should name the file, got: %v", err)
+	}
+}
+
+// A scanner without a renderer reads .mate.yaml unrendered, where template
+// syntax is often not valid YAML, so it cannot treat a parse error as fatal.
+func TestScannerUnrenderedDirConfigErrorTolerated(t *testing.T) {
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "app")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "config"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".mate.yaml"), []byte("{{ if eq .OS \"linux\" }}\ntarget_base: /\n{{ end }}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner("/home/user", dir)
+	if _, err := scanner.Scan([]string{srcDir}); err != nil {
+		t.Fatalf("unrendered scan should tolerate template syntax, got: %v", err)
+	}
+}
+
 func TestScannerWithDirConfig(t *testing.T) {
 	dir := t.TempDir()
 
