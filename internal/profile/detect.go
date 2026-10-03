@@ -11,17 +11,32 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 )
 
+// How a profile was chosen, as reported by DetectWithSource.
+const (
+	SourceConfig   = "config file (profile field)"
+	SourceEnv      = "STATEMATE_PROFILE environment variable"
+	SourceDetected = "auto-detected"
+)
+
 func Detect(cfg *config.Config) string {
+	name, _ := DetectWithSource(cfg)
+	return name
+}
+
+// DetectWithSource is Detect, also returning how the profile was chosen (one
+// of the Source constants, or "" when none matched). `mate profile` reports it,
+// and must go through the same precedence as every other command.
+func DetectWithSource(cfg *config.Config) (string, string) {
 	if cfg.Profile != "" {
-		return cfg.Profile
+		return cfg.Profile, SourceConfig
 	}
 
 	if p := os.Getenv("STATEMATE_PROFILE"); p != "" {
-		return p
+		return p, SourceEnv
 	}
 
 	if cfg.Profiles == nil {
-		return ""
+		return "", ""
 	}
 
 	hostname, _ := os.Hostname()
@@ -39,11 +54,11 @@ func Detect(cfg *config.Config) string {
 			continue
 		}
 		if matches(profile.Detection, hostname, username) {
-			return name
+			return name, SourceDetected
 		}
 	}
 
-	return ""
+	return "", ""
 }
 
 func matches(d *config.Detection, hostname, username string) bool {
