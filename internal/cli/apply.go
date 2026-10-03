@@ -136,9 +136,15 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 	tree = scope.FilterTree(tree, cfg.SourceDir())
 
-	// Narrow the source paths too. Secret discovery and script discovery both
-	// walk these directly, so leaving them unfiltered would make a scoped run
-	// fetch secrets for templates it is never going to render.
+	// Narrow the source paths too. Secret discovery walks these directly, so
+	// leaving them unfiltered would make a scoped run fetch secrets for
+	// templates it is never going to render.
+	//
+	// Hooks are the exception: they are collected from every active source,
+	// since a script: step may name a script anywhere in the repository and a
+	// source's own hooks live in its .mate.yaml. Only the files the scoped run
+	// writes decide which of them trigger.
+	allSourcePaths := sourcePaths
 	sourcePaths = scope.FilterSourcePaths(sourcePaths)
 
 	db, err := state.Open("")
@@ -186,12 +192,14 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	discoverer := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths)
-	allScripts, err := discoverer.Discover()
+	// Discover every script, so hooks can resolve their script: steps, but run
+	// only those the scope allows as #before/#after scripts.
+	discoverer := scripts.NewDiscoverer(cfg.SourceDir(), allSourcePaths)
+	discovered, err := discoverer.Discover()
 	if err != nil {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
-	allScripts = scopedScripts(allScripts, scope)
+	allScripts := scopedScripts(discovered, scope)
 
 	// Compute pending changes before applying anything, so #onchange scripts see
 	// the same set whether they run #before or #after -- once apply has written
@@ -248,7 +256,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	hookSet, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, allScripts)
+	hookSet, err := hooks.Collect(cfg, allSourcePaths, scanner.DirConfig, discovered)
 	if err != nil {
 		return fmt.Errorf("invalid hooks: %w", err)
 	}
@@ -259,7 +267,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		NoScripts:    noScripts,
 		ProfileChain: profileChain,
 	})
-	hookRes, err := runTriggeredHooks(hookRunner, hookSet, hookChanges(result.Written, sourcePaths), profileChain, verbose > 0 || dryRun)
+	hookRes, err := runTriggeredHooks(hookRunner, hookSet, hookChanges(result.Written, allSourcePaths), profileChain, verbose > 0 || dryRun)
 	if err != nil {
 		return err
 	}
