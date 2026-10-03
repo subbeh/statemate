@@ -292,3 +292,43 @@ func TestComputeSync_NonVerboseLeavesDescriptionsUnflagged(t *testing.T) {
 		}
 	}
 }
+
+// A profile inherits the packages of every profile it extends, as it already
+// inherits their sources and variables. Each package is attributed to the
+// profile that declared it, so `mate packages status` shows where it came from.
+func TestComputeSync_InheritsPackagesAlongExtendsChain(t *testing.T) {
+	f := &fakeManager{installed: []Package{{Name: "git"}}}
+	withFakeManager(t, f)
+
+	cfg := &config.Config{Profiles: map[string]*config.Profile{
+		"base":  {Packages: &config.PackageList{Brew: []string{"git"}}},
+		"mac":   {Extends: "base", Packages: &config.PackageList{Brew: []string{"ripgrep"}}},
+		"work":  {Extends: "mac", Packages: &config.PackageList{Brew: []string{"kubectl"}}},
+		"other": {Packages: &config.PackageList{Brew: []string{"unrelated"}}},
+	}}
+
+	results, err := ComputeSync(cfg, "work", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	got := make(map[string][]string)
+	for _, s := range results[0].Statuses {
+		got[s.Name] = s.Sources
+	}
+	for name, source := range map[string]string{
+		"git":     "profile:base",
+		"ripgrep": "profile:mac",
+		"kubectl": "profile:work",
+	} {
+		if len(got[name]) != 1 || got[name][0] != source {
+			t.Errorf("%s sources = %v, want [%s]", name, got[name], source)
+		}
+	}
+	if _, ok := got["unrelated"]; ok {
+		t.Error("packages of a profile outside the chain must not be included")
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/profile"
 )
 
 type SyncResult struct {
@@ -114,11 +115,13 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 		addPkgs(cfg.Packages, "config")
 	}
 
-	// Profile-specific packages
+	// Profile-specific packages, from every profile in the extends chain -- a
+	// profile inherits its parents' packages just as it inherits their sources
+	// and variables. Each is labelled with the profile that declared it.
 	if profileName != "" {
-		if profile, ok := cfg.Profiles[profileName]; ok {
-			if profile.Packages != nil {
-				addPkgs(profile.Packages, "profile:"+profileName)
+		for _, name := range profile.InheritanceChain(cfg, profileName) {
+			if p := cfg.Profiles[name]; p != nil && p.Packages != nil {
+				addPkgs(p.Packages, "profile:"+name)
 			}
 		}
 	}
