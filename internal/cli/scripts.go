@@ -343,9 +343,11 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = db.Close() }()
 
+	// A template script gets the context mate apply would give it, so cached
+	// secrets and encrypted var_files resolve here too.
 	var tmplCtx *template.Context
 	if script.Template {
-		tmplCtx, err = template.NewContext(cfg, profileName)
+		tmplCtx, err = newTemplateContext(cfg, profileName)
 		if err != nil {
 			return fmt.Errorf("creating template context: %w", err)
 		}
