@@ -124,7 +124,12 @@ When adding a feature, the checklist is:
 1. Update the command's `Short`/`Long` if the CLI changed, then `make docs`
 2. Document it in the relevant `docs/*.md` guide
 3. Add a CHANGELOG entry
-4. Link any new guide from `docs/README.md` (also enforced by a test)
+4. Link any new guide from `docs/README.md` (also enforced by a test) and add it
+   to the `nav` in `mkdocs.yml`
+
+The same files are published as the docs site on every push to `main`. Preview it
+locally with `make docs-serve`; `make docs-site` runs the strict build CI uses,
+which fails on broken links. Both need [uv](https://docs.astral.sh/uv/).
 
 ### 6. Merge
 
@@ -192,6 +197,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 | Run tests | `make test` |
 | Run linter | `make lint` |
 | Regenerate docs | `make docs` |
+| Preview docs site | `make docs-serve` |
 | Code review | `/code-review` in Claude Code |
 | Push branch | `git push -u origin feat/name` |
 | Create PR | GitHub UI or `gh pr create` |

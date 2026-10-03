@@ -1,0 +1,67 @@
+# Docs site, built by Zensical (which reads this file as-is; mkdocs-material 9.7
+# builds it too). See .specs/docs-site.md. The pages themselves live in docs/ and
+# are the same files GitHub renders, so links between them stay relative.
+site_name: Statemate
+site_description: Declarative dotfiles, system configuration, and packages
+site_url: https://subbeh.github.io/statemate/
+repo_url: https://github.com/subbeh/statemate
+repo_name: subbeh/statemate
+edit_uri: edit/develop/docs/
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.action.edit
+    - content.code.copy
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: README.md
+  - Getting Started:
+      - getting-started.md
+      - concepts.md
+  - Guides:
+      - configuration.md
+      - attributes.md
+      - templates.md
+      - secrets.md
+      - scripts.md
+      - hooks.md
+      - packages.md
+  # The subcommand pages are reached through this page's SEE ALSO links, so they
+  # are deliberately not listed one by one.
+  - Command Reference: commands/mate.md
+  - Changelog: https://github.com/subbeh/statemate/blob/main/CHANGELOG.md

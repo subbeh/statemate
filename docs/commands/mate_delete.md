@@ -1,8 +1,8 @@
-## mate delete
+# mate delete
 
 Delete file from source and target
 
-### Synopsis
+## Synopsis
 
 Delete a file from both source and target.
 
@@ -13,13 +13,16 @@ Hooks matching the removed target run afterwards (see 'mate hooks'); --force
 also confirms them. Nothing runs with --keep-target.
 
 Example:
-  mate delete ~/.config/nvim/init.lua
+
+```
+mate delete ~/.config/nvim/init.lua
+```
 
 ```
 mate delete <path> [flags]
 ```
 
-### Options
+## Options
 
 ```
   -f, --force         don't prompt for confirmation
@@ -27,14 +30,14 @@ mate delete <path> [flags]
       --keep-target   keep the target file, only delete source
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

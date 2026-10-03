@@ -1,8 +1,8 @@
-## mate scripts run
+# mate scripts run
 
 Run a script
 
-### Synopsis
+## Synopsis
 
 Manually run a script by name or path
 
@@ -10,7 +10,7 @@ Manually run a script by name or path
 mate scripts run <script> [flags]
 ```
 
-### Options
+## Options
 
 ```
       --dry-run   show what would be done without running
@@ -18,14 +18,14 @@ mate scripts run <script> [flags]
   -v, --verbose   verbose output
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate scripts](mate_scripts.md)	 - Manage scripts
 

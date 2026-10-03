@@ -1,8 +1,8 @@
-## mate decrypt
+# mate decrypt
 
 Decrypt a managed file
 
-### Synopsis
+## Synopsis
 
 Decrypt a file in place.
 
@@ -15,31 +15,36 @@ falling back to the source directory. The #encrypted suffix is optional.
 
 The age identity must be configured in mate.yaml:
 
-  age:
-    identity: "~/.config/statemate/key.txt"
+```
+age:
+  identity: "~/.config/statemate/key.txt"
+```
 
 Examples:
-  mate decrypt nvim/secrets.yaml#encrypted
-  mate decrypt .matedata/secrets.yaml
+
+```
+mate decrypt nvim/secrets.yaml#encrypted
+mate decrypt .matedata/secrets.yaml
+```
 
 ```
 mate decrypt <source> [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help   help for decrypt
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

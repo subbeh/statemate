@@ -1,8 +1,8 @@
-## mate status
+# mate status
 
 Show files that would change on apply
 
-### Synopsis
+## Synopsis
 
 Show pending changes that would be made on apply.
 
@@ -13,7 +13,7 @@ An empty directory in a source -- one with no files under it -- is reported unti
 it exists on the target. Directories that hold files are not listed separately;
 they arrive with those files.
 
-Markers: '+' new, '~' modified, '!' conflict, '<' will be imported into the
+Markers: '+' new, '~' modified, '!' conflict, '&lt;' will be imported into the
 source (an '#import' file whose target changed).
 
 The positional argument filters by file or path; use --source to limit the
@@ -23,7 +23,7 @@ report to a single source.
 mate status [path] [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help            help for status
@@ -32,14 +32,14 @@ mate status [path] [flags]
       --sudo            use sudo to check files requiring elevated access
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

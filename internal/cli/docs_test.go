@@ -230,6 +230,32 @@ func TestGuidesAreLinkedFromIndex(t *testing.T) {
 	}
 }
 
+// The docs site only shows pages listed in the mkdocs.yml nav, and the build does
+// not complain about one that is missing, so a new guide would be published
+// without any way to navigate to it.
+func TestGuidesAreInSiteNav(t *testing.T) {
+	dir := docsDir(t)
+
+	config, err := os.ReadFile(filepath.Join(filepath.Dir(dir), "mkdocs.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		if !regexp.MustCompile(`(?m)^\s*- (.*: )?` + regexp.QuoteMeta(e.Name()) + `$`).Match(config) {
+			t.Errorf("docs/%s is not in the nav in mkdocs.yml", e.Name())
+		}
+	}
+}
+
 // A broken relative link renders as a dead link on GitHub, which is where these
 // docs are read. Checks docs/*.md and the top-level README.md, following links
 // into docs/commands/ as well.

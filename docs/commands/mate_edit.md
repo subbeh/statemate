@@ -1,8 +1,8 @@
-## mate edit
+# mate edit
 
 Edit a managed file
 
-### Synopsis
+## Synopsis
 
 Edit a managed file in your editor.
 
@@ -18,34 +18,38 @@ temporary location, opened in the editor, and re-encrypted after saving. The
 original file permissions are preserved.
 
 The editor is determined by (in order):
-  1. The 'editor' field in mate.yaml
-  2. $VISUAL environment variable
-  3. $EDITOR environment variable
-  4. vi (fallback)
+
+1. The 'editor' field in mate.yaml
+2. $VISUAL environment variable
+3. $EDITOR environment variable
+4. vi (fallback)
 
 Examples:
-  mate edit nvim/init.lua
-  mate edit .matedata/secrets.yaml#encrypted
-  mate edit ~/.config/nvim/init.lua
+
+```
+mate edit nvim/init.lua
+mate edit .matedata/secrets.yaml#encrypted
+mate edit ~/.config/nvim/init.lua
+```
 
 ```
 mate edit <path> [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help   help for edit
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

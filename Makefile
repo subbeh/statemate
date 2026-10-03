@@ -1,8 +1,11 @@
-.PHONY: build build-all test lint install clean docs
+.PHONY: build build-all test lint install clean docs docs-site docs-serve
 
 BINARY := mate
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+
+# Docs site generator, run through uvx so no Python environment is needed.
+ZENSICAL := uvx zensical==0.0.67
 
 build:
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/mate
@@ -35,3 +38,11 @@ coverage:
 
 docs:
 	go run ./cmd/gendocs docs/commands
+
+# Build the docs site into site/; --strict fails on broken links.
+docs-site:
+	$(ZENSICAL) build --strict
+
+# Preview the docs site with live reload.
+docs-serve:
+	$(ZENSICAL) serve

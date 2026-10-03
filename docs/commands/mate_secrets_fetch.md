@@ -1,8 +1,8 @@
-## mate secrets fetch
+# mate secrets fetch
 
 Fetch secrets from providers
 
-### Synopsis
+## Synopsis
 
 Scan templates for secret references, fetch from providers, and update the encrypted cache. Optionally filter by item pattern (e.g., 'github*')
 
@@ -10,20 +10,20 @@ Scan templates for secret references, fetch from providers, and update the encry
 mate secrets fetch [pattern] [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help   help for fetch
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate secrets](mate_secrets.md)	 - Manage secrets
 

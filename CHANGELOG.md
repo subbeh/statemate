@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Documentation is now published as a searchable website at https://subbeh.github.io/statemate/, built from the same `docs/` guides and command reference
+
+### Fixed
+- The command reference in `docs/commands/` now shows the examples, prompt tables and YAML snippets from each command's help as code blocks. They used to collapse into a single run-on paragraph, and placeholders such as `<path>` and `<source>/<name>` disappeared from the text
+
 ## [0.4.0] - 2026-10-03
 
 ### Added

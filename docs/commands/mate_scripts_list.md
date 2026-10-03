@@ -1,8 +1,8 @@
-## mate scripts list
+# mate scripts list
 
 List all scripts
 
-### Synopsis
+## Synopsis
 
 List all discovered scripts and their status, including descriptions
 
@@ -10,20 +10,20 @@ List all discovered scripts and their status, including descriptions
 mate scripts list [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help   help for list
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate scripts](mate_scripts.md)	 - Manage scripts
 

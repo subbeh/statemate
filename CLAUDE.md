@@ -8,6 +8,8 @@ Declarative system configuration management tool. Binary is `mate`.
 make build-all  # Build for all platforms (use this, not `make build`)
 make test       # Run tests with race detection
 make docs       # Regenerate docs/commands/ from the cobra command tree
+make docs-serve # Preview the docs site (needs uv)
+make docs-site  # Strict docs site build, as CI runs it
 make lint       # Run golangci-lint
 ```
 
@@ -39,6 +41,9 @@ Documentation is committed under `docs/` and split by who writes it:
 - **README.md** is a quick start that links into `docs/` - don't duplicate the
   reference there
 - **CHANGELOG.md** tracks user-facing changes
+- **`mkdocs.yml`** publishes `docs/` to GitHub Pages (Zensical) on push to `main`.
+  A new guide must be added to its `nav`; keep guides flat in `docs/`, since
+  `docs_test.go` only reads top-level files
 
 `internal/cli/docs_test.go` fails when a new attribute, config key, template
 function, script frequency, or env var is not mentioned in the guides. If it

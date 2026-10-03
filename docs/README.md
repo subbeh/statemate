@@ -51,3 +51,7 @@ Everything else here is hand-written. A test
 (`internal/cli/docs_test.go`) asserts that every file attribute, config key,
 template function, and script frequency the code knows about appears in these
 guides, so a new feature cannot ship undocumented.
+
+These pages are also published as the docs site, with `mkdocs.yml` defining its
+navigation. Preview it with `make docs-serve`; `make docs-site` runs the strict
+build CI uses.

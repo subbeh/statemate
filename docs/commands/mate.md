@@ -1,22 +1,23 @@
-## mate
+# mate
 
 Statemate - system configuration management
 
-### Synopsis
+## Synopsis
 
 Statemate manages your dotfiles, system configuration, and packages declaratively.
 
 Features:
-  - Stow-style multi-directory source management
-  - Profile-based configuration with auto-detection
-  - Template rendering with Go text/template
-  - Age encryption for sensitive files
-  - Declarative package management (brew, pacman, yay)
-  - System file management with permission control
+
+- Stow-style multi-directory source management
+- Profile-based configuration with auto-detection
+- Template rendering with Go text/template
+- Age encryption for sensitive files
+- Declarative package management (brew, pacman, yay)
+- System file management with permission control
 
 Use "mate [command] --help" for more information about a command.
 
-### Options
+## Options
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
@@ -24,7 +25,7 @@ Use "mate [command] --help" for more information about a command.
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate add](mate_add.md)	 - Add a file to source
 * [mate apply](mate_apply.md)	 - Apply configuration to target

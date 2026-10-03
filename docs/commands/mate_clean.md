@@ -1,8 +1,8 @@
-## mate clean
+# mate clean
 
 Remove orphaned files
 
-### Synopsis
+## Synopsis
 
 Remove orphaned files that are no longer in the source.
 
@@ -14,20 +14,26 @@ Hooks matching the removed files run afterwards (see 'mate hooks'); --force
 also confirms them.
 
 Flags:
-  --force   Skip confirmation prompts
-  --all     Remove all orphans (otherwise specify paths)
+
+```
+--force   Skip confirmation prompts
+--all     Remove all orphans (otherwise specify paths)
+```
 
 Example:
-  mate clean                              # list orphans
-  mate clean ~/.config/old/file.conf      # remove specific orphan
-  mate clean --all                        # remove all orphans (with prompts)
-  mate clean --all --force                # remove all orphans (no prompts)
+
+```
+mate clean                              # list orphans
+mate clean ~/.config/old/file.conf      # remove specific orphan
+mate clean --all                        # remove all orphans (with prompts)
+mate clean --all --force                # remove all orphans (no prompts)
+```
 
 ```
 mate clean [path...] [flags]
 ```
 
-### Options
+## Options
 
 ```
       --all     remove all orphans
@@ -35,14 +41,14 @@ mate clean [path...] [flags]
   -h, --help    help for clean
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

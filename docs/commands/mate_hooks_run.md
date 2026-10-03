@@ -1,8 +1,8 @@
-## mate hooks run
+# mate hooks run
 
 Run a hook
 
-### Synopsis
+## Synopsis
 
 Run a hook manually, ignoring its patterns.
 
@@ -13,7 +13,7 @@ STATEMATE_HOOK_FILES and .Files are empty.
 mate hooks run <name> [flags]
 ```
 
-### Options
+## Options
 
 ```
       --dry-run   show what would be done without running
@@ -21,14 +21,14 @@ mate hooks run <name> [flags]
   -v, --verbose   verbose output
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate hooks](mate_hooks.md)	 - Manage hooks
 

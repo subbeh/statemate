@@ -1,4 +1,4 @@
-## mate version
+# mate version
 
 Print version information
 
@@ -6,20 +6,20 @@ Print version information
 mate version [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help   help for version
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

@@ -1,8 +1,8 @@
-## mate diff
+# mate diff
 
 Show pending changes
 
-### Synopsis
+## Synopsis
 
 Show full unified diff of pending changes.
 
@@ -16,7 +16,7 @@ This can also be set in config with 'diff_tool'.
 mate diff [path] [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help            help for diff
@@ -25,14 +25,14 @@ mate diff [path] [flags]
   -t, --tool string     external diff tool to use
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

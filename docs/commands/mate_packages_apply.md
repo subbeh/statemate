@@ -1,8 +1,8 @@
-## mate packages apply
+# mate packages apply
 
 Sync packages
 
-### Synopsis
+## Synopsis
 
 Install missing packages. Use --prune to also remove packages not in config.
 
@@ -10,7 +10,7 @@ Install missing packages. Use --prune to also remove packages not in config.
 mate packages apply [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help    help for apply
@@ -18,14 +18,14 @@ mate packages apply [flags]
   -y, --yes     auto-confirm all changes
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
   -c, --config string    config file (default: mate.yaml in current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate packages](mate_packages.md)	 - Manage packages
 

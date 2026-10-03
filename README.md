@@ -64,7 +64,8 @@ gitconfig#template                     rendered as a Go template
 
 ## Documentation
 
-Full documentation is in [`docs/`](docs/README.md):
+Full documentation is at **[subbeh.github.io/statemate](https://subbeh.github.io/statemate/)**,
+built from [`docs/`](docs/README.md):
 
 | Guide | Contents |
 |-------|----------|
@@ -75,6 +76,7 @@ Full documentation is in [`docs/`](docs/README.md):
 | [Templates](docs/templates.md) | Variables and functions available when rendering |
 | [Secrets](docs/secrets.md) | Bitwarden references and the encrypted cache |
 | [Scripts](docs/scripts.md) | Lifecycle scripts, frequency, timing |
+| [Hooks](docs/hooks.md) | Commands run when files matching a pattern change |
 | [Packages](docs/packages.md) | Declarative packages across brew, pacman, and the AUR |
 | [Command Reference](docs/commands/mate.md) | Every command and flag |
 
