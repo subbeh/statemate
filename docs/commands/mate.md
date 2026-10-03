@@ -20,7 +20,7 @@ Use "mate [command] --help" for more information about a command.
 ## Options
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -h, --help             help for mate
   -p, --profile string   override auto-detected profile
 ```

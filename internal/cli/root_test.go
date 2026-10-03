@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -25,5 +26,16 @@ func TestVersionFlag(t *testing.T) {
 	}
 	if got, want := out.String(), "mate version 1.2.3\n"; got != want {
 		t.Errorf("mate --version printed %q, want %q", got, want)
+	}
+}
+
+// The --config default is not just the current directory: $STATEMATE_DIR and a
+// registered source_dir come first, which the help must say.
+func TestConfigFlagDescribesResolution(t *testing.T) {
+	usage := rootCmd.PersistentFlags().Lookup("config").Usage
+	for _, want := range []string{"$STATEMATE_DIR", "source_dir", "current directory"} {
+		if !strings.Contains(usage, want) {
+			t.Errorf("--config help %q does not mention %s", usage, want)
+		}
 	}
 }

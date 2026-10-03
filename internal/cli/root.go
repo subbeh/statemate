@@ -47,7 +47,7 @@ func RootCmd() *cobra.Command {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in current directory)")
+	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
 	rootCmd.AddCommand(versionCmd)
 	// --version (which the Homebrew formula test runs) prints exactly what
