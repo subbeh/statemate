@@ -261,7 +261,13 @@ func resolveTargetBaseForAdd(sourceDir, targetPath, globalTargetBase string, tre
 		if fileUnderGlobal {
 			return globalBase, nil
 		}
-		// File is outside global target base - need to create .mate.yaml with target_base
+		// File is outside global target base - need to create .mate.yaml with
+		// target_base. That base applies to the whole source, so refuse when the
+		// source already deploys files under the global base: they would move,
+		// ~/.zshrc becoming /etc/.zshrc.
+		if sourceHasFiles(sourceDir, tree) {
+			return "", fmt.Errorf("source %q has existing files under %s; cannot add file from %s", filepath.Base(sourceDir), globalBase, targetPath)
+		}
 		return promptCreateDirConfig(sourceDir, targetPath)
 	}
 

@@ -4,10 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/source"
 )
 
 // The interactive source picker shows one list and indexes into another. If the
@@ -77,6 +79,38 @@ func TestSourcePickerListMatchesIndexedList(t *testing.T) {
 		if absSources[i] != want {
 			t.Errorf("index %d: showed %q but would use %q, want %q", i, s, absSources[i], want)
 		}
+	}
+}
+
+// Adding a file from outside the target base to a source with no .mate.yaml
+// must not give the whole source a new target_base while it already holds home
+// files: that would redeploy ~/.zshrc as /etc/.zshrc.
+func TestAddOutsideTargetBaseRefusesSourceWithHomeFiles(t *testing.T) {
+	home := t.TempDir()
+	sourceDir := filepath.Join(t.TempDir(), "shell")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, ".zshrc"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tree := &source.Tree{}
+	tree.AddEntry(&source.Entry{
+		SourcePath: filepath.Join(sourceDir, ".zshrc"),
+		TargetPath: filepath.Join(home, ".zshrc"),
+		RelPath:    ".zshrc",
+	})
+
+	// Confirm the .mate.yaml prompt, should it be (wrongly) shown.
+	withStdin(t, "y\n")
+
+	_, err := resolveTargetBaseForAdd(sourceDir, "/etc/hosts", home, tree, nil)
+	if err == nil || !strings.Contains(err.Error(), "existing files") {
+		t.Errorf("expected an error about the source's existing files, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(sourceDir, ".mate.yaml")); statErr == nil {
+		t.Error(".mate.yaml with a new target_base was written for a source holding home files")
 	}
 }
 
