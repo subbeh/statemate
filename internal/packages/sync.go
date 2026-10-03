@@ -104,7 +104,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 		}
 		add := func(manager string, specs []string) {
 			for _, spec := range specs {
-				name, _ := ParsePackageSpec(spec)
+				name := spec
 				key := manager + "\x00" + name
 				if e, ok := entries[key]; ok {
 					e.sources = appendUnique(e.sources, source)
@@ -157,7 +157,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 		if primaryManager == "" {
 			continue
 		}
-		name, _ := ParsePackageSpec(e.spec)
+		name := e.spec
 		targetKey := primaryManager + "\x00" + name
 		if existing, ok := entries[targetKey]; ok {
 			for _, s := range e.sources {
@@ -195,7 +195,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 
 		wantedMap := make(map[string]*pkgEntry)
 		for _, e := range pkgs {
-			name, _ := ParsePackageSpec(e.spec)
+			name := e.spec
 			wantedMap[name] = e
 		}
 
@@ -216,23 +216,16 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 		result := SyncResult{Manager: managerName, extrasComputed: o.extras}
 
 		for name, e := range wantedMap {
-			_, version := ParsePackageSpec(e.spec)
 			if inst, ok := queriedMap[name]; ok {
-				status := PackageStatus{
+				result.Statuses = append(result.Statuses, PackageStatus{
 					Name:      name,
-					Version:   version,
 					Status:    StatusInstalled,
 					Installed: inst.Version,
 					Sources:   e.sources,
-				}
-				if version != "" && inst.Version != "" && inst.Version != version {
-					status.Status = StatusVersionMismatch
-				}
-				result.Statuses = append(result.Statuses, status)
+				})
 			} else {
 				result.Statuses = append(result.Statuses, PackageStatus{
 					Name:    name,
-					Version: version,
 					Status:  StatusMissing,
 					Sources: e.sources,
 				})

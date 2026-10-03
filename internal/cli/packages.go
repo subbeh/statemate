@@ -130,8 +130,6 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 				indicator = color.RedString("+")
 			case packages.StatusExtra:
 				indicator = color.YellowString("-")
-			case packages.StatusVersionMismatch:
-				indicator = color.YellowString("~")
 			}
 
 			source := strings.Join(s.Sources, ", ")

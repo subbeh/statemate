@@ -400,3 +400,21 @@ func TestComputeSync_ReportsBrokenDirConfig(t *testing.T) {
 		t.Errorf("error should name the source, got: %v", err)
 	}
 }
+
+// Homebrew's versioned formulae (node@20, python@3.12, openssl@3) are distinct
+// packages whose names contain '@'. Splitting the name there checked for and
+// installed plain node instead, then reported a permanent version mismatch.
+func TestComputeSync_VersionedFormulaIsItsOwnPackage(t *testing.T) {
+	f := &fakeManager{installed: []Package{{Name: "node"}}}
+	withFakeManager(t, f)
+
+	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"node@20"}}}
+	results, err := ComputeSync(cfg, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if missing := results[0].Missing(); len(missing) != 1 || missing[0] != "node@20" {
+		t.Errorf("missing packages: got %v, want [node@20]", missing)
+	}
+}

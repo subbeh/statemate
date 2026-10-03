@@ -4,31 +4,6 @@ import (
 	"testing"
 )
 
-func TestParsePackageSpec(t *testing.T) {
-	tests := []struct {
-		spec        string
-		wantName    string
-		wantVersion string
-	}{
-		{"neovim", "neovim", ""},
-		{"node@20", "node", "20"},
-		{"python@3.11", "python", "3.11"},
-		{"foo@bar@baz", "foo", "bar@baz"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.spec, func(t *testing.T) {
-			name, version := ParsePackageSpec(tc.spec)
-			if name != tc.wantName {
-				t.Errorf("name = %q, want %q", name, tc.wantName)
-			}
-			if version != tc.wantVersion {
-				t.Errorf("version = %q, want %q", version, tc.wantVersion)
-			}
-		})
-	}
-}
-
 func TestUnqualifiedName(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{"jamf/internal-tap/hermes", "hermes"},
@@ -72,7 +47,6 @@ func TestStatusString(t *testing.T) {
 		{StatusInstalled, "installed"},
 		{StatusMissing, "missing"},
 		{StatusExtra, "extra"},
-		{StatusVersionMismatch, "version mismatch"},
 	}
 
 	for _, tc := range tests {
