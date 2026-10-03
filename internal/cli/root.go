@@ -9,8 +9,9 @@ import (
 var version = "dev"
 
 var rootCmd = &cobra.Command{
-	Use:   "mate",
-	Short: "Statemate - system configuration management",
+	Use:     "mate",
+	Version: version,
+	Short:   "Statemate - system configuration management",
 	Long: `Statemate manages your dotfiles, system configuration, and packages declaratively.
 
 Features:
@@ -34,6 +35,7 @@ var versionCmd = &cobra.Command{
 
 func SetVersion(v string) {
 	version = v
+	rootCmd.Version = v
 }
 
 func Execute() error {
@@ -48,6 +50,9 @@ func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in current directory)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
 	rootCmd.AddCommand(versionCmd)
+	// --version (which the Homebrew formula test runs) prints exactly what
+	// `mate version` does.
+	rootCmd.SetVersionTemplate("mate version {{.Version}}\n")
 
 	_ = rootCmd.RegisterFlagCompletionFunc("profile", completeProfiles)
 }
