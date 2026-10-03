@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/packages"
 )
 
 // hookRepo is a throwaway repository for running mate apply end to end. Every
@@ -205,5 +208,63 @@ hooks:
 				t.Error("#after script ran despite the broken hook")
 			}
 		})
+	}
+}
+
+// With nothing to read an answer from (cron, CI, `< /dev/null`), the install
+// prompt cannot be confirmed. Every manager with missing packages has to be
+// named in a warning, as skipped scripts are, instead of the first failed
+// prompt silently abandoning the rest.
+func TestInstallMissingPackages_WarnsWithoutTerminal(t *testing.T) {
+	stdinR, stdinW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = stdinW.Close() // immediate EOF, like </dev/null
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	origIn, origOut, origErr := os.Stdin, os.Stdout, os.Stderr
+	os.Stdin, os.Stdout, os.Stderr = stdinR, stdoutW, stderrW
+	t.Cleanup(func() { os.Stdin, os.Stdout, os.Stderr = origIn, origOut, origErr })
+
+	missing := func(names ...string) []packages.PackageStatus {
+		var s []packages.PackageStatus
+		for _, n := range names {
+			s = append(s, packages.PackageStatus{Name: n, Status: packages.StatusMissing, Sources: []string{"config"}})
+		}
+		return s
+	}
+	results := []packages.SyncResult{
+		{Manager: "brew", Statuses: missing("ripgrep", "fd")},
+		{Manager: "pacman", Statuses: missing("neovim")},
+	}
+
+	runErr := installMissingPackages(results, &config.Config{}, false, false, Scope{})
+
+	_ = stdoutW.Close()
+	_ = stderrW.Close()
+	_, _ = io.ReadAll(stdoutR)
+	stderr, _ := io.ReadAll(stderrR)
+	os.Stdin, os.Stdout, os.Stderr = origIn, origOut, origErr
+
+	if runErr != nil {
+		t.Fatalf("unexpected error: %v", runErr)
+	}
+	got := string(stderr)
+	for _, want := range []string{
+		"no terminal to confirm on",
+		"brew: ripgrep, fd",
+		"pacman: neovim",
+		"--force",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("warning missing %q:\n%s", want, got)
+		}
 	}
 }

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -396,6 +397,15 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 		return nil
 	}
 
+	return installMissingPackages(results, cfg, dryRun, autoConfirm, scope)
+}
+
+func installMissingPackages(results []packages.SyncResult, cfg *config.Config, dryRun bool, autoConfirm bool, scope Scope) error {
+	// Installs that could not be confirmed because no answer could be read,
+	// as under cron or CI. Once stdin has failed every later prompt would too,
+	// so the rest are recorded without asking and reported together.
+	var skippedNoTTY []string
+
 	for _, result := range results {
 		// Under --source, install only what that source declares. Filter the
 		// statuses (which carry the contributing source) rather than the names.
@@ -414,11 +424,20 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 			continue
 		}
 
+		if len(skippedNoTTY) > 0 {
+			skippedNoTTY = append(skippedNoTTY, result.Manager+": "+strings.Join(missing, ", "))
+			continue
+		}
+
 		fmt.Printf("\nMissing %s packages: %s\n", result.Manager, strings.Join(missing, ", "))
 		if !autoConfirm {
 			ok, err := util.Confirm("Install? [y/N] ", false)
-			if err != nil {
+			if errors.Is(err, util.ErrInterrupted) {
 				return nil
+			}
+			if err != nil {
+				skippedNoTTY = append(skippedNoTTY, result.Manager+": "+strings.Join(missing, ", "))
+				continue
 			}
 			if !ok {
 				continue
@@ -430,5 +449,19 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 		}
 	}
 
+	warnSkippedPackages(skippedNoTTY)
 	return nil
+}
+
+// warnSkippedPackages reports package installs that could not be confirmed
+// because there was no terminal to prompt on, matching warnSkippedScripts.
+func warnSkippedPackages(skipped []string) {
+	if len(skipped) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\nWarning: %d package install(s) skipped (no terminal to confirm on):\n", len(skipped))
+	for _, s := range skipped {
+		fmt.Fprintf(os.Stderr, "  - %s\n", s)
+	}
+	fmt.Fprintln(os.Stderr, "Use --force to install them.")
 }
