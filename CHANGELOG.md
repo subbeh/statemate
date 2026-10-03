@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-03
+
 ### Added
 - Hooks: run commands or scripts after files matching a pattern are deployed or removed, such as `sudo systemctl daemon-reload` when a `*.service` file changes or `tmux source-file` when `.config/tmux/**/*.conf` does. Declare them under `hooks:` in `mate.yaml`, in the local config (which can replace or disable a repository hook by name), or in a source's `.mate.yaml` (matching only that source's files). A triggered hook runs once per `mate apply`, however many of its files changed, after packages and before `#after` scripts, and is confirmed like a script. `mate clean`, `mate delete` and `mate rename` trigger hooks too. `run:` steps are templates with the triggering paths in `.Files`, and `script:` steps run a script by its `mate scripts list` name. `mate hooks list` and `mate hooks run <name>` list and run hooks, `mate status` and `mate apply --dry-run` show the hooks that would run, and `mate doctor` warns about a hook that matches no managed file. See [docs/hooks.md](docs/hooks.md)
 
