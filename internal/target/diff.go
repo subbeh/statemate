@@ -123,6 +123,12 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 		return nil, fmt.Errorf("%s: #import cannot be combined with #template -- importing would overwrite the template with its rendered output", entry.SourcePath)
 	}
 
+	// Without an identity the source can only be compared and deployed as
+	// ciphertext, which status would then report as up to date.
+	if entry.Attrs.Encrypted && (opts.Enc == nil || !opts.Enc.CanDecrypt()) {
+		return nil, errNoIdentity(entry)
+	}
+
 	var sourceHash string
 	var err error
 	if entry.Generated {
@@ -399,6 +405,10 @@ func IsBinaryFile(path string) bool {
 		}
 	}
 	return false
+}
+
+func errNoIdentity(entry *source.Entry) error {
+	return fmt.Errorf("%s is #encrypted but no age identity is configured", entry.SourcePath)
 }
 
 func getRenderedHash(entry *source.Entry, opts *ComputeOpts) (string, error) {

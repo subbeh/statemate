@@ -289,7 +289,11 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 			return err
 		}
 
-		if entry.Attrs.Encrypted && a.enc != nil {
+		if entry.Attrs.Encrypted {
+			// Never fall through to writing the ciphertext as the target.
+			if a.enc == nil {
+				return errNoIdentity(entry)
+			}
 			content, err = a.enc.Decrypt(content)
 			if err != nil {
 				return fmt.Errorf("decrypting: %w", err)
@@ -481,7 +485,12 @@ func (a *Applier) importFile(entry *source.Entry) error {
 		return fmt.Errorf("reading target: %w", err)
 	}
 
-	if entry.Attrs.Encrypted && a.enc != nil {
+	if entry.Attrs.Encrypted {
+		// Writing the target back unencrypted would put plaintext into the repo
+		// under an #encrypted name.
+		if a.enc == nil || !a.enc.CanEncrypt() {
+			return fmt.Errorf("%s is #encrypted but no age recipients are configured to re-encrypt it", entry.SourcePath)
+		}
 		content, err = a.enc.Encrypt(content)
 		if err != nil {
 			return fmt.Errorf("encrypting: %w", err)

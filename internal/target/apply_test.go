@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"filippo.io/age"
+
+	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 )
@@ -726,5 +729,38 @@ func TestApplier_VerboseListsWrittenFiles(t *testing.T) {
 		} else if out != "" {
 			t.Errorf("non-verbose apply printed per-file output:\n%s", out)
 		}
+	}
+}
+
+// Without an age identity an #encrypted file cannot be decrypted. Skipping the
+// decryption deployed the ciphertext as the target, and status then reported it
+// as up to date.
+func TestEncryptedWithoutIdentityErrors(t *testing.T) {
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recipientsOnly, err := encrypt.NewAgeEncryptor("", "", []string{identity.Recipient().String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, enc := range map[string]*encrypt.AgeEncryptor{"no age config": nil, "recipients only": recipientsOnly} {
+		t.Run(name, func(t *testing.T) {
+			f := newImportFixture(t, "token#encrypted", "-----BEGIN AGE ENCRYPTED FILE-----\n")
+
+			_, err := ComputeChanges(f.tree, f.db, ComputeOpts{Enc: enc})
+			if err == nil || !strings.Contains(err.Error(), "is #encrypted but no age identity is configured") {
+				t.Errorf("ComputeChanges: expected a missing-identity error, got %v", err)
+			}
+
+			_, err = NewApplier(f.db, nil, enc, false, false, 0).Apply(f.tree)
+			if err == nil || !strings.Contains(err.Error(), "is #encrypted but no age identity is configured") {
+				t.Errorf("Apply: expected a missing-identity error, got %v", err)
+			}
+			if _, err := os.Stat(f.targetPath); !os.IsNotExist(err) {
+				t.Errorf("ciphertext was deployed to %s", f.targetPath)
+			}
+		})
 	}
 }

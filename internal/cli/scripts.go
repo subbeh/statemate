@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/state"
@@ -108,7 +109,12 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			if profileName != "" {
 				tree = tree.FilterByProfile(profileChain)
 			}
-			if res, err := target.ComputeChanges(tree, db); err == nil {
+			// #encrypted files cannot be compared without the identity.
+			var enc *encrypt.AgeEncryptor
+			if cfg.Age != nil {
+				enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
+			}
+			if res, err := target.ComputeChanges(tree, db, target.ComputeOpts{Enc: enc}); err == nil {
 				changed = changedSources(res.Changes)
 			}
 		}
