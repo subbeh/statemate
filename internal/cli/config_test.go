@@ -96,3 +96,23 @@ func TestConfigSourceDir_OutputIsBarePath(t *testing.T) {
 		t.Errorf("output should be a bare path with no label or extra lines, got %q", got)
 	}
 }
+
+// Run from the repository with a relative --config, the printed path used to be
+// "." -- useless in command substitution from anywhere else.
+func TestConfigSourceDir_AbsoluteForRelativeConfig(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	repo := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repo, "mate.yaml"), []byte("sources: []\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
+	want, _ := os.Getwd()
+
+	got, err := runConfigSourceDirCapture(t, "mate.yaml")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

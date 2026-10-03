@@ -212,7 +212,7 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("hook %s requires profile %q", h.Name, h.Profile)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(env.cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

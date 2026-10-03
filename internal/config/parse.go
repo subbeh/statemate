@@ -22,6 +22,15 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	// The source dir is derived from this path and flows into every source and
+	// script path, template output (.SourceDir) and the state database. A config
+	// found in, or passed relative to, the current directory would otherwise
+	// make all of those relative -- "." for `mate config source-dir`.
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolving config path: %w", err)
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)

@@ -9,7 +9,6 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/util"
 )
 
@@ -113,7 +112,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Removed target: %s\n", util.ShortenPath(entry.TargetPath))
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

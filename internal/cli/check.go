@@ -9,7 +9,6 @@ import (
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/secrets"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -81,7 +80,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

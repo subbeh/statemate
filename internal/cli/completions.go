@@ -207,7 +207,7 @@ func completeOrphanedFiles(cmd *cobra.Command, args []string, toComplete string)
 		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}

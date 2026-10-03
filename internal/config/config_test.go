@@ -205,6 +205,34 @@ func TestFindConfigAutodetect(t *testing.T) {
 	}
 }
 
+// A config found in, or passed relative to, the current directory must still
+// give an absolute source dir: it ends up in template output (.SourceDir), in
+// every source and script path, and in the state database.
+func TestLoadRelativePathGivesAbsoluteSourceDir(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("STATEMATE_DIR", "")
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mate.yaml"), []byte("sources: [nvim]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	want, _ := os.Getwd()
+
+	for _, path := range []string{"", "mate.yaml"} {
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load(%q): %v", path, err)
+		}
+		if cfg.SourceDir() != want {
+			t.Errorf("Load(%q): SourceDir() = %q, want %q", path, cfg.SourceDir(), want)
+		}
+		if got := cfg.ResolveSourcePaths(cfg.Sources); got[0] != filepath.Join(want, "nvim") {
+			t.Errorf("Load(%q): source path = %q, want it under %q", path, got[0], want)
+		}
+	}
+}
+
 func TestTargetBaseExpansion(t *testing.T) {
 	dir := t.TempDir()
 

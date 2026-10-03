@@ -96,7 +96,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

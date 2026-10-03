@@ -112,7 +112,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("renaming file: %w", err)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

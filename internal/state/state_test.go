@@ -189,3 +189,66 @@ func TestHashBytes(t *testing.T) {
 		t.Error("different content should produce different hash")
 	}
 }
+
+// Before the source dir was made absolute, running from the repository root
+// recorded script and source paths relative to it. Those rows must be found
+// again under the absolute paths now used, or every once/onchange script would
+// run a second time.
+func TestResolveRelativePaths(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	for _, e := range []*FileEntry{
+		{SourcePath: "nvim/.config/nvim/init.lua", TargetPath: "/home/u/.config/nvim/init.lua", SourceHash: "a", AppliedHash: "a"},
+		{SourcePath: "/elsewhere/zsh/.zshrc", TargetPath: "/home/u/.zshrc", SourceHash: "b", AppliedHash: "b"},
+	} {
+		if err := db.SaveFile(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.RecordScriptRun(".matescripts/setup#once", "h1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RecordScriptRun("nvim/.matescripts/plugins#onchange", "h2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RecordScriptRun("/elsewhere/.matescripts/other#once", "h3"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.ResolveRelativePaths("/repo"); err != nil {
+		t.Fatalf("ResolveRelativePaths: %v", err)
+	}
+
+	for path, hash := range map[string]string{
+		"/repo/.matescripts/setup#once":            "h1",
+		"/repo/nvim/.matescripts/plugins#onchange": "h2",
+		"/elsewhere/.matescripts/other#once":       "h3",
+	} {
+		ok, err := db.HasScriptRunWithHash(path, hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			t.Errorf("script run for %s not found after migration", path)
+		}
+	}
+	if ok, _ := db.HasScriptRun(".matescripts/setup#once"); ok {
+		t.Error("relative script path still present after migration")
+	}
+
+	fe, err := db.GetFile("/home/u/.config/nvim/init.lua")
+	if err != nil || fe == nil {
+		t.Fatalf("GetFile: %v %v", fe, err)
+	}
+	if fe.SourcePath != "/repo/nvim/.config/nvim/init.lua" {
+		t.Errorf("source path = %q, want it resolved against /repo", fe.SourcePath)
+	}
+	fe, _ = db.GetFile("/home/u/.zshrc")
+	if fe == nil || fe.SourcePath != "/elsewhere/zsh/.zshrc" {
+		t.Errorf("absolute source path changed: %+v", fe)
+	}
+}

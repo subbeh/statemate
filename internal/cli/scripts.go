@@ -92,7 +92,7 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
@@ -343,7 +343,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("script not found: %s", scriptArg)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

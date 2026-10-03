@@ -14,7 +14,6 @@ import (
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -158,7 +157,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 	allScripts := scopedScripts(discovered, scope)
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

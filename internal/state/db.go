@@ -66,6 +66,60 @@ func (d *DB) Close() error {
 	return d.db.Close()
 }
 
+// ResolveRelativePaths rewrites script and source paths that were recorded
+// relative, joining them onto sourceDir.
+//
+// Until the source dir was made absolute at config load, running mate from the
+// repository root (the config found in, or passed as, a relative path) recorded
+// paths such as ".matescripts/setup#once". Scripts are looked up by path, so
+// without this every once and onchange script would run again after upgrading.
+// Such paths were relative to the working directory of that run, which in the
+// case that produced them -- mate run from the repository root -- is the source
+// dir. (A relative --config pointing elsewhere, such as ../dotfiles/mate.yaml,
+// cannot be recovered; those scripts run once more.) Target paths, the key for
+// managed files, were always absolute and are not touched.
+func (d *DB) ResolveRelativePaths(sourceDir string) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, col := range []struct{ table, column string }{
+		{"script_runs", "script_path"},
+		{"managed_files", "source_path"},
+	} {
+		rows, err := tx.Query(fmt.Sprintf(`SELECT DISTINCT %s FROM %s WHERE %s NOT LIKE '/%%'`, col.column, col.table, col.column))
+		if err != nil {
+			return err
+		}
+		var paths []string
+		for rows.Next() {
+			var p string
+			if err := rows.Scan(&p); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			paths = append(paths, p)
+		}
+		_ = rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		for _, p := range paths {
+			if p == "" || filepath.IsAbs(p) {
+				continue
+			}
+			if _, err := tx.Exec(fmt.Sprintf(`UPDATE %s SET %s = ? WHERE %s = ?`, col.table, col.column, col.column), filepath.Join(sourceDir, p), p); err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
 func defaultPath() (string, error) {
 	dataDir := os.Getenv("XDG_DATA_HOME")
 	if dataDir == "" {
