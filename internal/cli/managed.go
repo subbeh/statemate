@@ -61,6 +61,12 @@ func runManaged(cmd *cobra.Command, args []string) error {
 	allSources := profile.AllSources(cfg)
 	allSourcePaths := cfg.ResolveSourcePaths(allSources)
 
+	// Without a profile apply deploys every #profile: file, as here.
+	var profileChain []string
+	if profileName != "" {
+		profileChain = profile.InheritanceChain(cfg, profileName)
+	}
+
 	activeSources := profile.ResolveSources(cfg, profileName)
 	activeSourceSet := make(map[string]bool)
 	for _, s := range activeSources {
@@ -90,7 +96,7 @@ func runManaged(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		active := isActiveForProfile(e, profileName, activeSourceSet, cfg.SourceDir())
+		active := isActiveForProfile(e, profileChain, activeSourceSet, cfg.SourceDir())
 		destPath := util.ShortenPath(e.TargetPath)
 		attrs := formatAttrs(e.Attrs)
 
@@ -166,8 +172,12 @@ func resolveFilterPath(filter string) (string, bool) {
 	return resolveSymlinks(abs), true
 }
 
-func isActiveForProfile(e *source.Entry, profileName string, activeSources map[string]bool, sourceDir string) bool {
-	if e.Attrs.Profile != "" && e.Attrs.Profile != profileName {
+// isActiveForProfile reports whether apply would deploy the entry. A #profile:
+// file is deployed for any profile in the inheritance chain, not only the
+// active one -- the same rule as source.Tree.FilterByProfile. A nil chain means
+// no profile is active, in which case apply does not filter by profile at all.
+func isActiveForProfile(e *source.Entry, profileChain []string, activeSources map[string]bool, sourceDir string) bool {
+	if e.Attrs.Profile != "" && profileChain != nil && !matchesChain(e.Attrs.Profile, profileChain) {
 		return false
 	}
 

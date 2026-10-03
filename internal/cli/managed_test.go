@@ -159,3 +159,33 @@ func TestFormatAttrsListsEveryAttribute(t *testing.T) {
 		}
 	}
 }
+
+// A file for a profile the active one extends is deployed, so it is active.
+// Comparing against the active profile alone marked every #profile:base file
+// inactive under a profile with extends: base.
+func TestIsActiveForProfileFollowsInheritance(t *testing.T) {
+	sourceDir := "/repo"
+	active := map[string]bool{"app": true}
+	chain := []string{"work", "base"}
+
+	for _, tc := range []struct {
+		profile string
+		want    bool
+	}{
+		{"", true},
+		{"work", true},
+		{"base", true},
+		{"personal", false},
+	} {
+		e := &source.Entry{SourcePath: "/repo/app/file", Attrs: source.Attrs{Profile: tc.profile}}
+		if got := isActiveForProfile(e, chain, active, sourceDir); got != tc.want {
+			t.Errorf("#profile:%s under %v: active = %v, want %v", tc.profile, chain, got, tc.want)
+		}
+	}
+
+	// With no profile, apply deploys #profile: files unfiltered.
+	e := &source.Entry{SourcePath: "/repo/app/file", Attrs: source.Attrs{Profile: "work"}}
+	if !isActiveForProfile(e, nil, active, sourceDir) {
+		t.Error("#profile:work with no active profile should be active, as apply deploys it")
+	}
+}
