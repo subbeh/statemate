@@ -28,10 +28,15 @@ var packagesStatusCmd = &cobra.Command{
 	Long: `Show package sync status across configured package managers.
 
 Packages can be defined in:
-  - mate.yaml (global packages)
-  - mate.yaml profiles.<name>.packages (profile-specific)
-  - <source>/.mate.yaml packages (source-level)
-  - Files referenced via 'include' field
+  - mate.yaml packages (global packages)
+  - mate.yaml profiles.<name>.packages, for the active profile and every
+    profile it extends
+  - <source>/.mate.yaml packages, for each active source
+  - Files listed under 'include', either top-level (global) or in a
+    profile's 'include' (part of that profile)
+
+The SOURCE column shows where each package is declared: config, profile:<name>,
+or the source directory.
 
 Use --all to show extra packages not in config. Detecting extras means listing
 every installed package, which is noticeably slower, so it is only done when
@@ -45,9 +50,15 @@ exists but publishes none.`,
 
 var packagesApplyCmd = &cobra.Command{
 	Use:   "apply",
-	Short: "Sync packages",
-	Long:  "Install missing packages. Use --prune to also remove packages not in config.",
-	RunE:  runPackagesApply,
+	Short: "Install missing packages",
+	Long: `Install packages that are declared but not installed.
+
+Missing packages are listed per package manager, and each manager's install is
+confirmed separately with [y/N]. Use -y/--yes to confirm all of them.
+
+Use --prune to also remove installed packages that are not in config. Removals
+are confirmed the same way, and -y/--yes confirms them too.`,
+	RunE: runPackagesApply,
 }
 
 var (

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Documentation is now published as a searchable website at https://subbeh.github.io/statemate/, built from the same `docs/` guides and command reference
 
+### Changed
+- `mate packages apply --help` now describes what the command does: it installs missing packages, confirming each package manager separately unless `-y`/`--yes` is given, and only removes anything with `--prune`. Its summary used to read "Sync packages", which suggested it would also remove undeclared packages. `mate packages status --help` now lists every place packages are read from, including profiles reached through `extends` and a profile's own `include` files
+
 ### Fixed
 - The command reference in `docs/commands/` now shows the examples, prompt tables and YAML snippets from each command's help as code blocks. They used to collapse into a single run-on paragraph, and placeholders such as `<path>` and `<source>/<name>` disappeared from the text
 - Hooks now work in a scoped apply. `mate apply <path>` failed with `invalid hooks: hook "X": step 1: script "hello.sh" not found` as soon as any enabled hook had a `script:` step — after the files had already been written, so the run exited 1 with its work half done — and never loaded the hooks in a source's `.mate.yaml` at all. `mate apply --source <name>` failed the same way for a hook whose script lives in the repository root or in another source. Hooks are now loaded from every active source, and a `script:` step can name any script, whatever the scope; only the files the scoped run writes decide which hooks run. Scoping still keeps other sources' and repo-root scripts from running as `#before`/`#after` scripts
