@@ -1,6 +1,7 @@
 package packages
 
 import (
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -19,8 +20,9 @@ type SyncResult struct {
 }
 
 type syncOptions struct {
-	verbose bool
-	extras  bool
+	verbose  bool
+	extras   bool
+	renderer config.TemplateRenderer
 }
 
 type SyncOption func(*syncOptions)
@@ -37,6 +39,13 @@ func WithVerbose(v bool) SyncOption {
 // of which reports extras.
 func WithExtras(v bool) SyncOption {
 	return func(o *syncOptions) { o.extras = v }
+}
+
+// WithDirConfigRenderer renders each source's .mate.yaml as a template before
+// reading its packages, as the scanner does for the rest of that file. Without
+// it the file is read raw, so a templated package list is taken literally.
+func WithDirConfigRenderer(r config.TemplateRenderer) SyncOption {
+	return func(o *syncOptions) { o.renderer = r }
 }
 
 func (r *SyncResult) Missing() []string {
@@ -128,7 +137,12 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 
 	// Source directory packages
 	for _, source := range sources {
-		dirCfg, _ := config.LoadDirConfig(source)
+		// A .mate.yaml that fails to render or parse is reported rather than
+		// skipped, which would silently drop every package the source declares.
+		dirCfg, err := config.LoadDirConfigRaw(source, o.renderer)
+		if err != nil {
+			return nil, fmt.Errorf("source %s: %w", filepath.Base(source), err)
+		}
 		if dirCfg != nil && dirCfg.Packages != nil {
 			addPkgs(dirCfg.Packages, filepath.Base(source))
 		}

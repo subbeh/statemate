@@ -1,9 +1,13 @@
 package packages
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/template"
 )
 
 // fakeManager records whether the expensive full-inventory call was made.
@@ -330,5 +334,69 @@ func TestComputeSync_InheritsPackagesAlongExtendsChain(t *testing.T) {
 	}
 	if _, ok := got["unrelated"]; ok {
 		t.Error("packages of a profile outside the chain must not be included")
+	}
+}
+
+// writeDirConfig creates a source directory holding the given .mate.yaml.
+func writeDirConfig(t *testing.T, content string) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "tools")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".mate.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// A source's .mate.yaml is a template wherever else it is read, so its packages
+// must be rendered the same way. Read raw, a range loop yielded no packages and
+// an interpolated name was taken literally as "{{ .Vars.editor }}".
+func TestComputeSync_RendersTemplatedDirConfig(t *testing.T) {
+	withFakeManager(t, &fakeManager{})
+
+	source := writeDirConfig(t, `packages:
+  brew:
+    - "{{ .Vars.editor }}"
+{{- range .Vars.extras }}
+    - {{ . }}
+{{- end }}
+`)
+
+	cfg := &config.Config{Variables: map[string]any{
+		"editor": "neovim",
+		"extras": []any{"ripgrep", "fd"},
+	}}
+	tmplCtx, err := template.NewContext(cfg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	render := func(data []byte) ([]byte, error) { return template.Render(data, tmplCtx) }
+
+	results, err := ComputeSync(cfg, "", []string{source}, WithDirConfigRenderer(render))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := results[0].Missing()
+	if strings.Join(got, ",") != "fd,neovim,ripgrep" {
+		t.Errorf("missing = %v, want [fd neovim ripgrep]", got)
+	}
+}
+
+// A .mate.yaml that cannot be loaded is an error, not a source with no packages.
+// Ignoring it made every package of that source vanish without a word.
+func TestComputeSync_ReportsBrokenDirConfig(t *testing.T) {
+	withFakeManager(t, &fakeManager{})
+
+	source := writeDirConfig(t, "packages:\n  brew: [git\n")
+
+	_, err := ComputeSync(syncConfig(), "", []string{source})
+	if err == nil {
+		t.Fatal("expected an error for an unparseable .mate.yaml")
+	}
+	if !strings.Contains(err.Error(), "tools") {
+		t.Errorf("error should name the source, got: %v", err)
 	}
 }

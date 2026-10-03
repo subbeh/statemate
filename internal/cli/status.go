@@ -172,17 +172,21 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Missing packages are informational only -- a package manager being
-	// unavailable should never fail status.
+	// unavailable should never fail status. A failure is still reported, since
+	// a broken .mate.yaml would otherwise make the packages section vanish.
 	type missingPkgs struct {
 		manager  string
 		packages []string
 	}
 	var pendingPackages []missingPkgs
-	if syncResults, err := packages.ComputeSync(cfg, profileName, sourcePaths); err == nil {
-		for _, r := range syncResults {
-			if missing := r.Missing(); len(missing) > 0 {
-				pendingPackages = append(pendingPackages, missingPkgs{manager: r.Manager, packages: missing})
-			}
+	syncResults, err := packages.ComputeSync(cfg, profileName, sourcePaths,
+		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: not checking packages: %v\n", err)
+	}
+	for _, r := range syncResults {
+		if missing := r.Missing(); len(missing) > 0 {
+			pendingPackages = append(pendingPackages, missingPkgs{manager: r.Manager, packages: missing})
 		}
 	}
 

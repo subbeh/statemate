@@ -81,9 +81,15 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 		profileName = profile.Detect(cfg)
 	}
 
+	tmplCtx, err := newTemplateContext(cfg, profileName)
+	if err != nil {
+		return fmt.Errorf("creating template context: %w", err)
+	}
+
 	sources := profile.ResolveSources(cfg, profileName)
 	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),
-		packages.WithVerbose(packagesVerbose), packages.WithExtras(packagesShowAll))
+		packages.WithVerbose(packagesVerbose), packages.WithExtras(packagesShowAll),
+		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
 	if err != nil {
 		return fmt.Errorf("computing sync: %w", err)
 	}
@@ -184,9 +190,14 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 		profileName = profile.Detect(cfg)
 	}
 
+	tmplCtx, err := newTemplateContext(cfg, profileName)
+	if err != nil {
+		return fmt.Errorf("creating template context: %w", err)
+	}
+
 	sources := profile.ResolveSources(cfg, profileName)
 	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),
-		packages.WithExtras(packagesPrune))
+		packages.WithExtras(packagesPrune), packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
 	if err != nil {
 		return fmt.Errorf("computing sync: %w", err)
 	}

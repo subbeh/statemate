@@ -253,7 +253,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := promptMissingPackages(cfg, profileName, sourcePaths, dryRun, force, scope); err != nil {
+	if err := promptMissingPackages(cfg, profileName, sourcePaths, tmplCtx, dryRun, force, scope); err != nil {
 		return err
 	}
 
@@ -381,14 +381,18 @@ func warnSkippedScripts(res *scripts.ExecuteResult) {
 	fmt.Fprintln(os.Stderr, "Use --force to run them, or --no-scripts to silence this warning.")
 }
 
-func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, dryRun bool, autoConfirm bool, scope Scope) error {
+func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, tmplCtx *template.Context, dryRun bool, autoConfirm bool, scope Scope) error {
 	// A file-scoped run touches files only.
 	if scope.Path != "" {
 		return nil
 	}
 
-	results, err := packages.ComputeSync(cfg, profileName, sourcePaths)
+	// Packages never fail an apply whose files are already written, but a
+	// broken .mate.yaml must not make them disappear without a word.
+	results, err := packages.ComputeSync(cfg, profileName, sourcePaths,
+		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "\nWarning: skipping packages: %v\n", err)
 		return nil
 	}
 
