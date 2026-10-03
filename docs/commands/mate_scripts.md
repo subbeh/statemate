@@ -13,7 +13,7 @@ A script can describe itself with a comment in its first 10 lines:
 # Description: Bootstrap the development environment
 ```
 
-The description is shown by 'scripts list', 'mate status', and the
+The description is shown by 'mate scripts list', 'mate status', and the
 confirmation prompt during apply. Matching is case-insensitive.
 
 An '#onchange' script runs when its own source has pending changes -- the files

@@ -6,6 +6,9 @@ List all managed files
 
 List all files in source directories that are managed by mate.
 
+Files from every source are listed, including those only some profiles use;
+ACTIVE marks the ones the current profile deploys.
+
 With no argument, lists every managed file. With an argument, filters the list:
 
 - A path to an existing file (absolute, or relative to the current directory)
@@ -13,17 +16,17 @@ With no argument, lists every managed file. With an argument, filters the list:
 - Anything else is treated as a name fragment, so 'mate managed nvim' lists
   every file in the nvim source.
 
-Examples:
-
-```
-mate managed                    # all managed files
-mate managed ~/.ssh/config      # just that file
-mate managed config             # that file if it exists here, else all matches
-mate managed nvim               # everything in the nvim source
-```
-
 ```
 mate managed [path] [flags]
+```
+
+## Examples
+
+```
+  mate managed                    # all managed files
+  mate managed ~/.ssh/config      # just that file
+  mate managed config             # that file if it exists here, else all matches
+  mate managed nvim               # everything in the nvim source
 ```
 
 ## Options

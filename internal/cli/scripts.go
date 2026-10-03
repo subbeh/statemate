@@ -30,7 +30,7 @@ A script can describe itself with a comment in its first 10 lines:
   #!/usr/bin/env bash
   # Description: Bootstrap the development environment
 
-The description is shown by 'scripts list', 'mate status', and the
+The description is shown by 'mate scripts list', 'mate status', and the
 confirmation prompt during apply. Matching is case-insensitive.
 
 An '#onchange' script runs when its own source has pending changes -- the files
@@ -48,9 +48,13 @@ var scriptsListCmd = &cobra.Command{
 }
 
 var scriptsRunCmd = &cobra.Command{
-	Use:               "run <script>",
-	Short:             "Run a script",
-	Long:              "Manually run a script by name or path",
+	Use:   "run <script>",
+	Short: "Run a script",
+	Long: `Run a script now, by the name 'mate scripts list' shows or by path, whatever
+its frequency, timing or #profile:.
+
+There is no confirmation prompt. The run is recorded, so running a #once
+script this way marks it done.`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runScript,
 	ValidArgsFunction: completeScripts,

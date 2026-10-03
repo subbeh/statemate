@@ -2,6 +2,10 @@
 
 Show secrets that need fetching
 
+## Synopsis
+
+List the secret references the cache does not hold yet. 'mate apply' fetches these before deploying.
+
 ```
 mate secrets status [flags]
 ```

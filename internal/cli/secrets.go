@@ -28,20 +28,32 @@ var secretsCmd = &cobra.Command{
 var secretsFetchCmd = &cobra.Command{
 	Use:   "fetch [pattern]",
 	Short: "Fetch secrets from providers",
-	Long:  "Scan templates for secret references, fetch from providers, and update the encrypted cache. Optionally filter by item pattern (e.g., 'github*')",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runSecretsFetch,
+	Long: `Find every secret reference in templates, fetch the values from Bitwarden, and
+store them in the encrypted cache.
+
+Every reference is fetched again, not only missing ones. With a pattern, only
+the item with exactly that name is fetched, or every item whose name starts
+with a prefix ending in '*'.
+
+Needs the bw CLI, logged in, and an age identity to encrypt the cache with. A
+locked vault is unlocked for you.`,
+	Example: `  mate secrets fetch
+  mate secrets fetch 'github*'`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runSecretsFetch,
 }
 
 var secretsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List secrets referenced in templates and cache status",
+	Long:  "List every secret reference found in templates, with whether the cache holds it.",
 	RunE:  runSecretsList,
 }
 
 var secretsStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show secrets that need fetching",
+	Long:  "List the secret references the cache does not hold yet. 'mate apply' fetches these before deploying.",
 	RunE:  runSecretsStatus,
 }
 

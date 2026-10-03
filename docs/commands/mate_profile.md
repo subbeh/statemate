@@ -4,7 +4,10 @@ Show active profile
 
 ## Synopsis
 
-Show which profile will be used and how it was determined
+Show the active profile, how it was chosen, and the sources it resolves to.
+
+The profile is chosen by the first of: --profile, 'profile:' in the local
+config or mate.yaml, $STATEMATE_PROFILE, and automatic detection.
 
 ```
 mate profile [flags]

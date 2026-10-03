@@ -14,8 +14,13 @@ import (
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check configuration and dependencies",
-	Long:  "Verify that statemate is properly configured and dependencies are available",
-	RunE:  runDoctor,
+	Long: `Check that the configuration loads and validates, that every source directory
+exists, that every active hook matches some managed file, that the age identity
+and recipients work, and which package managers are available.
+
+Exits 1 if any check reports an error. Run it first when something behaves
+unexpectedly.`,
+	RunE: runDoctor,
 }
 
 func init() {

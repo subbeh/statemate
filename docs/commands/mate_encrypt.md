@@ -21,15 +21,15 @@ age:
     - age1...
 ```
 
-Examples:
-
-```
-mate encrypt nvim/secrets.yaml
-mate encrypt .matedata/secrets.yaml
-```
-
 ```
 mate encrypt <source> [flags]
+```
+
+## Examples
+
+```
+  mate encrypt nvim/secrets.yaml
+  mate encrypt .matedata/secrets.yaml
 ```
 
 ## Options

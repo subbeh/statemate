@@ -2,6 +2,10 @@
 
 List secrets referenced in templates and cache status
 
+## Synopsis
+
+List every secret reference found in templates, with whether the cache holds it.
+
 ```
 mate secrets list [flags]
 ```

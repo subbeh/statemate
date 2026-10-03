@@ -30,10 +30,8 @@ The age recipients must be configured in mate.yaml:
 
   age:
     recipients:
-      - age1...
-
-Examples:
-  mate encrypt nvim/secrets.yaml
+      - age1...`,
+	Example: `  mate encrypt nvim/secrets.yaml
   mate encrypt .matedata/secrets.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runEncrypt,

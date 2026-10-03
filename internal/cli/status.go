@@ -25,11 +25,12 @@ import (
 
 var statusCmd = &cobra.Command{
 	Use:   "status [path]",
-	Short: "Show files that would change on apply",
+	Short: "Show what apply would change",
 	Long: `Show pending changes that would be made on apply.
 
 Reports files to be created, modified, or in conflict, plus orphaned files,
-missing packages, pending scripts, and secrets needing refresh.
+missing packages, pending scripts, the hooks the changes would trigger, and
+secrets that need fetching.
 
 An empty directory in a source -- one with no files under it -- is reported until
 it exists on the target. Directories that hold files are not listed separately;
@@ -39,7 +40,12 @@ Markers: '+' new, '~' modified, '!' conflict, '<' will be imported into the
 source (an '#import' file whose target changed).
 
 The positional argument filters by file or path; use --source to limit the
-report to a single source.`,
+file report to a single source. Packages, scripts and secrets are always
+reported in full.
+
+--short prints one compact line for status bars, and nothing when there is
+nothing to do. It covers files, orphans, scripts and secrets, not packages or
+hooks.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runStatus,
 	ValidArgsFunction: completeManagedFiles,

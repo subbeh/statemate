@@ -24,16 +24,18 @@ The editor is determined by (in order):
 3. $EDITOR environment variable
 4. vi (fallback)
 
-Examples:
-
-```
-mate edit nvim/init.lua
-mate edit .matedata/secrets.yaml#encrypted
-mate edit ~/.config/nvim/init.lua
-```
+The editor command may include arguments, such as 'code --wait'.
 
 ```
 mate edit <path> [flags]
+```
+
+## Examples
+
+```
+  mate edit ~/.config/nvim/init.lua      # opens the source in the repository
+  mate edit nvim/.config/nvim/init.lua
+  mate edit ~/.ssh/config                # decrypts, edits, re-encrypts
 ```
 
 ## Options

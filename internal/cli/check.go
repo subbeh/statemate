@@ -17,8 +17,14 @@ import (
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check if configuration is in sync",
-	Long:  "Exit 0 if in sync, 1 if changes pending. Useful for CI.",
-	RunE:  runCheck,
+	Long: `Exit 0 if every managed file is in sync, and 1 if any would change.
+
+Only files count: pending changes and conflicts. Orphans, missing packages,
+pending scripts and secrets do not. Hooks are validated as well, so a broken
+hook fails the check, and so does any other error, such as a config that does
+not load. Use -q to print nothing and rely on the exit code.`,
+	Example: `  mate check -q || echo "dotfiles out of sync"`,
+	RunE:    runCheck,
 }
 
 var checkQuiet bool

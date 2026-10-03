@@ -11,13 +11,13 @@ import (
 
 var catCmd = &cobra.Command{
 	Use:   "cat <file>",
-	Short: "Display file contents",
-	Long: `Display file contents, decrypting if necessary.
+	Short: "Print a file, decrypting it if needed",
+	Long: `Print a file, decrypting it first if it is age-encrypted.
 
-Works like cat but automatically decrypts age-encrypted files.
-
-Example:
-  mate cat ~/.statemate/files/secrets.age
+Works like cat, but an age-encrypted file is decrypted with the configured
+identity. The path is used as given: absolute, starting with ~, or relative to
+the current directory.`,
+	Example: `  mate cat ssh/.ssh/config#encrypted
   mate cat ~/.config/app/config.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runCat,

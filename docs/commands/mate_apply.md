@@ -41,6 +41,13 @@ Hooks run for the files this apply wrote, after packages and before #after
 scripts, and are confirmed the same way (without [s]kip). A failed hook does
 not stop the others, but the apply exits non-zero. See 'mate hooks'.
 
+Missing secrets are fetched before anything is written, and missing packages
+are offered for install after the files are written.
+
+A target changed outside mate is a conflict, and is confirmed on its own:
+[o]verwrite, [i]mport into the source, [s]kip, [d]iff, or [a]bort. --force
+overwrites without asking; --dry-run still asks.
+
 A file marked '#import' is not prompted about when only its target changed: the
 target is treated as authoritative and copied back into the source. Use it for
 files an application rewrites, such as ~/.claude/settings.json. If the source
@@ -54,11 +61,11 @@ mate apply [path] [flags]
 
 ```
       --dry-run         show what would be done without making changes
-      --force           overwrite modified targets and auto-confirm scripts
+      --force           overwrite conflicting targets and auto-confirm scripts, hooks and package installs
   -h, --help            help for apply
       --no-scripts      skip all scripts
   -s, --source string   limit to a single source
-  -V, --verbose count   increase verbosity (can be repeated)
+  -V, --verbose count   list every file written, and with --dry-run the files and steps of each hook
 ```
 
 ## Options inherited from parent commands

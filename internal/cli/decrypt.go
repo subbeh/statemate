@@ -31,10 +31,8 @@ falling back to the source directory. The #encrypted suffix is optional.
 The age identity must be configured in mate.yaml:
 
   age:
-    identity: "~/.config/statemate/key.txt"
-
-Examples:
-  mate decrypt nvim/secrets.yaml#encrypted
+    identity: "~/.config/statemate/key.txt"`,
+	Example: `  mate decrypt nvim/secrets.yaml#encrypted
   mate decrypt .matedata/secrets.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runDecrypt,

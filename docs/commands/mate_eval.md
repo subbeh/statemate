@@ -4,20 +4,24 @@ Render a template file
 
 ## Synopsis
 
-Render a template file and output the result to stdout.
+Render a file as a template and print the result.
 
-Useful for debugging templates or previewing output before applying.
-If the file is encrypted, it will be decrypted first (requires age identity).
+Useful for debugging a template, or previewing what apply would deploy. Any
+file is rendered, whether or not it is marked #template. An encrypted file is
+decrypted first, which needs the age identity.
 
-Example:
-
-```
-mate eval ~/.statemate/files/config.tmpl
-mate eval --profile work ~/.statemate/files/config.tmpl
-```
+The path is used as given: absolute, starting with ~, or relative to the
+current directory. Use --profile to render it as another profile would.
 
 ```
 mate eval <file> [flags]
+```
+
+## Examples
+
+```
+  mate eval git/.config/git/config#template
+  mate eval --profile work git/.config/git/config#template
 ```
 
 ## Options

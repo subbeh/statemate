@@ -22,15 +22,15 @@ age:
   identity: "~/.config/statemate/key.txt"
 ```
 
-Examples:
-
-```
-mate decrypt nvim/secrets.yaml#encrypted
-mate decrypt .matedata/secrets.yaml
-```
-
 ```
 mate decrypt <source> [flags]
+```
+
+## Examples
+
+```
+  mate decrypt nvim/secrets.yaml#encrypted
+  mate decrypt .matedata/secrets.yaml
 ```
 
 ## Options

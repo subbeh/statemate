@@ -20,15 +20,22 @@ var addCmd = &cobra.Command{
 	Short: "Add a file to source",
 	Long: `Add an existing file to the source directory.
 
-The file is copied from its current location to the appropriate source directory,
-following stow-style conventions. The original file remains in place.
+The file is copied into a source, keeping its path relative to the target base
+(stow-style), and the original stays in place. Directories cannot be added;
+add the files in them one by one.
+
+The source is the one named with --source, else 'default_source' from the
+config, else one you pick from a list of the configured sources. The source must
+already be listed under 'sources:' and exist as a directory.
+
+A file outside your home directory, such as one under /etc, needs a source that
+maps that location (see 'targets:' in a source's .mate.yaml); for a source
+without a .mate.yaml, mate offers to create one.
 
 --for-profile marks the file #profile:<name>, so it is only deployed for that
 profile. The global --profile only selects the active profile, which decides the
-sources you can add to, as it does for every other command.
-
-Examples:
-  mate add ~/.config/nvim/init.lua
+sources you can add to, as it does for every other command.`,
+	Example: `  mate add ~/.config/nvim/init.lua
   mate add --for-profile work ~/.gitconfig
   mate add --encrypt ~/.ssh/config`,
 	Args: cobra.ExactArgs(1),

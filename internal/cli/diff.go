@@ -24,8 +24,9 @@ var diffCmd = &cobra.Command{
 The positional argument filters by file or path; use --source to limit the diff
 to a single source.
 
-Use --tool to specify an external diff tool (e.g., delta, difft, vimdiff).
-This can also be set in config with 'diff_tool'.`,
+Use --tool to specify an external diff tool (e.g., delta, difft, vimdiff), or
+set 'diff_tool' in config. The tool is run as '<tool> <old> <new>' and its
+output is captured, so it may include arguments but cannot be interactive.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runDiff,
 	ValidArgsFunction: completeManagedFiles,

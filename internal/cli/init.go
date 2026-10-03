@@ -15,8 +15,20 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new statemate repository",
-	Long:  "Create a minimal mate.yaml or mate.toml configuration file with comments",
-	RunE:  runInit,
+	Long: `Set up the current directory as a statemate repository.
+
+In a directory without a config, mate init writes a commented mate.yaml (or
+mate.toml), writes a README.md with setup instructions unless one exists, and
+runs git init unless the directory is already inside a git repository. It then
+offers to register the directory.
+
+In a directory that already has a mate.yaml, mate.yml or mate.toml, such as a
+fresh clone on a new machine, it only registers the directory.
+
+Registering writes source_dir to the local config
+(~/.config/statemate/mate.yaml), so mate works from any directory. Other
+settings in that file are kept.`,
+	RunE: runInit,
 }
 
 var initFormat string
@@ -203,8 +215,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\nNext steps:")
-	fmt.Printf("  1. Add source directories to %s (e.g., sources: [nvim, zsh])\n", configPath)
-	fmt.Println("  2. Add files: mate add ~/.config/nvim/init.lua")
+	fmt.Printf("  1. Create a source directory and list it in %s:\n", configPath)
+	fmt.Println("       mkdir zsh      and set      sources: [zsh]")
+	fmt.Println("  2. Add files: mate add ~/.zshrc")
 	fmt.Println("  3. Check status: mate status")
 	fmt.Println("  4. Apply changes: mate apply")
 

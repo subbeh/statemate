@@ -4,7 +4,11 @@ Run a script
 
 ## Synopsis
 
-Manually run a script by name or path
+Run a script now, by the name 'mate scripts list' shows or by path, whatever
+its frequency, timing or #profile:.
+
+There is no confirmation prompt. The run is recorded, so running a #once
+script this way marks it done.
 
 ```
 mate scripts run <script> [flags]

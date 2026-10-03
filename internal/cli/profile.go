@@ -13,8 +13,11 @@ import (
 var profileCmd = &cobra.Command{
 	Use:   "profile",
 	Short: "Show active profile",
-	Long:  "Show which profile will be used and how it was determined",
-	RunE:  runProfile,
+	Long: `Show the active profile, how it was chosen, and the sources it resolves to.
+
+The profile is chosen by the first of: --profile, 'profile:' in the local
+config or mate.yaml, $STATEMATE_PROFILE, and automatic detection.`,
+	RunE: runProfile,
 }
 
 func init() {

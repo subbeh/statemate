@@ -1,22 +1,24 @@
 # mate cat
 
-Display file contents
+Print a file, decrypting it if needed
 
 ## Synopsis
 
-Display file contents, decrypting if necessary.
+Print a file, decrypting it first if it is age-encrypted.
 
-Works like cat but automatically decrypts age-encrypted files.
-
-Example:
-
-```
-mate cat ~/.statemate/files/secrets.age
-mate cat ~/.config/app/config.yaml
-```
+Works like cat, but an age-encrypted file is decrypted with the configured
+identity. The path is used as given: absolute, starting with ~, or relative to
+the current directory.
 
 ```
 mate cat <file> [flags]
+```
+
+## Examples
+
+```
+  mate cat ssh/.ssh/config#encrypted
+  mate cat ~/.config/app/config.yaml
 ```
 
 ## Options

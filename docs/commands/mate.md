@@ -29,7 +29,7 @@ Use "mate [command] --help" for more information about a command.
 
 * [mate add](mate_add.md)	 - Add a file to source
 * [mate apply](mate_apply.md)	 - Apply configuration to target
-* [mate cat](mate_cat.md)	 - Display file contents
+* [mate cat](mate_cat.md)	 - Print a file, decrypting it if needed
 * [mate check](mate_check.md)	 - Check if configuration is in sync
 * [mate clean](mate_clean.md)	 - Remove orphaned files
 * [mate config](mate_config.md)	 - Inspect resolved configuration
@@ -49,6 +49,6 @@ Use "mate [command] --help" for more information about a command.
 * [mate rename](mate_rename.md)	 - Rename a managed file
 * [mate scripts](mate_scripts.md)	 - Manage scripts
 * [mate secrets](mate_secrets.md)	 - Manage secrets
-* [mate status](mate_status.md)	 - Show files that would change on apply
+* [mate status](mate_status.md)	 - Show what apply would change
 * [mate version](mate_version.md)	 - Print version information
 

@@ -4,10 +4,21 @@ Check if configuration is in sync
 
 ## Synopsis
 
-Exit 0 if in sync, 1 if changes pending. Useful for CI.
+Exit 0 if every managed file is in sync, and 1 if any would change.
+
+Only files count: pending changes and conflicts. Orphans, missing packages,
+pending scripts and secrets do not. Hooks are validated as well, so a broken
+hook fails the check, and so does any other error, such as a config that does
+not load. Use -q to print nothing and rely on the exit code.
 
 ```
 mate check [flags]
+```
+
+## Examples
+
+```
+  mate check -q || echo "dotfiles out of sync"
 ```
 
 ## Options

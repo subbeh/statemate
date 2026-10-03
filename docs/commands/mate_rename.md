@@ -17,19 +17,19 @@ not change the content: use 'mate encrypt' or 'mate decrypt'.
 Hooks matching the old or the new target path run afterwards, with a
 confirmation prompt (see 'mate hooks').
 
-Examples:
-
-```
-mate rename nvim/init.lua init.vim
-mate rename zsh/.zshrc .zshrc.bak
-mate rename git/.gitconfig#template .gitconfig.local
-    (source becomes .gitconfig.local#template, target .gitconfig.local)
-mate rename ssh/.ssh/config config#perm:600
-    (changes only the attributes; the target keeps its name)
-```
-
 ```
 mate rename <source> <new-name> [flags]
+```
+
+## Examples
+
+```
+  mate rename nvim/init.lua init.vim
+  mate rename zsh/.zshrc .zshrc.bak
+  mate rename git/.gitconfig#template .gitconfig.local
+      (source becomes .gitconfig.local#template, target .gitconfig.local)
+  mate rename ssh/.ssh/config config#perm:600
+      (changes only the attributes; the target keeps its name)
 ```
 
 ## Options
