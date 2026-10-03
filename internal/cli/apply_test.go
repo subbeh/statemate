@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -144,6 +145,64 @@ func TestApplyScoped_RunsHooksForWrittenFiles(t *testing.T) {
 			// Scoping still keeps lifecycle scripts out of the run.
 			if got := r.ran("lifecycle"); got != tc.lifecycle {
 				t.Errorf("repo-root #after script ran = %v, want %v", got, tc.lifecycle)
+			}
+		})
+	}
+}
+
+// A broken hook used to be noticed only after the files were written and the
+// packages prompted for, so the apply failed with its work half done.
+func TestApply_BrokenHookFailsBeforeWriting(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		mateYAML string
+		appYAML  string
+	}{
+		{
+			name: "unknown script",
+			mateYAML: `sources: [app]
+hooks:
+  missing:
+    match: "*.conf"
+    do:
+      - script: nope.sh
+`,
+		},
+		{
+			name: "run template does not parse",
+			mateYAML: `sources: [app]
+hooks:
+  bad:
+    match: "*.conf"
+    do:
+      - run: echo {{ .Files
+`,
+		},
+		{
+			name:     "source hook without match",
+			mateYAML: "sources: [app]\n",
+			appYAML: `hooks:
+  bad:
+    do:
+      - run: "true"
+`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newHookRepo(t, tc.mateYAML)
+			if tc.appYAML != "" {
+				writeFile(t, filepath.Join(r.dir, "app", ".mate.yaml"), tc.appYAML, 0644)
+			}
+
+			err := r.apply(t, nil, "")
+			if err == nil || !strings.Contains(err.Error(), "invalid hooks") {
+				t.Fatalf("want an invalid hooks error, got %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(r.home, ".config", "app", "app.conf")); err == nil {
+				t.Error("app.conf was written before the broken hook was reported")
+			}
+			if r.ran("lifecycle") {
+				t.Error("#after script ran despite the broken hook")
 			}
 		})
 	}

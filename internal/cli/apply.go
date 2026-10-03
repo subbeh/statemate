@@ -147,6 +147,16 @@ func runApply(cmd *cobra.Command, args []string) error {
 	allSourcePaths := sourcePaths
 	sourcePaths = scope.FilterSourcePaths(sourcePaths)
 
+	// Collect hooks before fetching secrets, running scripts, or writing files,
+	// so a broken hook stops the apply before it has done anything. Every
+	// script is discovered, so hooks can resolve their script: steps, but only
+	// those the scope allows run as #before/#after scripts.
+	hookSet, discovered, err := collectHooks(cfg, allSourcePaths, scanner)
+	if err != nil {
+		return err
+	}
+	allScripts := scopedScripts(discovered, scope)
+
 	db, err := state.Open("")
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
@@ -191,15 +201,6 @@ func runApply(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
-
-	// Discover every script, so hooks can resolve their script: steps, but run
-	// only those the scope allows as #before/#after scripts.
-	discoverer := scripts.NewDiscoverer(cfg.SourceDir(), allSourcePaths)
-	discovered, err := discoverer.Discover()
-	if err != nil {
-		return fmt.Errorf("discovering scripts: %w", err)
-	}
-	allScripts := scopedScripts(discovered, scope)
 
 	// Compute pending changes before applying anything, so #onchange scripts see
 	// the same set whether they run #before or #after -- once apply has written
@@ -256,10 +257,6 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	hookSet, err := hooks.Collect(cfg, allSourcePaths, scanner.DirConfig, discovered)
-	if err != nil {
-		return fmt.Errorf("invalid hooks: %w", err)
-	}
 	hookRunner := hooks.NewRunner(executor, tmplCtx, hooks.Options{
 		DryRun:       dryRun,
 		Verbose:      verbose > 0,

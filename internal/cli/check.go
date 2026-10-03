@@ -7,9 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
-	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/profile"
-	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
@@ -65,14 +63,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
 	}
 
-	// Hook script steps and run templates are only checked once scripts are
-	// discovered, so a broken hook is caught here rather than mid-apply.
-	allScripts, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover()
-	if err != nil {
-		return fmt.Errorf("discovering scripts: %w", err)
-	}
-	if _, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, allScripts); err != nil {
-		return fmt.Errorf("invalid hooks: %w", err)
+	// mate apply runs the same check before it writes anything.
+	if _, _, err := collectHooks(cfg, sourcePaths, scanner); err != nil {
+		return err
 	}
 
 	if tree.HasConflicts() {

@@ -236,6 +236,23 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// collectHooks discovers every script of the given sources and collects the
+// hooks against them, returning both. Hook script steps and run templates are
+// only checked once scripts are discovered, so commands call this before they
+// change anything: a broken hook then stops the command up front rather than
+// failing it with its work half done.
+func collectHooks(cfg *config.Config, sourcePaths []string, scanner *source.Scanner) (hooks.Set, scripts.Scripts, error) {
+	all, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover()
+	if err != nil {
+		return nil, nil, fmt.Errorf("discovering scripts: %w", err)
+	}
+	set, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, all)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid hooks: %w", err)
+	}
+	return set, all, nil
+}
+
 // hookChanges turns the entries a command wrote into hook changes, noting which
 // source each came from so source hooks only see their own files.
 func hookChanges(entries []*source.Entry, sourcePaths []string) []hooks.Change {
