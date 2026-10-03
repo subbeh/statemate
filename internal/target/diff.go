@@ -13,6 +13,7 @@ import (
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 func isPermissionDenied(err error) bool {
@@ -364,7 +365,7 @@ func showDiff(sourcePath, targetPath string) error {
 
 func ShowDiffWithTool(sourcePath, targetPath, diffTool string) error {
 	if diffTool != "" {
-		cmd := exec.Command(diffTool, targetPath, sourcePath)
+		cmd := util.UserCommand(diffTool, targetPath, sourcePath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
@@ -439,14 +440,10 @@ func GenerateDiffWithTool(sourcePath, targetPath, diffTool string) (string, erro
 // the usual one, since for those files the target is what will be written into
 // the source.
 func GenerateDiffBetween(oldPath, newPath, diffTool string) (string, error) {
-	tool := "diff"
-	args := []string{"-u", oldPath, newPath}
+	cmd := exec.Command("diff", "-u", oldPath, newPath)
 	if diffTool != "" {
-		tool = diffTool
-		args = []string{oldPath, newPath}
+		cmd = util.UserCommand(diffTool, oldPath, newPath)
 	}
-
-	cmd := exec.Command(tool, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

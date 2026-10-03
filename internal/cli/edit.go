@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -202,7 +201,7 @@ func getEditor(cfg *config.Config) string {
 }
 
 func runEditor(editor, path string) error {
-	cmd := exec.Command(editor, path)
+	cmd := util.UserCommand(editor, path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
