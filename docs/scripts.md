@@ -59,6 +59,9 @@ run one on demand.
 Pending changes are computed before any file is written, so an `onchange` script
 sees the same set whether its timing is `before` or `after`.
 
+To react to specific files rather than a whole source — `*.service`, say — use a
+[hook](hooks.md).
+
 ## Timing
 
 | Timing | When |
@@ -99,6 +102,9 @@ Run keyd-restart.sh (after, onchange)?
 | `s` | Mark as done without running, so it is not offered again |
 | `a` | Run this and auto-confirm the rest |
 | `q` | Abort the apply |
+
+Each answer is a single keypress — there is no need to press Enter. Ctrl-C aborts
+like `q`.
 
 `[s]kip` is not offered for `always` scripts, whose runs are never recorded — there
 is no meaningful "never ask again" for a script that opted into running every time.

@@ -177,7 +177,7 @@ func (s *Scanner) resolveTarget(relPath, name string, dirCfg *config.DirConfig) 
 		} else if len(cleanParts) > 0 {
 			firstDir := cleanParts[0]
 			if override, ok := dirCfg.Targets[firstDir]; ok {
-				targetBase = override
+				targetBase = expandHome(override)
 				cleanParts = cleanParts[1:]
 			}
 		}
@@ -255,7 +255,7 @@ func matchesIgnore(ignore *gitignore.GitIgnore, relPath string, isDir bool) bool
 
 func (s *Scanner) processGenerateDirectives(sourceDir string, dirCfg *config.DirConfig, tree *Tree) error {
 	for _, gen := range dirCfg.Generate {
-		targetPath := gen.Target
+		targetPath := expandHome(gen.Target)
 		targetBase := s.targetBase
 		if dirCfg.TargetBase != "" {
 			targetBase = expandHome(dirCfg.TargetBase)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
@@ -20,6 +21,9 @@ var renameCmd = &cobra.Command{
 	Long: `Rename a managed file in both source and target.
 
 This renames the source file, the target file, and updates tracking.
+
+Hooks matching the old or the new target path run afterwards, with a
+confirmation prompt (see 'mate hooks').
 
 Examples:
   mate rename nvim/init.lua init.vim
@@ -96,10 +100,12 @@ func runRename(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("target already exists: %s", util.ShortenPath(newTargetPath))
 	}
 
+	targetMoved := false
 	if _, err := os.Stat(entry.TargetPath); err == nil {
 		if err := os.Rename(entry.TargetPath, newTargetPath); err != nil {
 			return fmt.Errorf("renaming target: %w", err)
 		}
+		targetMoved = true
 	}
 
 	existing, _ := db.GetFile(entry.TargetPath)
@@ -133,5 +139,21 @@ func runRename(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  source: %s -> %s\n", util.ShortenPath(entry.SourcePath), util.ShortenPath(newSourcePath))
 	fmt.Printf("  target: %s -> %s\n", util.ShortenPath(entry.TargetPath), util.ShortenPath(newTargetPath))
 
-	return nil
+	if !targetMoved {
+		return nil
+	}
+
+	// The old target is gone and the new one is written; both can trigger
+	// hooks. Only sources of the active profile contribute source hooks.
+	profileName, _ := cmd.Flags().GetString("profile")
+	if profileName == "" {
+		profileName = profile.Detect(cfg)
+	}
+	sourcePaths := cfg.ResolveSourcePaths(profile.ResolveSources(cfg, profileName))
+	srcDir := hooks.OwningSource(entry.SourcePath, sourcePaths)
+	changes := []hooks.Change{
+		{Path: entry.TargetPath, SourceDir: srcDir},
+		{Path: newTargetPath, SourceDir: srcDir},
+	}
+	return runRemovalHooks(cfg, profileName, sourcePaths, scanner, db, changes, false)
 }

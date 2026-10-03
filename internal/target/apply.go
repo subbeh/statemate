@@ -3,15 +3,17 @@ package target
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
-	"golang.org/x/term"
 )
 
 type Applier struct {
@@ -29,6 +31,10 @@ type ApplyResult struct {
 	Imported int
 	Errors   []error
 	DryRun   bool
+	// Written lists the files whose content was written (or, under dry-run,
+	// would be). Mode-only fixes are left out: nothing on disk changed that a
+	// hook would need to react to.
+	Written []*source.Entry
 }
 
 
@@ -96,13 +102,13 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			dirMode = os.FileMode(dir.Attrs.Perm)
 		}
 
-		// An existing directory needs no work unless an attribute asks for it.
-		// This matters most for mapped roots like etc: /etc -- creating them is a
-		// no-op, but chmodding a system directory the user never asked about is
-		// not.
+		// An existing directory needs no work unless an attribute it does not
+		// already satisfy asks for it. This matters most for mapped roots like
+		// etc#owner-r:root: /etc -- creating them is a no-op, and reapplying
+		// attributes that already hold would prompt for sudo on every apply.
 		created := false
 		if info, err := os.Stat(dir.TargetPath); err == nil && info.IsDir() {
-			if dir.Attrs.Perm == 0 && dir.Attrs.Owner == "" && dir.Attrs.Group == "" {
+			if dirAttrsMatch(info, dir.Attrs) {
 				continue
 			}
 		} else if os.IsNotExist(err) && emptyDirs[dir.TargetPath] {
@@ -125,6 +131,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				}
 			}
 			if created {
+				if a.verbose > 0 {
+					fmt.Printf("+ %s\n", dir.TargetPath)
+				}
 				result.Applied++
 			}
 			continue
@@ -144,6 +153,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			}
 		}
 		if created {
+			if a.verbose > 0 {
+				fmt.Printf("+ %s\n", dir.TargetPath)
+			}
 			result.Applied++
 		}
 	}
@@ -213,13 +225,22 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 		if a.dryRun {
 			a.printChange(change)
 			result.Applied++
+			if !change.PermOnly {
+				result.Written = append(result.Written, entry)
+			}
 			continue
 		}
 
 		if err := a.applyFile(entry, change.NewHash); err != nil {
 			return nil, fmt.Errorf("applying %s: %w", entry.SourcePath, err)
 		}
+		if a.verbose > 0 {
+			a.printChange(change)
+		}
 		result.Applied++
+		if !change.PermOnly {
+			result.Written = append(result.Written, entry)
+		}
 	}
 
 	return result, nil
@@ -337,6 +358,35 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 	})
 }
 
+// dirAttrsMatch reports whether an existing directory already has the mode and
+// ownership its attributes ask for. When an owner or group cannot be resolved it
+// reports false, so the chown that follows surfaces the lookup error.
+func dirAttrsMatch(info os.FileInfo, attrs source.Attrs) bool {
+	if attrs.Perm != 0 && info.Mode().Perm() != os.FileMode(attrs.Perm) {
+		return false
+	}
+	if attrs.Owner == "" && attrs.Group == "" {
+		return true
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return false
+	}
+	if attrs.Owner != "" {
+		u, err := user.Lookup(attrs.Owner)
+		if err != nil || u.Uid != strconv.FormatUint(uint64(stat.Uid), 10) {
+			return false
+		}
+	}
+	if attrs.Group != "" {
+		g, err := user.LookupGroup(attrs.Group)
+		if err != nil || g.Gid != strconv.FormatUint(uint64(stat.Gid), 10) {
+			return false
+		}
+	}
+	return true
+}
+
 func (a *Applier) promptConflict(change *Change) (string, error) {
 	fmt.Printf("\nConflict: %s\n", change.Entry.TargetPath)
 	fmt.Printf("  Target has been modified since last apply\n")
@@ -351,13 +401,14 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 	fmt.Print(prompt)
 
 	for {
-		char, err := readSingleChar()
+		char, err := util.ReadKey()
 		if err != nil {
+			fmt.Println()
 			return "", err
 		}
 
 		input := strings.ToLower(string(char))
-		fmt.Println(input)
+		fmt.Println(strings.TrimSpace(input))
 
 		switch input {
 		case "o":
@@ -380,33 +431,6 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 			fmt.Print("\n" + prompt)
 		}
 	}
-}
-
-func readSingleChar() (byte, error) {
-	fd := int(os.Stdin.Fd())
-
-	if !term.IsTerminal(fd) {
-		b := make([]byte, 1)
-		_, err := os.Stdin.Read(b)
-		if err != nil {
-			return 0, err
-		}
-		return b[0], nil
-	}
-
-	oldState, err := term.MakeRaw(fd)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = term.Restore(fd, oldState) }()
-
-	b := make([]byte, 1)
-	_, err = os.Stdin.Read(b)
-	if err != nil {
-		return 0, err
-	}
-
-	return b[0], nil
 }
 
 func (a *Applier) showConflictDiff(entry *source.Entry) error {

@@ -1,7 +1,9 @@
 package target
 
 import (
+	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -385,6 +387,79 @@ func TestApplier_LeavesExistingUnattributedDirectoriesAlone(t *testing.T) {
 	}
 }
 
+// An existing directory whose attributes already hold must not be touched.
+// Otherwise a mapped root like etc#owner-r:root: /etc prompts for sudo on every
+// apply, even when nothing has changed.
+func TestApplier_SkipsExistingDirectoriesWhoseAttrsMatch(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: every directory is writable")
+	}
+	u, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	// A fake sudo that records being called, so the test never prompts.
+	binDir := filepath.Join(tmpDir, "bin")
+	marker := filepath.Join(tmpDir, "sudo-called")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	fakeSudo := "#!/bin/sh\ntouch " + marker + "\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(binDir, "sudo"), []byte(fakeSudo), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	nested := filepath.Join(sourceDir, "app", "etc#owner-r:"+u.Username+"#perm-r:555", "sub")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "f"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The target already matches, but is not writable -- so any attempt to
+	// reapply the attributes would go through sudo.
+	existing := filepath.Join(targetDir, "etc", "sub")
+	if err := os.MkdirAll(existing, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(existing, "f"), []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{existing, filepath.Dir(existing)} {
+		if err := os.Chmod(d, 0555); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(d, 0755) })
+	}
+
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	scanner := source.NewScanner(targetDir, "")
+	tree, err := scanner.Scan([]string{filepath.Join(sourceDir, "app")})
+	if err != nil {
+		t.Fatalf("scanning: %v", err)
+	}
+
+	applier := NewApplier(db, nil, nil, false, false, 0)
+	if _, err := applier.Apply(tree); err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("sudo was invoked for directories whose attributes already match")
+	}
+}
+
 // A file written via sudo (root-owned, or mode 0600 like a secret) usually
 // cannot be read back by the invoking user, so recording state after applying it
 // must not fail on the hash. When elevated access is unavailable too, the error
@@ -574,5 +649,82 @@ func TestApplier_DryRunReportsEmptyDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(targetDir, ".cache")); !os.IsNotExist(err) {
 		t.Error("dry-run must not create directories")
+	}
+}
+
+// captureStdout returns what fn printed to stdout.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	fn()
+
+	_ = w.Close()
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+// --verbose lists each file apply writes, with the same markers as --dry-run;
+// without it, only the summary the caller prints reports what happened.
+func TestApplier_VerboseListsWrittenFiles(t *testing.T) {
+	for _, verbose := range []int{0, 1} {
+		tmpDir := t.TempDir()
+		sourceDir := filepath.Join(tmpDir, "source")
+		targetDir := filepath.Join(tmpDir, "target")
+
+		if err := os.MkdirAll(filepath.Join(sourceDir, "app"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sourceDir, "app", "new.txt"), []byte("x\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sourceDir, "app", "same.txt"), []byte("same\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(targetDir, "same.txt"), []byte("same\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		tree, err := source.NewScanner(targetDir, "").Scan([]string{filepath.Join(sourceDir, "app")})
+		if err != nil {
+			t.Fatalf("scanning: %v", err)
+		}
+
+		applier := NewApplier(db, nil, nil, false, false, verbose)
+		out := captureStdout(t, func() {
+			if _, err := applier.Apply(tree); err != nil {
+				t.Errorf("apply failed: %v", err)
+			}
+		})
+		_ = db.Close()
+
+		newLine := "+ " + filepath.Join(targetDir, "new.txt")
+		if verbose > 0 {
+			if !strings.Contains(out, newLine) {
+				t.Errorf("verbose output missing %q:\n%s", newLine, out)
+			}
+			if strings.Contains(out, "same.txt") {
+				t.Errorf("verbose output lists an unchanged file:\n%s", out)
+			}
+		} else if out != "" {
+			t.Errorf("non-verbose apply printed per-file output:\n%s", out)
+		}
 	}
 }

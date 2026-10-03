@@ -41,6 +41,7 @@ func Load(path string) (*Config, error) {
 	default:
 		return nil, fmt.Errorf("unsupported config format: %s", filepath.Ext(path))
 	}
+	setHookOrigin(cfg.Hooks, cfg.sourceDir, false)
 
 	localCfg := loadLocalConfig()
 	cfg.ApplyOverrides(localCfg)
@@ -100,6 +101,7 @@ func loadLocalConfig() *Config {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil
 	}
+	setHookOrigin(cfg.Hooks, filepath.Dir(LocalConfigPath()), true)
 	return &cfg
 }
 
@@ -171,6 +173,7 @@ func LoadDirConfigRaw(dir string, render TemplateRenderer) (*DirConfig, error) {
 			return nil, fmt.Errorf("parsing TOML: %w", err)
 		}
 	}
+	setHookOrigin(cfg.Hooks, dir, false)
 
 	return cfg, nil
 }

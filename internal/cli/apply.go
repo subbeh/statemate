@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/packages"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
@@ -27,7 +27,7 @@ var applyCmd = &cobra.Command{
 With no argument, applies everything. Otherwise the run is narrowed:
 
   mate apply <path>        apply matching files only -- no scripts, no
-                           packages, no secret fetch
+                           packages, no secret fetch; hooks still run
   mate apply -s <source>   apply that source's files, run its scripts, and
                            prompt for its packages
 
@@ -50,6 +50,10 @@ manually with 'mate scripts run'.
 Use --force to auto-confirm all scripts, or --no-scripts to skip them entirely
 (useful for automated runs). Without a terminal to prompt on, scripts are
 skipped with a warning.
+
+Hooks run for the files this apply wrote, after packages and before #after
+scripts, and are confirmed the same way (without [s]kip). A failed hook does
+not stop the others, but the apply exits non-zero. See 'mate hooks'.
 
 A file marked '#import' is not prompted about when only its target changed: the
 target is treated as authoritative and copied back into the source. Use it for
@@ -205,7 +209,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	beforeScripts.Sort()
 
 	if len(beforeScripts) > 0 {
-		if verbose > 0 || dryRun {
+		if dryRun {
 			fmt.Println("Running before scripts...")
 		}
 		res, err := executor.Execute(beforeScripts)
@@ -244,11 +248,27 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	hookSet, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, allScripts)
+	if err != nil {
+		return fmt.Errorf("invalid hooks: %w", err)
+	}
+	hookRunner := hooks.NewRunner(executor, tmplCtx, hooks.Options{
+		DryRun:       dryRun,
+		Verbose:      verbose > 0,
+		Force:        force,
+		NoScripts:    noScripts,
+		ProfileChain: profileChain,
+	})
+	hookRes, err := runTriggeredHooks(hookRunner, hookSet, hookChanges(result.Written, sourcePaths), profileChain, verbose > 0 || dryRun)
+	if err != nil {
+		return err
+	}
+
 	afterScripts := allScripts.Automatic().ByProfile(profileChain).ByTiming(scripts.TimingAfter)
 	afterScripts.Sort()
 
 	if len(afterScripts) > 0 {
-		if verbose > 0 || dryRun {
+		if dryRun {
 			fmt.Println("Running after scripts...")
 		}
 		res, err := executor.Execute(afterScripts)
@@ -282,7 +302,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return nil
+	// A failed hook does not stop the other hooks or the #after scripts, but
+	// the run still fails.
+	return hookRes.Err()
 }
 
 func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.AgeEncryptor, profileName string, sourcePaths []string, dryRun bool, verbose int) error {
@@ -385,14 +407,11 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 
 		fmt.Printf("\nMissing %s packages: %s\n", result.Manager, strings.Join(missing, ", "))
 		if !autoConfirm {
-			fmt.Print("Install? [y/N] ")
-			reader := bufio.NewReader(os.Stdin)
-			input, err := reader.ReadString('\n')
+			ok, err := util.Confirm("Install? [y/N] ", false)
 			if err != nil {
 				return nil
 			}
-			input = strings.TrimSpace(strings.ToLower(input))
-			if input != "y" && input != "yes" {
+			if !ok {
 				continue
 			}
 		}

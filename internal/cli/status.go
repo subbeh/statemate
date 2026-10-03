@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/packages"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
@@ -214,13 +215,27 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		filteredOrphans = append(filteredOrphans, o)
 	}
 
+	// Hooks follow from the files apply would write: not imports (the target
+	// is the source of truth) and not mode-only fixes.
+	hookSet, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, allScripts)
+	if err != nil {
+		return fmt.Errorf("invalid hooks: %w", err)
+	}
+	var written []*source.Entry
+	for _, c := range filteredChanges {
+		if c.Status != target.StatusImport && !c.PermOnly {
+			written = append(written, c.Entry)
+		}
+	}
+	pendingHooks := hookSet.Trigger(hookChanges(written, sourcePaths), profileChain)
+
 	short, _ := cmd.Flags().GetBool("short")
 	if short {
 		return printShortStatus(filteredChanges, filteredOrphans, pendingScripts, pendingSecrets)
 	}
 
 	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 && len(pendingScripts) == 0 &&
-		pendingSecrets == 0 && len(pendingPackages) == 0 {
+		len(pendingHooks) == 0 && pendingSecrets == 0 && len(pendingPackages) == 0 {
 		fmt.Println("Everything is up to date")
 		return nil
 	}
@@ -272,6 +287,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  %s (%s, %s)\n", s.Name, s.Frequency, timing)
 			if s.Description != "" {
 				fmt.Printf("      %s\n", s.Description)
+			}
+		}
+	}
+
+	if len(pendingHooks) > 0 {
+		fmt.Println("\nPending hooks:")
+		for _, h := range pendingHooks {
+			fmt.Printf("  %s (%s)\n", h.Name, hooks.FileCount(len(h.Files)))
+			if h.Description != "" {
+				fmt.Printf("      %s\n", h.Description)
 			}
 		}
 	}

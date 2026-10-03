@@ -71,6 +71,7 @@ secrets_cache: "~/.local/state/statemate/secrets.age"
 | `variable_commands` | map | Variables whose values come from shell commands, run at load |
 | `var_files` | list | YAML/TOML files to load variables from |
 | `packages` | map | Packages to install — see [Packages](packages.md) |
+| `hooks` | map | Commands to run when matching files change — see [Hooks](hooks.md) |
 | `include` | list | Files to merge `packages` and `variables` from |
 | `ignore` | list | gitignore-style patterns excluded from scanning |
 | `aur_helper` | string | AUR helper binary, e.g. `paru` or `yay`. Auto-detected if unset |
@@ -253,7 +254,8 @@ looks for `mate.yaml` in the current directory.
 
 Only a subset of keys is honoured here: `sources`, `default_source`,
 `target_base`, `profile`, `editor`, `age`, `variables`, `var_files`,
-`variable_commands`, `packages`, `profiles`, and `diff_tool`.
+`variable_commands`, `packages`, `profiles`, `diff_tool`, and `hooks`. A local
+hook replaces a repository hook of the same name — see [Hooks](hooks.md).
 
 ## Source directory config
 
@@ -294,6 +296,7 @@ generate:
 | `perm` | Default mode for all files, octal string |
 | `packages` | Packages this source needs |
 | `generate` | Files created from inline content — see below |
+| `hooks` | Hooks matching only this source's files — see [Hooks](hooks.md) |
 
 `.mate.yaml` is itself rendered as a template, so `{{ .Vars.workspace }}` works
 inside it.
@@ -360,4 +363,5 @@ your config:
 STATEMATE_DIR=~/other-dotfiles mate status
 ```
 
-Scripts also receive [their own environment variables](scripts.md#environment).
+Scripts also receive [their own environment variables](scripts.md#environment),
+and hooks [theirs](hooks.md#environment).

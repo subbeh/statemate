@@ -20,6 +20,7 @@ type Config struct {
 	AURHelper    string       `yaml:"aur_helper" toml:"aur_helper"`
 	SecretsCache string       `yaml:"secrets_cache" toml:"secrets_cache"`
 	DiffTool     string       `yaml:"diff_tool" toml:"diff_tool"`
+	Hooks        map[string]*Hook `yaml:"hooks" toml:"hooks"`
 
 	sourceDir string
 }
@@ -64,6 +65,7 @@ func (c *Config) ApplyOverrides(override *Config) {
 	if override.DiffTool != "" {
 		c.DiffTool = override.DiffTool
 	}
+	c.Hooks = mergeHooks(c.Hooks, override.Hooks)
 }
 
 func (c *Config) SourceDir() string {
@@ -128,6 +130,7 @@ type DirConfig struct {
 	Packages   *PackageList      `yaml:"packages" toml:"packages"`
 	Scripts    *DirScripts       `yaml:"scripts" toml:"scripts"`
 	Generate   []GenerateConfig  `yaml:"generate" toml:"generate"`
+	Hooks      map[string]*Hook  `yaml:"hooks" toml:"hooks"`
 }
 
 type GenerateConfig struct {

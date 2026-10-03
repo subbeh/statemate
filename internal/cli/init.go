@@ -201,7 +201,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := registerSourceDir(reader, cwd); err != nil {
+	if err := registerSourceDir(cwd); err != nil {
 		return err
 	}
 
@@ -232,7 +232,7 @@ func handleExistingRepo(cwd, configPath string) error {
 	return nil
 }
 
-func registerSourceDir(reader *bufio.Reader, cwd string) error {
+func registerSourceDir(cwd string) error {
 	existingSourceDir := config.SourceDir()
 	if existingSourceDir == cwd {
 		return nil
@@ -240,26 +240,22 @@ func registerSourceDir(reader *bufio.Reader, cwd string) error {
 
 	if localConfigExists() {
 		fmt.Printf("\nLocal config already points to: %s\n", util.ShortenPath(existingSourceDir))
-		fmt.Printf("Update to this directory instead? [y/N]: ")
-		input, err := reader.ReadString('\n')
+		ok, err := util.Confirm("Update to this directory instead? [y/N]: ", false)
 		if err != nil {
 			return err
 		}
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input == "y" || input == "yes" {
+		if ok {
 			if err := config.SaveLocalSourceDir(cwd); err != nil {
 				return fmt.Errorf("saving local config: %w", err)
 			}
 			fmt.Printf("Updated %s\n", util.ShortenPath(config.LocalConfigPath()))
 		}
 	} else {
-		fmt.Printf("\nRegister this directory as your dotfiles location? [Y/n]: ")
-		input, err := reader.ReadString('\n')
+		ok, err := util.Confirm("\nRegister this directory as your dotfiles location? [Y/n]: ", true)
 		if err != nil {
 			return err
 		}
-		input = strings.TrimSpace(strings.ToLower(input))
-		if input == "" || input == "y" || input == "yes" {
+		if ok {
 			if err := config.SaveLocalSourceDir(cwd); err != nil {
 				return fmt.Errorf("saving local config: %w", err)
 			}

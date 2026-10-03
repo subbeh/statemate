@@ -9,7 +9,7 @@ Apply files from source directories to their targets.
 With no argument, applies everything. Otherwise the run is narrowed:
 
   mate apply <path>        apply matching files only -- no scripts, no
-                           packages, no secret fetch
+                           packages, no secret fetch; hooks still run
   mate apply -s <source>   apply that source's files, run its scripts, and
                            prompt for its packages
 
@@ -32,6 +32,10 @@ manually with 'mate scripts run'.
 Use --force to auto-confirm all scripts, or --no-scripts to skip them entirely
 (useful for automated runs). Without a terminal to prompt on, scripts are
 skipped with a warning.
+
+Hooks run for the files this apply wrote, after packages and before #after
+scripts, and are confirmed the same way (without [s]kip). A failed hook does
+not stop the others, but the apply exits non-zero. See 'mate hooks'.
 
 A file marked '#import' is not prompted about when only its target changed: the
 target is treated as authoritative and copied back into the source. Use it for

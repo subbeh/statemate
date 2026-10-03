@@ -26,6 +26,10 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if err := ValidateHooks(c.Hooks); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -40,5 +44,5 @@ func validateDetection(d *Detection) error {
 }
 
 func (c *DirConfig) Validate() error {
-	return nil
+	return ValidateHooks(c.Hooks)
 }

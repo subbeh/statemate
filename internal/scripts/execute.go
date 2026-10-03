@@ -14,6 +14,7 @@ import (
 
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 func readShebang(path string) string {
@@ -76,9 +77,11 @@ type Executor struct {
 	noScripts bool
 	// confirmAll is set once the user answers "all" at a prompt.
 	confirmAll bool
-	stdin      *bufio.Reader
 	// changed names the sources with pending changes, used by #onchange scripts.
 	changed ChangedSources
+	// ranAsHook holds the paths of scripts a hook already ran in this
+	// invocation, so their own #after trigger does not run them a second time.
+	ranAsHook map[string]bool
 }
 
 // WithChangedSources tells the executor which sources have pending changes, so
@@ -94,7 +97,6 @@ func NewExecutor(db *state.DB, tmplCtx *template.Context, dryRun, verbose bool) 
 		tmplCtx: tmplCtx,
 		dryRun:  dryRun,
 		verbose: verbose,
-		stdin:   bufio.NewReader(os.Stdin),
 	}
 }
 
@@ -149,19 +151,45 @@ func describe(script *Script) string {
 
 // confirm asks whether a single script should run, honouring force/confirmAll.
 func (e *Executor) confirm(script *Script) (scriptAction, error) {
+	var details []string
+	if script.Description != "" {
+		details = append(details, script.Description)
+	}
+	// [s]kip records the script as run without executing it, so it is not offered
+	// again while that record stands. Meaningless for `always` scripts, whose runs
+	// are never recorded, so the option is hidden for them.
+	return e.ask(describe(script), details, canMarkSkipped(script))
+}
+
+// Confirm asks whether to run something other than a scheduled script, such as a
+// hook. It shares the scripts' prompt and their [a]ll answer, so one "all"
+// covers hooks and after scripts alike. It reports false when declined, and an
+// error when the user quits.
+func (e *Executor) Confirm(title string, details []string) (bool, error) {
+	action, err := e.ask(title, details, false)
+	if err != nil {
+		return false, err
+	}
+	switch action {
+	case actionAbort:
+		return false, fmt.Errorf("aborted by user")
+	case actionRun:
+		return true, nil
+	}
+	return false, nil
+}
+
+// ask prompts with the standard script answers. markable offers [s]kip.
+func (e *Executor) ask(title string, details []string, markable bool) (scriptAction, error) {
 	if e.force || e.confirmAll {
 		return actionRun, nil
 	}
 
-	fmt.Printf("\nRun %s?\n", describe(script))
-	if script.Description != "" {
-		fmt.Printf("  %s\n", script.Description)
+	fmt.Printf("\nRun %s?\n", title)
+	for _, d := range details {
+		fmt.Printf("  %s\n", d)
 	}
 
-	// [s]kip records the script as run without executing it, so it is not offered
-	// again while that record stands. Meaningless for `always` scripts, whose runs
-	// are never recorded, so the option is hidden for them.
-	markable := canMarkSkipped(script)
 	prompt := "[y]es / [n]o / [a]ll / [q]uit: "
 	if markable {
 		prompt = "[y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit: "
@@ -169,25 +197,30 @@ func (e *Executor) confirm(script *Script) (scriptAction, error) {
 
 	for {
 		fmt.Print(prompt)
-		input, err := e.stdin.ReadString('\n')
+		key, err := util.ReadKey()
 		if err != nil {
-			// EOF with no answer -- treat as abort rather than assuming consent.
+			// EOF or Ctrl-C with no answer -- treat as abort rather than assuming
+			// consent.
+			fmt.Println()
 			return actionAbort, nil
 		}
 
-		switch strings.TrimSpace(strings.ToLower(input)) {
-		case "y", "yes":
+		input := strings.ToLower(string(key))
+		fmt.Println(strings.TrimSpace(input))
+
+		switch input {
+		case "y":
 			return actionRun, nil
-		case "n", "no":
+		case "n":
 			return actionSkip, nil
-		case "s", "skip":
+		case "s":
 			if markable {
 				return actionSkipMark, nil
 			}
-		case "a", "all":
+		case "a":
 			e.confirmAll = true
 			return actionRun, nil
-		case "q", "quit":
+		case "q":
 			return actionAbort, nil
 		}
 	}
@@ -204,15 +237,16 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 	}
 
 	for _, script := range scripts {
-		shouldRun, reason, err := e.shouldRun(script)
+		shouldRun, _, err := e.shouldRun(script)
 		if err != nil {
 			return nil, fmt.Errorf("checking script %s: %w", script.Name, err)
 		}
 
+		if shouldRun && e.ranAsHook[script.Path] {
+			shouldRun = false // already ran as a hook step
+		}
+
 		if !shouldRun {
-			if e.verbose {
-				fmt.Printf("  skip: %s (%s)\n", script.Name, reason)
-			}
 			result.Skipped++
 			continue
 		}
@@ -292,6 +326,21 @@ func (e *Executor) ExecuteOne(script *Script) error {
 		return err
 	}
 
+	return e.recordRun(script)
+}
+
+// RunAsHook runs a script as a step of a hook, with the hook's environment on
+// top of the script's own. The run is recorded like 'mate scripts run', and the
+// script is not run again by its own #after trigger in this invocation.
+func (e *Executor) RunAsHook(script *Script, env []string) error {
+	if e.ranAsHook == nil {
+		e.ranAsHook = make(map[string]bool)
+	}
+	e.ranAsHook[script.Path] = true
+
+	if err := e.run(script, env...); err != nil {
+		return err
+	}
 	return e.recordRun(script)
 }
 
@@ -381,7 +430,7 @@ func PendingScripts(scripts Scripts, db *state.DB, changed ChangedSources) (Scri
 	return pending, nil
 }
 
-func (e *Executor) run(script *Script) error {
+func (e *Executor) run(script *Script, extraEnv ...string) error {
 	scriptPath := script.Path
 
 	if script.Template {
@@ -435,6 +484,7 @@ func (e *Executor) run(script *Script) error {
 	if script.SourceDir != "" {
 		cmd.Env = append(cmd.Env, "STATEMATE_SOURCE_DIR="+script.SourceDir)
 	}
+	cmd.Env = append(cmd.Env, extraEnv...)
 
 	fmt.Printf(">>> running: %s (%s/%s)\n", script.Name, script.Frequency, script.Timing)
 	err := cmd.Run()

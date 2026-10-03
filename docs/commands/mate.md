@@ -40,6 +40,7 @@ Use "mate [command] --help" for more information about a command.
 * [mate encrypt](mate_encrypt.md)	 - Encrypt a managed file
 * [mate eval](mate_eval.md)	 - Render a template file
 * [mate forget](mate_forget.md)	 - Remove files from tracking
+* [mate hooks](mate_hooks.md)	 - Manage hooks
 * [mate init](mate_init.md)	 - Initialize a new statemate repository
 * [mate managed](mate_managed.md)	 - List all managed files
 * [mate packages](mate_packages.md)	 - Manage packages

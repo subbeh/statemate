@@ -9,6 +9,21 @@ import (
 )
 
 func newScanner(cfg *config.Config, profileName string) (*source.Scanner, error) {
+	tmplCtx, err := newTemplateContext(cfg, profileName)
+	if err != nil {
+		return nil, err
+	}
+
+	renderer := func(data []byte) ([]byte, error) {
+		return template.Render(data, tmplCtx)
+	}
+
+	return source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), renderer, cfg.Ignore), nil
+}
+
+// newTemplateContext builds a rendering context with decryption and secret
+// lookups wired up where they are configured.
+func newTemplateContext(cfg *config.Config, profileName string) (*template.Context, error) {
 	var enc *encrypt.AgeEncryptor
 	if cfg.Age != nil {
 		enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
@@ -35,9 +50,5 @@ func newScanner(cfg *config.Config, profileName string) (*source.Scanner, error)
 		}
 	}
 
-	renderer := func(data []byte) ([]byte, error) {
-		return template.Render(data, tmplCtx)
-	}
-
-	return source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), renderer, cfg.Ignore), nil
+	return tmplCtx, nil
 }
