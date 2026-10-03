@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/source"
 )
 
 type SecretLookup func(item, typ, field string) (string, error)
@@ -118,7 +120,8 @@ func (c *Context) loadVarFile(path string) error {
 		} else {
 			return nil
 		}
-	} else if strings.HasSuffix(path, "#encrypted") {
+	} else if _, attrs := source.ParseAttrs(filepath.Base(path)); attrs.Encrypted {
+		// #encrypted may be any of the attributes, not only the last.
 		encrypted = true
 	}
 
@@ -135,8 +138,9 @@ func (c *Context) loadVarFile(path string) error {
 		if err != nil {
 			return fmt.Errorf("decrypting var_file %s: %w", path, err)
 		}
-		// Strip #encrypted suffix for format detection
-		path = strings.TrimSuffix(path, "#encrypted")
+		// Strip the attributes for format detection
+		baseName, _ := source.ParseAttrs(filepath.Base(path))
+		path = filepath.Join(filepath.Dir(path), baseName)
 	}
 
 	vars, err := parseVarFile(data, path)

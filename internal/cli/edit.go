@@ -28,7 +28,7 @@ Files under the source directory are opened directly. If you pass a target
 path (a deployed file), the corresponding source file is opened instead --
 mate never edits deployed files in place.
 
-For encrypted files (with the '#encrypted' suffix), the file is decrypted to a
+For encrypted files (with the '#encrypted' attribute), the file is decrypted to a
 temporary location, opened in the editor, and re-encrypted after saving. The
 original file permissions are preserved.
 
@@ -79,7 +79,7 @@ func runEdit(cmd *cobra.Command, args []string) error {
 
 	editor := getEditor(cfg)
 
-	if !strings.Contains(filepath.Base(editPath), "#encrypted") {
+	if !hasEncryptedAttr(editPath) {
 		if err := runEditor(editor, editPath); err != nil {
 			return err
 		}
@@ -118,7 +118,9 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decrypting: %w", err)
 	}
 
-	baseName := strings.TrimSuffix(filepath.Base(editPath), "#encrypted")
+	// The temp file keeps the attribute-free name so the editor still sees the
+	// real extension.
+	baseName, _ := source.ParseAttrs(filepath.Base(editPath))
 	tmpFile, err := os.CreateTemp("", "mate-edit-*-"+baseName)
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)

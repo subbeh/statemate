@@ -102,7 +102,7 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("file not found: %s", srcPattern)
 	}
-	if strings.HasSuffix(filePath, "#encrypted") {
+	if hasEncryptedAttr(filePath) {
 		return fmt.Errorf("file is already encrypted: %s", srcPattern)
 	}
 

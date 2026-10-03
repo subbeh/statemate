@@ -7,7 +7,9 @@ Decrypt a managed file
 Decrypt a file in place.
 
 This reads the encrypted file, decrypts it using the configured age identity,
-writes it back, and removes the #encrypted suffix from the filename.
+writes it back, and removes the #encrypted attribute from the filename
+wherever it appears among the attributes (config#encrypted#template becomes
+config#template).
 
 The file can be a managed source file or any file path (e.g. a var_file
 in .matedata/). Paths are resolved relative to the current directory,

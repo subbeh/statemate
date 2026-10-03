@@ -103,6 +103,26 @@ func TestAttrNamesAreParsed(t *testing.T) {
 	}
 }
 
+// mate decrypt drops the #encrypted attribute from a filename; it may sit
+// anywhere among the attributes, not only last.
+func TestRemoveAttr(t *testing.T) {
+	tests := []struct {
+		name, attr, want string
+	}{
+		{"x#encrypted", "encrypted", "x"},
+		{"x#encrypted#template", "encrypted", "x#template"},
+		{"x#perm:600#encrypted#template", "encrypted", "x#perm:600#template"},
+		{"x#template", "encrypted", "x#template"},
+		{"x#encrypted-backup", "encrypted", "x#encrypted-backup"},
+		{"x", "encrypted", "x"},
+	}
+	for _, tc := range tests {
+		if got := RemoveAttr(tc.name, tc.attr); got != tc.want {
+			t.Errorf("RemoveAttr(%q, %q) = %q, want %q", tc.name, tc.attr, got, tc.want)
+		}
+	}
+}
+
 func TestAttrsMerge(t *testing.T) {
 	parent := Attrs{Profile: "work", Perm: 0755}
 	child := Attrs{Perm: 0600}
