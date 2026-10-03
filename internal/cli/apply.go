@@ -182,11 +182,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating template context: %w", err)
 	}
 
-	identitySource := ""
-	if cfg.Age != nil {
-		identitySource = cfg.Age.Identity
-	}
-	mgr, mgrErr := secrets.NewManager(enc, identitySource, cfg.SecretsCache)
+	mgr, mgrErr := secrets.NewManager(enc, cfg.SecretsCache)
 	if mgrErr == nil {
 		tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 			key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}

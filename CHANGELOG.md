@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - The `scripts:` key (`before_apply` / `after_apply`) in a source's `.mate.yaml` is no longer recognised. It was documented as a way to name scripts outside `.matescripts/`, but it never did anything: the listed scripts were never discovered, run, or shown in `mate scripts list`. Unknown keys are ignored, so a `.mate.yaml` that still has it keeps loading without an error. Move such scripts into the source's `.matescripts/` directory, where a `#before` or `#after` attribute in the filename sets when they run
 
+### Security
+- The secrets cache (`~/.local/state/statemate/secrets.age`) is now always age-encrypted. It was only encrypted when `age.identity` was set: with no `age:` block, or with the identity supplied by `age.identity_command`, `mate secrets fetch` and `mate apply` silently wrote every fetched secret to it as plain JSON. With `identity_command` the next read then failed with `parsing age header: unexpected intro: "{...`, an error that printed the start of the cache — the secret values — to the terminal. The cache is now encrypted to your identity whichever of `identity` or `identity_command` provides it, and without any age identity `mate secrets fetch` and `mate apply` refuse to fetch secrets, saying an identity is needed, instead of writing them in the clear. An unencrypted cache left by an earlier version is never read or shown: commands that need a secret report it as unencrypted, and the next `mate secrets fetch` or `mate apply` re-fetches and replaces it with an encrypted one, with a warning. If you used secrets without an `age:` block, add one and run `mate secrets fetch`
+
 ## [0.4.0] - 2026-10-03
 
 ### Added

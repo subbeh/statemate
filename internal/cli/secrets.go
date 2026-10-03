@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -91,6 +92,10 @@ func runSecretsFetch(cmd *cobra.Command, args []string) error {
 
 	result, err := mgr.Fetch(items)
 	if err != nil {
+		// Without an identity there is no cache to fall back on either.
+		if errors.Is(err, secrets.ErrNoIdentity) {
+			return err
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		if ok, _ := util.Confirm("Continue with cached secrets? [y/n]: ", false); !ok {
 			return err
@@ -211,16 +216,14 @@ func setupSecrets(cmd *cobra.Command) (*secrets.Manager, []secrets.FetchItem, er
 	sourcePaths := cfg.ResolveSourcePaths(sources)
 
 	var enc *encrypt.AgeEncryptor
-	identitySource := ""
 	if cfg.Age != nil {
 		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
 		if err != nil {
 			return nil, nil, fmt.Errorf("setting up encryption: %w", err)
 		}
-		identitySource = cfg.Age.Identity
 	}
 
-	mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache)
+	mgr, err := secrets.NewManager(enc, cfg.SecretsCache)
 	if err != nil {
 		return nil, nil, fmt.Errorf("setting up secrets: %w", err)
 	}

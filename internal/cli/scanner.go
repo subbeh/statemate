@@ -42,11 +42,7 @@ func newTemplateContext(cfg *config.Config, profileName string) (*template.Conte
 		return nil, err
 	}
 
-	identitySource := ""
-	if cfg.Age != nil {
-		identitySource = cfg.Age.Identity
-	}
-	mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache)
+	mgr, err := secrets.NewManager(enc, cfg.SecretsCache)
 	if err == nil {
 		tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 			key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
