@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/subbeh/statemate/internal/config"
@@ -121,6 +122,56 @@ func TestInitDetectsExistingMateYml(t *testing.T) {
 	}
 	if got := registeredSourceDir(t); got != repo {
 		t.Errorf("registered source_dir = %q, want %q", got, repo)
+	}
+}
+
+// init is often run in a directory that is already a repository with a README
+// of its own; that README must survive.
+func TestInitKeepsExistingReadme(t *testing.T) {
+	repo := initSandbox(t)
+	readme := filepath.Join(repo, "README.md")
+	if err := os.WriteFile(readme, []byte("# My dotfiles\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	initFormat = "yaml"
+	t.Cleanup(func() { initFormat = "" })
+	withStdin(t, "n\n")
+
+	if err := runInit(nil, nil); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+
+	if data, _ := os.ReadFile(readme); string(data) != "# My dotfiles\n" {
+		t.Errorf("existing README was overwritten:\n%s", data)
+	}
+}
+
+func TestInitReadmeInstructions(t *testing.T) {
+	repo := initSandbox(t)
+
+	initFormat = "yaml"
+	t.Cleanup(func() { initFormat = "" })
+	withStdin(t, "n\n")
+
+	if err := runInit(nil, nil); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(repo, "README.md"))
+	if err != nil {
+		t.Fatalf("README not created: %v", err)
+	}
+	readme := string(data)
+
+	// The AUR package is statemate-bin (see .goreleaser.yaml); there is no
+	// package named plain "statemate".
+	if !strings.Contains(readme, "-S statemate-bin") || strings.Contains(readme, "-S statemate\n") {
+		t.Errorf("README does not install the statemate-bin AUR package:\n%s", readme)
+	}
+	// Same location the guides use.
+	if strings.Contains(readme, "~/.dotfiles") || !strings.Contains(readme, "~/dotfiles") {
+		t.Errorf("README should clone into ~/dotfiles:\n%s", readme)
 	}
 }
 

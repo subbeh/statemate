@@ -118,17 +118,17 @@ Managed with [statemate](https://github.com/subbeh/statemate).
 
 1. Install statemate:
    ` + "```" + `sh
-   # macOS
+   # Homebrew (macOS/Linux)
    brew install subbeh/tap/statemate
 
-   # Arch Linux
-   yay -S statemate
+   # Arch Linux (AUR)
+   paru -S statemate-bin    # or: yay -S statemate-bin
    ` + "```" + `
 
 2. Clone this repository:
    ` + "```" + `sh
-   git clone <your-repo-url> ~/.dotfiles
-   cd ~/.dotfiles
+   git clone <your-repo-url> ~/dotfiles
+   cd ~/dotfiles
    ` + "```" + `
 
 3. Register and apply:
@@ -183,10 +183,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Created %s\n", filepath.Join(cwd, configPath))
 
-	if err := os.WriteFile("README.md", []byte(defaultReadme), 0644); err != nil {
-		return fmt.Errorf("writing README: %w", err)
+	// init is often run in a repository that already has a README of its own,
+	// so never replace one.
+	if _, err := os.Stat("README.md"); err == nil {
+		fmt.Printf("Kept existing %s\n", filepath.Join(cwd, "README.md"))
+	} else {
+		if err := os.WriteFile("README.md", []byte(defaultReadme), 0644); err != nil {
+			return fmt.Errorf("writing README: %w", err)
+		}
+		fmt.Printf("Created %s\n", filepath.Join(cwd, "README.md"))
 	}
-	fmt.Printf("Created %s\n", filepath.Join(cwd, "README.md"))
 
 	if err := initGitRepo(); err != nil {
 		return err
