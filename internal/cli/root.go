@@ -23,6 +23,13 @@ Features:
   - System file management with permission control
 
 Use "mate [command] --help" for more information about a command.`,
+	// By the time this runs, flags and arguments have been parsed and validated,
+	// so any later error is a runtime one -- no config, a conflict, a broken hook
+	// -- and the usage block would only bury it. Flag and argument errors happen
+	// earlier and still print the usage.
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		cmd.SilenceUsage = true
+	},
 }
 
 var versionCmd = &cobra.Command{
