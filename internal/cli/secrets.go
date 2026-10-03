@@ -12,6 +12,7 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/template"
@@ -229,7 +230,7 @@ func setupSecrets(cmd *cobra.Command) (*secrets.Manager, []secrets.FetchItem, er
 	}
 
 	// Discover all bitwarden() calls by rendering templates
-	templateFiles := discoverTemplateFiles(cfg, sourcePaths)
+	templateFiles := discoverTemplateFiles(cfg, profileName, sourcePaths)
 
 	var decryptFn func([]byte) ([]byte, error)
 	var ctxOpts []template.ContextOption
@@ -248,7 +249,11 @@ func setupSecrets(cmd *cobra.Command) (*secrets.Manager, []secrets.FetchItem, er
 	return mgr, items, nil
 }
 
-func discoverTemplateFiles(cfg *config.Config, sourcePaths []string) []string {
+// discoverTemplateFiles lists the templates whose secrets mate apply would need:
+// the files and scripts it would actually render, filtered by profile the same
+// way apply filters them, so secrets are never fetched for another profile's
+// files.
+func discoverTemplateFiles(cfg *config.Config, profileName string, sourcePaths []string) []string {
 	var files []string
 
 	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
@@ -257,25 +262,32 @@ func discoverTemplateFiles(cfg *config.Config, sourcePaths []string) []string {
 		return files
 	}
 
+	profileChain := profile.InheritanceChain(cfg, profileName)
+	if profileName != "" {
+		tree = tree.FilterByProfile(profileChain)
+	}
+
 	for _, entry := range tree.Files() {
 		if entry.Attrs.Template {
 			files = append(files, entry.SourcePath)
 		}
 	}
 
-	// Also scan matescripts for template scripts
-	scriptsDir := cfg.SourceDir() + "/.matescripts"
-	if entries, err := os.ReadDir(scriptsDir); err == nil {
-		for _, e := range entries {
-			if strings.Contains(e.Name(), "#template") {
-				files = append(files, scriptsDir+"/"+e.Name())
+	// Template scripts, from the repo root and from every source's
+	// .matescripts/. Discover them the way apply does rather than listing a
+	// directory here, so the two cannot disagree on which scripts exist.
+	// Manual scripts are kept: 'mate scripts run' renders them with the cache.
+	if allScripts, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover(); err == nil {
+		for _, s := range allScripts.ByProfile(profileChain) {
+			if s.Template {
+				files = append(files, s.Path)
 			}
 		}
 	}
 
-	// Scan .mate.yaml files in source directories for generate directives
+	// Scan source directory configs for generate directives
 	for _, sourcePath := range sourcePaths {
-		for _, name := range []string{".mate.yaml", ".mate.yml"} {
+		for _, name := range []string{".mate.yaml", ".mate.yml", ".mate.toml"} {
 			path := filepath.Join(sourcePath, name)
 			if _, err := os.Stat(path); err == nil {
 				files = append(files, path)

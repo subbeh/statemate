@@ -152,7 +152,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	var pendingSecrets int
 	{
 		if mgr, err := secrets.NewManager(enc, cfg.SecretsCache); err == nil {
-			templateFiles := discoverTemplateFiles(cfg, sourcePaths)
+			templateFiles := discoverTemplateFiles(cfg, profileName, sourcePaths)
 			var decryptFn func([]byte) ([]byte, error)
 			if enc != nil && enc.CanDecrypt() {
 				decryptFn = enc.Decrypt

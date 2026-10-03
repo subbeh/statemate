@@ -310,7 +310,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 }
 
 func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.AgeEncryptor, profileName string, sourcePaths []string, dryRun bool, verbose int) error {
-	templateFiles := discoverTemplateFiles(cfg, sourcePaths)
+	templateFiles := discoverTemplateFiles(cfg, profileName, sourcePaths)
 	if len(templateFiles) == 0 {
 		return nil
 	}
