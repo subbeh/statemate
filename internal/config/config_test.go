@@ -133,6 +133,30 @@ packages:
 	}
 }
 
+// The scripts: key was removed from .mate.yaml (it never did anything). A file
+// that still has it must keep loading, since unknown keys are ignored.
+func TestLoadDirConfig_IgnoresRemovedScriptsKey(t *testing.T) {
+	for name, content := range map[string]string{
+		".mate.yaml": "scripts:\n  before_apply: [bin/prepare.sh]\npackages:\n  brew: [neovim]\n",
+		".mate.toml": "[scripts]\nbefore_apply = [\"bin/prepare.sh\"]\n\n[packages]\nbrew = [\"neovim\"]\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			cfg, err := LoadDirConfig(dir)
+			if err != nil {
+				t.Fatalf("LoadDirConfig failed: %v", err)
+			}
+			if cfg.Packages == nil || len(cfg.Packages.Brew) != 1 {
+				t.Errorf("rest of the file should still load, got packages %+v", cfg.Packages)
+			}
+		})
+	}
+}
+
 func TestValidateInvalidExtends(t *testing.T) {
 	cfg := &Config{
 		Sources: []string{"."},

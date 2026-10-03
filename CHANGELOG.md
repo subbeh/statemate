@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `packages:` in a source's `.mate.yaml` is now rendered as a template, like the rest of that file. The package list was read from the raw file, so `{{ .Vars.editor }}` was taken literally as a package name, and a `{{ range }}` loop — which is not valid YAML until rendered — made the whole file fail to parse, silently dropping every package that source declared from `mate status`, `mate apply` and `mate packages`. A `.mate.yaml` that fails to render or parse is now reported: `mate packages status` and `mate packages apply` stop with an error naming the source, and `mate status` and `mate apply` print a warning and carry on without packages
 - `mate apply` without a terminal to answer on (cron, CI, `< /dev/null`) now warns about the missing packages it did not install, as it already did for skipped scripts and hooks, listing each package manager and its packages and suggesting `--force`. The first install prompt that could not be answered silently abandoned the packages of every remaining manager, so an unattended run looked as if everything was installed
 
+### Removed
+- The `scripts:` key (`before_apply` / `after_apply`) in a source's `.mate.yaml` is no longer recognised. It was documented as a way to name scripts outside `.matescripts/`, but it never did anything: the listed scripts were never discovered, run, or shown in `mate scripts list`. Unknown keys are ignored, so a `.mate.yaml` that still has it keeps loading without an error. Move such scripts into the source's `.matescripts/` directory, where a `#before` or `#after` attribute in the filename sets when they run
+
 ## [0.4.0] - 2026-10-03
 
 ### Added

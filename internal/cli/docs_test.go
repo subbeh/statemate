@@ -191,7 +191,6 @@ func TestConfigKeysAreDocumented(t *testing.T) {
 		{"packages", config.PackageList{}, "docs/packages.md"},
 		{".mate.yaml", config.DirConfig{}, "docs/configuration.md"},
 		{"generate", config.GenerateConfig{}, "docs/configuration.md"},
-		{"scripts", config.DirScripts{}, "docs/scripts.md"},
 		{"hook", config.Hook{}, "docs/hooks.md"},
 		{"hook step", config.HookStep{}, "docs/hooks.md"},
 	}

@@ -190,17 +190,3 @@ script.
 
 Long descriptions are truncated with `…` to fit the terminal; when the output is
 piped or redirected they are printed in full.
-
-## Alternative: `.mate.yaml`
-
-A source's [`.mate.yaml`](configuration.md#source-directory-config) can name
-scripts explicitly instead of relying on the `.matescripts/` convention:
-
-```yaml
-scripts:
-  before_apply: [bin/prepare.sh]
-  after_apply: [bin/reload.sh]
-```
-
-Paths are relative to the source directory. Attributes in the filename still
-apply.
