@@ -89,7 +89,7 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(results) == 0 {
-		managers := packages.GetAvailableManagers()
+		managers := packages.GetAvailableManagersWithHelper(cfg.AURHelper)
 		if len(managers) == 0 {
 			fmt.Println("No package managers available")
 		} else {
@@ -192,7 +192,7 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(results) == 0 {
-		managers := packages.GetAvailableManagers()
+		managers := packages.GetAvailableManagersWithHelper(cfg.AURHelper)
 		if len(managers) == 0 {
 			fmt.Println("No package managers available")
 		} else {

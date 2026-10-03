@@ -78,7 +78,11 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Package Managers:")
 
-	managers := packages.GetAvailableManagers()
+	aurHelper := ""
+	if cfg != nil {
+		aurHelper = cfg.AURHelper
+	}
+	managers := packages.GetAvailableManagersWithHelper(aurHelper)
 	if len(managers) == 0 {
 		fmt.Println("[WARN] No package managers found")
 	} else {

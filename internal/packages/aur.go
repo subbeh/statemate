@@ -12,11 +12,27 @@ type AURManager struct {
 	helper string
 }
 
+// defaultAURHelpers are tried in order when aur_helper is not configured.
+var defaultAURHelpers = []string{"yay", "paru"}
+
 func NewAURManager(helper string) *AURManager {
 	if helper == "" {
-		helper = "yay"
+		helper = detectAURHelper()
 	}
 	return &AURManager{helper: helper}
+}
+
+// detectAURHelper returns the first default helper found on PATH. Assuming yay
+// made the AUR manager unavailable on a paru-only machine, silently ignoring
+// every aur: package. With neither installed it still returns yay, so the
+// manager reports itself unavailable as before.
+func detectAURHelper() string {
+	for _, h := range defaultAURHelpers {
+		if _, err := exec.LookPath(h); err == nil {
+			return h
+		}
+	}
+	return defaultAURHelpers[0]
 }
 
 func (a *AURManager) Name() string {

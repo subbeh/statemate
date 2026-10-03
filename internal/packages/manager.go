@@ -129,10 +129,6 @@ func GetManager(name string, aurHelper string) (Manager, error) {
 	}
 }
 
-func GetAvailableManagers() []Manager {
-	return GetAvailableManagersWithHelper("")
-}
-
 func GetAvailableManagersWithHelper(aurHelper string) []Manager {
 	managers := []Manager{
 		NewBrewManager(),
