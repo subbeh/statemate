@@ -7,7 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"filippo.io/age"
 	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/config"
 )
 
 // mate doctor must look for the AUR helper the config names, not a default one.
@@ -52,5 +54,39 @@ func TestDoctor_HonoursConfiguredAURHelper(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "[OK] aur") {
 		t.Errorf("doctor did not find the configured AUR helper:\n%s", out)
+	}
+}
+
+// statemate has age built in, so the age binary says nothing about whether
+// encryption works; whether the configured identity and recipients load does.
+func TestAgeStatus(t *testing.T) {
+	id, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := filepath.Join(t.TempDir(), "key.txt")
+	if err := os.WriteFile(key, []byte(id.String()+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	recipient := id.Recipient().String()
+
+	tests := []struct {
+		name  string
+		age   *config.AgeConfig
+		level string
+	}{
+		{"not configured", nil, "OK"},
+		{"identity and recipients", &config.AgeConfig{Identity: key, Recipients: []string{recipient}}, "OK"},
+		{"recipients only", &config.AgeConfig{Recipients: []string{recipient}}, "WARN"},
+		{"identity only", &config.AgeConfig{Identity: key}, "WARN"},
+		{"unreadable identity", &config.AgeConfig{Identity: key + ".missing", Recipients: []string{recipient}}, "ERROR"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			level, msg := ageStatus(&config.Config{Age: tc.age})
+			if level != tc.level {
+				t.Errorf("level = %s (%s), want %s", level, msg, tc.level)
+			}
+		})
 	}
 }
