@@ -23,29 +23,34 @@ var addCmd = &cobra.Command{
 The file is copied from its current location to the appropriate source directory,
 following stow-style conventions. The original file remains in place.
 
+--for-profile marks the file #profile:<name>, so it is only deployed for that
+profile. The global --profile only selects the active profile, which decides the
+sources you can add to, as it does for every other command.
+
 Examples:
   mate add ~/.config/nvim/init.lua
-  mate add --profile work ~/.gitconfig
+  mate add --for-profile work ~/.gitconfig
   mate add --encrypt ~/.ssh/config`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAdd,
 }
 
 var (
-	addProfile  string
-	addEncrypt  bool
-	addSource   string
-	addTemplate bool
+	addForProfile string
+	addEncrypt    bool
+	addSource     string
+	addTemplate   bool
 )
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().StringVar(&addProfile, "profile", "", "add file with profile suffix")
+	addCmd.Flags().StringVar(&addForProfile, "for-profile", "", "deploy the file only for this profile (adds #profile:<name>)")
 	addCmd.Flags().BoolVar(&addEncrypt, "encrypt", false, "encrypt file when adding")
 	addCmd.Flags().StringVarP(&addSource, "source", "s", "", "target source directory")
 	addCmd.Flags().BoolVar(&addTemplate, "template", false, "mark file as template")
 
 	_ = addCmd.RegisterFlagCompletionFunc("source", completeSources)
+	_ = addCmd.RegisterFlagCompletionFunc("for-profile", completeProfiles)
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
@@ -56,7 +61,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	profileName := profile.Detect(cfg)
+	profileName, _ := cmd.Flags().GetString("profile")
+	if profileName == "" {
+		profileName = profile.Detect(cfg)
+	}
 	sources := profile.ResolveSources(cfg, profileName)
 	absSources := cfg.ResolveSourcePaths(sources)
 	if len(absSources) == 0 {
@@ -143,8 +151,8 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	destName := filepath.Base(relPath)
-	if addProfile != "" {
-		destName = destName + "#profile:" + addProfile
+	if addForProfile != "" {
+		destName = destName + "#profile:" + addForProfile
 	}
 	if addEncrypt {
 		destName = destName + "#encrypted"

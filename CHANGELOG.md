@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `mate packages apply --help` now describes what the command does: it installs missing packages, confirming each package manager separately unless `-y`/`--yes` is given, and only removes anything with `--prune`. Its summary used to read "Sync packages", which suggested it would also remove undeclared packages. `mate packages status --help` now lists every place packages are read from, including profiles reached through `extends` and a profile's own `include` files
+- `mate add` marks a file for one profile with `--for-profile <name>` (adding `#profile:<name>`) instead of `--profile <name>`. Its own `--profile` hid the global `-p/--profile`, so `mate add -p work <file>` failed with "unknown shorthand flag: 'p'" and `add` could not be told which profile's sources to offer. `-p/--profile` now means what it does for every other command, the active profile, and no longer adds a suffix: if you scripted `mate add --profile <name>`, switch to `--for-profile <name>`
 
 ### Fixed
 - The command reference in `docs/commands/` now shows the examples, prompt tables and YAML snippets from each command's help as code blocks. They used to collapse into a single run-on paragraph, and placeholders such as `<path>` and `<source>/<name>` disappeared from the text
