@@ -70,17 +70,14 @@ func FindConfig() (string, error) {
 	return findConfigInDir(".")
 }
 
-func SourceDir() string {
-	if envDir := os.Getenv("STATEMATE_DIR"); envDir != "" {
-		return expandHome(envDir)
-	}
-
+// LocalSourceDir returns the repository registered in the local config's
+// source_dir, or "" when none is. It deliberately has no fallback to the
+// current directory, so callers can tell whether anything is registered at all.
+func LocalSourceDir() string {
 	if lc := loadLocalConfig(); lc != nil && lc.SourceDirPath != "" {
 		return expandHome(lc.SourceDirPath)
 	}
-
-	cwd, _ := os.Getwd()
-	return cwd
+	return ""
 }
 
 func LocalConfigPath() string {

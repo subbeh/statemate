@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -140,7 +139,6 @@ Managed with [statemate](https://github.com/subbeh/statemate).
 `
 
 func runInit(cmd *cobra.Command, args []string) error {
-	reader := bufio.NewReader(os.Stdin)
 	format := initFormat
 
 	cwd, err := os.Getwd()
@@ -148,23 +146,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configExists := false
-	var existingConfigPath string
-	if _, err := os.Stat("mate.yaml"); err == nil {
-		configExists = true
-		existingConfigPath = "mate.yaml"
-	} else if _, err := os.Stat("mate.toml"); err == nil {
-		configExists = true
-		existingConfigPath = "mate.toml"
-	}
-
-	if configExists {
-		return handleExistingRepo(cwd, existingConfigPath)
+	// The same names, in the same order, that every other command looks for.
+	for _, name := range []string{"mate.yaml", "mate.yml", "mate.toml"} {
+		if _, err := os.Stat(name); err == nil {
+			return handleExistingRepo(cwd, name)
+		}
 	}
 
 	if format == "" {
 		fmt.Print("Config format [yaml/toml] (default: yaml): ")
-		input, err := reader.ReadString('\n')
+		input, err := util.ReadLine()
 		if err != nil {
 			return err
 		}
@@ -217,7 +208,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 func handleExistingRepo(cwd, configPath string) error {
 	fmt.Printf("Found existing config: %s\n", configPath)
 
-	if localConfigExists() && config.SourceDir() == cwd {
+	if config.LocalSourceDir() == cwd {
 		fmt.Println("This directory is already registered as your dotfiles location.")
 		fmt.Println("\nRun 'mate apply' to apply your configuration.")
 		return nil
@@ -233,12 +224,16 @@ func handleExistingRepo(cwd, configPath string) error {
 }
 
 func registerSourceDir(cwd string) error {
-	existingSourceDir := config.SourceDir()
+	// Ask the local config directly: resolving the source dir the way other
+	// commands do falls back to the current directory when nothing is
+	// registered, which always equals cwd here and so hid the prompt on exactly
+	// the machines that needed it.
+	existingSourceDir := config.LocalSourceDir()
 	if existingSourceDir == cwd {
 		return nil
 	}
 
-	if localConfigExists() {
+	if existingSourceDir != "" {
 		fmt.Printf("\nLocal config already points to: %s\n", util.ShortenPath(existingSourceDir))
 		ok, err := util.Confirm("Update to this directory instead? [y/N]: ", false)
 		if err != nil {
@@ -263,11 +258,6 @@ func registerSourceDir(cwd string) error {
 		}
 	}
 	return nil
-}
-
-func localConfigExists() bool {
-	_, err := os.Stat(config.LocalConfigPath())
-	return err == nil
 }
 
 func initGitRepo() error {

@@ -62,6 +62,26 @@ func ReadKey() (byte, error) {
 	return b[0], nil
 }
 
+// ReadLine reads one line from stdin and returns it without the newline. Like
+// ReadKey it reads byte by byte, because a buffered reader would swallow the
+// answers piped in for the prompts that follow.
+func ReadLine() (string, error) {
+	var line []byte
+	b := make([]byte, 1)
+	for {
+		if _, err := os.Stdin.Read(b); err != nil {
+			if len(line) > 0 {
+				return string(line), nil
+			}
+			return "", err
+		}
+		if b[0] == '\n' {
+			return string(line), nil
+		}
+		line = append(line, b[0])
+	}
+}
+
 // Confirm prints prompt and waits for a single y or n keypress. Enter picks
 // defaultYes; any other key counts as no.
 func Confirm(prompt string, defaultYes bool) (bool, error) {
