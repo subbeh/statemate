@@ -549,6 +549,37 @@ func TestScannerPermRInheritance(t *testing.T) {
 	}
 }
 
+// .mate.yaml perm: is a default for files. Applied to directories too, perm:
+// "644" left them without the execute bit, so nothing inside could be written.
+func TestScannerDirConfigPermIsFilesOnly(t *testing.T) {
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "app")
+	if err := os.MkdirAll(filepath.Join(srcDir, ".config", "app"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".config", "app", "config"), []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".mate.yaml"), []byte("perm: \"644\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := NewScanner("/home/testuser", dir).Scan([]string{srcDir})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	files := tree.Files()
+	if len(files) != 1 || files[0].Attrs.Perm != 0644 {
+		t.Fatalf("expected one file with perm 0644, got %v", files)
+	}
+	for _, d := range tree.Dirs() {
+		if d.Attrs.Perm != 0 {
+			t.Errorf("directory %s got perm %#o from .mate.yaml, want none", d.RelPath, d.Attrs.Perm)
+		}
+	}
+}
+
 func TestScannerSkipsSpecialDirs(t *testing.T) {
 	dir := t.TempDir()
 

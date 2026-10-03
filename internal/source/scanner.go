@@ -146,7 +146,10 @@ func (s *Scanner) buildEntry(sourceDir, fullPath, relPath string, info os.FileIn
 		if dirCfg.Group != "" && attrs.Group == "" {
 			attrs.Group = dirCfg.Group
 		}
-		if dirCfg.Perm != "" && attrs.Perm == 0 {
+		// perm: is the default mode for files. A file mode such as 644 lacks the
+		// execute bit a directory needs to be entered, so applying it to
+		// directories would lock apply out of them.
+		if dirCfg.Perm != "" && attrs.Perm == 0 && !info.IsDir() {
 			if p, err := strconv.ParseUint(dirCfg.Perm, 8, 32); err == nil {
 				attrs.Perm = uint32(p)
 			}
