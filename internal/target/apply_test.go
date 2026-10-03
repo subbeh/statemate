@@ -764,3 +764,28 @@ func TestEncryptedWithoutIdentityErrors(t *testing.T) {
 		})
 	}
 }
+
+// With no terminal (cron, CI, ssh host 'mate apply'), a conflict cannot be
+// answered. The error has to say so and point at --force: it used to be a bare
+// "EOF", which reads like a corrupt file rather than a missing answer.
+func TestPromptConflict_NoTerminalExplainsItself(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = w.Close()
+	orig := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = orig })
+
+	a := &Applier{}
+	_, err = a.promptConflict(&Change{Entry: &source.Entry{TargetPath: "/home/u/.zshrc"}})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	for _, want := range []string{"/home/u/.zshrc", "no terminal", "--force"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+}

@@ -1,7 +1,9 @@
 package target
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -410,6 +412,11 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 		char, err := util.ReadKey()
 		if err != nil {
 			fmt.Println()
+			// No terminal to answer on. A bare "EOF" read like a damaged file;
+			// say what is missing and how an unattended run gets past it.
+			if errors.Is(err, io.EOF) {
+				return "", fmt.Errorf("conflict on %s needs an answer, but there is no terminal to ask on (use --force to overwrite)", change.Entry.TargetPath)
+			}
 			return "", err
 		}
 
