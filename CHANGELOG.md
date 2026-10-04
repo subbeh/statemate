@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New guides: [Organising Your Repository](docs/repository-layout.md), [Different Machines](docs/machines.md), [Encryption and Secrets](docs/encryption.md) (including creating an age key), [Managing System Files](docs/system-files.md), [Setting Up a New Machine](docs/new-machine.md), [Tips & Tricks](docs/tips.md) (Neovim, tmux, git, shell and status bar integration) and [Troubleshooting](docs/troubleshooting.md). Getting Started is rewritten end to end, and every reference guide was checked against the code and corrected
 - Documentation is now published as a searchable website at https://subbeh.github.io/statemate/, built from the same `docs/` guides and command reference
 
 ### Changed

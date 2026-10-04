@@ -54,6 +54,14 @@ nav:
       - getting-started.md
       - concepts.md
   - Guides:
+      - repository-layout.md
+      - machines.md
+      - encryption.md
+      - system-files.md
+      - new-machine.md
+      - tips.md
+      - troubleshooting.md
+  - Reference:
       - configuration.md
       - attributes.md
       - templates.md
@@ -61,7 +69,7 @@ nav:
       - scripts.md
       - hooks.md
       - packages.md
-  # The subcommand pages are reached through this page's SEE ALSO links, so they
-  # are deliberately not listed one by one.
-  - Command Reference: commands/mate.md
+      # The subcommand pages are reached through this page's SEE ALSO links, so
+      # they are deliberately not listed one by one.
+      - Commands: commands/mate.md
   - Changelog: https://github.com/subbeh/statemate/blob/main/CHANGELOG.md

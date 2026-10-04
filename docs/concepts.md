@@ -14,12 +14,13 @@ defaults to your home directory:
       zsh/aliases.zsh       →  ~/.config/zsh/aliases.zsh
 ```
 
-The path inside the source is preserved verbatim; only the source's own name is
-stripped. Nothing is deployed by directory name, so two sources can contribute to
-the same subtree. If two sources claim the *same* target, that is a conflict and
-statemate refuses to apply until you resolve it. Files excluded by
-[`#profile:`](attributes.md#profilename) do not count — a target may have one
-variant per profile.
+The path inside the source is preserved, minus the source's own name and any
+[attributes](attributes.md) on its components: `zsh/.config#perm:700/zsh/aliases.zsh`
+deploys to `~/.config/zsh/aliases.zsh`. Nothing is deployed by directory name, so
+two sources can contribute to the same subtree. If two sources claim the *same*
+target, that is a conflict and statemate refuses to apply until you resolve it.
+Files excluded by [`#profile:`](attributes.md#profilename) do not count, so a
+target may have one variant per profile.
 
 A source can deploy somewhere other than home with `target_base` or `targets` in
 its [`.mate.yaml`](configuration.md#source-directory-config) — this is how system
@@ -36,6 +37,11 @@ The database lives at `~/.local/share/statemate/state.db` (or
 `$XDG_DATA_HOME/statemate/state.db`). It is local to each machine and is not
 meant to be committed.
 
+There is one database per user, keyed by target path, whichever repository you
+run `mate` against. Pointing `mate` at a second repository therefore reports
+every file the first one manages as an orphan. Never run `mate clean --all`
+against a repository other than your usual one.
+
 Two hashes rather than one is what lets statemate tell *which side* of a file
 changed. For a plain file they are identical. For a `#template` or `#encrypted`
 file they differ, because the target holds rendered or decrypted content — and
@@ -47,44 +53,80 @@ permanently modified.
 On each run statemate hashes the source, computes what the target *should*
 contain, and compares both against the recorded state:
 
+For a file with a record:
+
 | Source vs recorded | Target vs recorded | Result | Marker |
 |---|---|---|---|
 | same | same | unchanged | |
-| changed | same | modified — deploy | `~` |
+| changed | same | modified, deploy | `~` |
 | same | changed | conflict, or [import](attributes.md#import) | `!` / `<` |
 | changed | changed | conflict | `!` |
-| — | missing | new — deploy | `+` |
+| any | missing | modified, deploy again | `~` |
+
+"Source changed" includes a template whose rendered output changed because a
+variable or secret did, even when the template file itself did not.
+
+For a file with **no** record, such as on a new machine or after `mate add`:
+
+| Target | Result | Marker |
+|---|---|---|
+| missing | new, deploy | `+` |
+| identical to what would be deployed | adopted silently: recorded on the next apply, nothing written | |
+| different | conflict | `!` |
 
 A **conflict** means the target changed without statemate's knowledge, so
-overwriting it would destroy work. `mate apply` stops and asks:
+overwriting it would destroy work. `mate apply` stops and asks, with a single
+keypress:
 
 ```
-[o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort
+Conflict: /home/you/.zshrc
+  Target has been modified since last apply
+  [o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort:
 ```
 
-`[i]mport` copies the target's content back into the source. For files where that
-is always the right answer, mark them [`#import`](attributes.md#import) and
-statemate stops asking.
+`[i]mport` copies the target's content back into the source. It is not offered for
+`#template` files, whose source is not the deployed content. `[d]iff` shows the
+difference and asks again. For files where importing is always the right answer,
+mark them [`#import`](attributes.md#import) and statemate stops asking.
 
-Permission differences count as changes too: a file with correct content but the
-wrong mode shows as modified and is fixed on apply.
+`mate apply --force` overwrites every conflict without asking, and keeps no
+backup. `--dry-run` still asks, so you can look at the diffs.
+
+A mode difference counts as a change for files with a
+[`#perm:`](attributes.md#perm600) attribute (or a `perm` default): the file shows
+as modified and is fixed on apply. Without one, the mode is set when the file is
+written and not checked afterwards. Owner and group are never checked.
 
 ### Untracked targets
 
-If a file has no recorded state — a fresh machine, or a file you just added — but
-the target already exists with different content, statemate reports a conflict.
-With nothing recorded there is no way to know which side is newer, so it asks
-rather than guessing. This applies to `#import` files too, on their first
+If a file has no recorded state, as on a fresh machine or for a file you just
+added, but the target already exists with different content, statemate reports a
+conflict. With nothing recorded there is no way to know which side is newer, so it
+asks rather than guessing. This applies to `#import` files too, on their first
 encounter only.
+
+A target that already matches, which is the usual case right after `mate add`, is
+not reported at all. The next `mate apply` records it and reports it as
+unchanged.
 
 ## Orphans
 
-A file tracked in the database but no longer present in any source is an
-**orphan**. `mate status` warns about them; `mate clean` removes them. This
-happens when you delete a file from the repository — statemate will not remove the
-deployed copy until you say so.
+A file tracked in the database but no longer present in any active source, while
+its target still exists, is an **orphan**. This happens when you delete a file
+from the repository, or drop a source from `sources:`. statemate will not remove
+the deployed copy until you say so.
 
-Use `mate forget` to drop tracking while leaving the deployed file alone.
+```bash
+mate status                 # lists orphans under a warning
+mate clean                  # lists them too
+mate clean ~/.old.conf      # removes one, after asking
+mate clean --all            # removes all, asking for each
+mate clean --all --force    # removes all, without asking
+```
+
+`mate forget <path>` drops the tracking but leaves the deployed file alone. That
+only sticks once the file is gone from the source. If it is still there, the next
+apply picks it up again.
 
 ## Profiles
 
@@ -100,14 +142,21 @@ attribute in their filename.
 
 `mate apply` runs these phases:
 
-1. Scan sources, filter by profile and by any `--source`/path scope
-2. Fetch missing [secrets](secrets.md)
-3. Run `#before` [scripts](scripts.md), then reload config (a script may have
+1. Load and validate the config, including the [hooks](hooks.md) in `mate.yaml`
+2. Fetch missing [secrets](secrets.md) (skipped for a path scope)
+3. Scan sources, filter by profile, and refuse if two files claim one target
+4. Narrow to any `--source` or path scope, and validate the hooks declared in
+   sources
+5. Run `#before` [scripts](scripts.md), then reload config (a script may have
    generated a var_file)
-4. Write files: create, modify, import, or prompt on conflict
-5. Prompt for missing [packages](packages.md)
-6. Run `#after` scripts
+6. Write directories and files: create, modify, import, or prompt on conflict
+7. Prompt for missing [packages](packages.md) (skipped for a path scope)
+8. Run the hooks that the written files triggered
+9. Run `#after` scripts
 
-Pending changes are computed *once*, before step 3, so an `#onchange` script sees
+A config mistake caught in steps 1–4 stops the run before any script runs or any
+file is written.
+
+Pending changes are computed *once*, before step 5, so an `#onchange` script sees
 the same set whether it runs before or after — by the time files are written there
 are no pending changes left to observe.

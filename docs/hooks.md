@@ -66,8 +66,7 @@ never collide with other hooks. The local config cannot override them.
 
 ## Patterns
 
-Patterns match the **target** path — where the file is deployed — with the same
-gitignore-style rules as [`ignore`](configuration.md#ignore):
+Patterns match the **target** path, meaning where the file is deployed:
 
 | Pattern | Matches |
 |---------|---------|
@@ -76,8 +75,11 @@ gitignore-style rules as [`ignore`](configuration.md#ignore):
 | `~/.config/environment.d/*.conf` | Relative to `~`, spelled out |
 | `/etc/keyd/*.conf` | Absolute |
 
-`**` matches any number of directories, and a pattern naming a directory matches
-everything under it. Attributes such as `#template` are not part of the target
+`*` matches within one path segment, `**` matches any number of directories, and
+a pattern naming a directory matches everything under it. A trailing `/`
+restricts a pattern to files inside the directory. Unlike
+[`ignore`](configuration.md#ignore), there is no `!` negation: a hook that should
+skip some files needs narrower patterns. Attributes such as `#template` are not part of the target
 path, so they never need to appear in a pattern. `target_base` and `targets:`
 mappings do not matter either: a unit deployed to `/etc/systemd/system` matches
 `*.service` and `/etc/systemd/system/*.service` alike.
@@ -97,7 +99,10 @@ Only what actually reached the disk counts. These do not trigger hooks:
 
 - Permission-only fixes
 - `#import` files, which are copied back into the source rather than deployed
-- Writes that failed or were skipped, such as a conflict answered with skip
+- Conflicts answered with `[s]kip`
+
+A write that fails aborts the whole apply, so no hooks or `#after` scripts run
+after it.
 
 Scoped runs (`mate apply <path>`, `mate apply --source <name>`) trigger hooks for
 the files they wrote.
@@ -111,7 +116,8 @@ scripts:
 
 Each triggered hook runs **once**, however many of its files changed. Triggered
 hooks run in name order, so a numeric prefix (`10-systemd`, `20-keyd`) forces an
-order. Steps run in the order listed.
+order. Source hooks sort by their full `<source>/<name>`. Steps run in the order
+listed.
 
 ## Steps
 
@@ -119,6 +125,11 @@ order. Steps run in the order listed.
 
 A command run with `sh -c`. It is rendered as a [template](templates.md) first,
 with `.Files` set to the triggering target paths, sorted.
+
+> **In a source's `.mate.yaml`**, the whole file is rendered once when it is
+> loaded, before any hook runs, so `{{ .Files }}` there is always empty. Use the
+> `$STATEMATE_HOOK_FILES` environment variable instead, or escape the expression
+> so it survives the first rendering: ``{{`{{ .Files }}`}}``.
 
 Commands run in the directory of the config file that declared the hook: the
 repository root for `mate.yaml`, the source directory for `.mate.yaml`, and
@@ -138,8 +149,9 @@ A script by the name `mate scripts list` shows in its NAME column, such as
 3. A script in any other source. If more than one matches, it is a config error.
 
 The script runs as it would with `mate scripts run`: its attributes, environment,
-and working directory are unchanged, and the run is recorded. If the script has
-a `#profile:` that is not active, the step is skipped with a warning.
+and working directory are unchanged, and the run is recorded (except for
+`#always` and manual scripts, which never are). If the script has a `#profile:`
+that is not active, the step is skipped with a warning.
 
 A script a hook ran is not run again as an `#after` script in the same apply.
 
@@ -151,9 +163,11 @@ Every step receives, on top of the usual environment:
 |----------|-------|
 | `STATEMATE_HOOK_NAME` | The hook name, `arch/keyd` for a source hook |
 | `STATEMATE_HOOK_FILES` | The triggering target paths, newline-separated, sorted |
-| `STATEMATE_SOURCE_DIR` | The declaring source, for a hook in a source's `.mate.yaml` |
+| `STATEMATE_SOURCE_DIR` | For `run:` steps, the declaring source of a hook in a source's `.mate.yaml`. For `script:` steps, the script's own source |
 
 `STATEMATE_HOOK_FILES` is empty when the hook is run with `mate hooks run`.
+`script:` steps also receive the usual
+[script variables](scripts.md#environment).
 
 ## Confirmation
 
@@ -202,8 +216,8 @@ which usually means a typo.
 
 | Command | Purpose |
 |---------|---------|
-| `mate hooks list` | Every hook with its scope, patterns, profile, and status |
-| `mate hooks run <name>` | Run a hook now, without a prompt |
+| `mate hooks list` | Every hook: NAME, SCOPE, MATCH, PROFILE, STEPS, STATUS, DESCRIPTION |
+| `mate hooks run <name>` | Run a hook now, without a prompt. `--dry-run` shows the steps instead |
 | `mate apply --dry-run` | Lists the hooks that would run; `-V` adds the files and steps |
 | `mate status` | Lists the hooks that pending changes would trigger |
 
