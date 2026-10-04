@@ -107,6 +107,36 @@ func runApply(cmd *cobra.Command, args []string) error {
 	sources := profile.ResolveSources(cfg, profileName)
 	sourcePaths := cfg.ResolveSourcePaths(sources)
 
+	// Narrow the run before anything is applied, so every later phase (secrets,
+	// files, scripts, packages, orphans) sees the same scope.
+	scope, err := scopeFrom(cmd, args)
+	if err != nil {
+		return err
+	}
+
+	var enc *encrypt.AgeEncryptor
+	if cfg.Age != nil {
+		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
+		if err != nil {
+			return fmt.Errorf("setting up encryption: %w", err)
+		}
+	}
+
+	// Fetch missing secrets before scanning: a source's .mate.yaml is rendered
+	// during the scan, and one that generates files from secrets fails to
+	// render on a fresh machine whose cache does not have them yet. Discovery
+	// reads .mate.yaml unrendered, so it does not depend on the cache itself.
+	//
+	// A file-scoped run deploys files and nothing else, so it does not reach
+	// out to fetch secrets. Source scope still does, since its templates may
+	// need them.
+	mgr, mgrErr := secrets.NewManager(enc, cfg.SecretsCache)
+	if mgrErr == nil && scope.Path == "" {
+		if err := fetchMissingSecrets(cfg, mgr, enc, profileName, scope.FilterSourcePaths(sourcePaths), dryRun, verbose); err != nil {
+			return err
+		}
+	}
+
 	scanner, err := newScanner(cfg, profileName)
 	if err != nil {
 		return fmt.Errorf("creating scanner: %w", err)
@@ -132,12 +162,6 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolve conflicts before applying")
 	}
 
-	// Narrow the run before anything is applied, so every later phase (files,
-	// scripts, packages, orphans) sees the same scope.
-	scope, err := scopeFrom(cmd, args)
-	if err != nil {
-		return err
-	}
 	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
 		return err
 	}
@@ -170,14 +194,6 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	var enc *encrypt.AgeEncryptor
-	if cfg.Age != nil {
-		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-		if err != nil {
-			return fmt.Errorf("setting up encryption: %w", err)
-		}
-	}
-
 	var ctxOpts []template.ContextOption
 	if enc != nil && enc.CanDecrypt() {
 		ctxOpts = append(ctxOpts, template.WithDecrypt(enc.Decrypt))
@@ -188,20 +204,10 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating template context: %w", err)
 	}
 
-	mgr, mgrErr := secrets.NewManager(enc, cfg.SecretsCache)
 	if mgrErr == nil {
 		tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 			key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
 			return mgr.Get(key)
-		}
-
-		// A file-scoped run deploys files and nothing else, so it does not reach
-		// out to fetch secrets. Source scope still does, since its templates may
-		// need them.
-		if scope.Path == "" {
-			if err := fetchMissingSecrets(cfg, mgr, enc, profileName, sourcePaths, dryRun, verbose); err != nil {
-				return err
-			}
 		}
 	}
 

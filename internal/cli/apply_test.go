@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"filippo.io/age"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/packages"
@@ -266,5 +267,63 @@ func TestInstallMissingPackages_WarnsWithoutTerminal(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("warning missing %q:\n%s", want, got)
 		}
+	}
+}
+
+// A source's .mate.yaml can generate files from secrets (an SSH key per name in
+// a variable is the common case). On a fresh machine nothing is cached yet, and
+// rendering that file while scanning failed with "no secrets cache found"
+// before apply had reached the fetch that would have filled the cache.
+func TestApply_FetchesSecretsUsedByDirConfigBeforeScanning(t *testing.T) {
+	root := isolateHome(t)
+	home := filepath.Join(root, "home")
+	repo := filepath.Join(root, "repo")
+	t.Setenv("STATEMATE_DIR", repo)
+
+	id, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := filepath.Join(root, "key.txt")
+	writeFile(t, keyPath, id.String()+"\n", 0600)
+
+	// A bw that is unlocked and holds one item with a custom field.
+	bin := filepath.Join(root, "bin")
+	writeFile(t, filepath.Join(bin, "bw"), `#!/bin/sh
+case "$1" in
+  status) echo '{"status":"unlocked"}' ;;
+  sync) echo synced ;;
+  list) echo '[{"id":"1","name":"api","fields":[{"name":"token","value":"s3cret"}]}]' ;;
+esac
+`, 0755)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeFile(t, filepath.Join(repo, "mate.yaml"), `sources: [app]
+age:
+  identity: "`+keyPath+`"
+  recipients: ["`+id.Recipient().String()+`"]
+`, 0644)
+	writeFile(t, filepath.Join(repo, "app", ".mate.yaml"), `generate:
+  - target: .config/app/token
+    content: '{{ bitwarden "api" "field" "token" }}'
+`, 0644)
+
+	cmd := &cobra.Command{Use: "apply", RunE: runApply}
+	cmd.Flags().String("config", "", "")
+	cmd.Flags().String("profile", "", "")
+	addScopeFlag(cmd)
+	origForce := force
+	force = true
+	defer func() { force = origForce }()
+
+	if err := runApply(cmd, nil); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(home, ".config", "app", "token"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "s3cret" {
+		t.Errorf("generated file = %q, want %q", got, "s3cret")
 	}
 }

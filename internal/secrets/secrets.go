@@ -206,7 +206,7 @@ func (m *Manager) loadCache() error {
 	data, err := os.ReadFile(m.cachePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("no secrets cache found")
+			return fmt.Errorf("no secrets cache found (run 'mate secrets fetch')")
 		}
 		return err
 	}
