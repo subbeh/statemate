@@ -128,7 +128,6 @@ type DirConfig struct {
 	Group      string            `yaml:"group" toml:"group"`
 	Perm       string            `yaml:"perm" toml:"perm"`
 	Packages   *PackageList      `yaml:"packages" toml:"packages"`
-	Scripts    *DirScripts       `yaml:"scripts" toml:"scripts"`
 	Generate   []GenerateConfig  `yaml:"generate" toml:"generate"`
 	Hooks      map[string]*Hook  `yaml:"hooks" toml:"hooks"`
 }
@@ -138,9 +137,4 @@ type GenerateConfig struct {
 	Mode    string `yaml:"mode" toml:"mode"`
 	Content string `yaml:"content" toml:"content"`
 	Profile string `yaml:"profile" toml:"profile"`
-}
-
-type DirScripts struct {
-	BeforeApply []string `yaml:"before_apply" toml:"before_apply"`
-	AfterApply  []string `yaml:"after_apply" toml:"after_apply"`
 }

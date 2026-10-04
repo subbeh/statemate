@@ -8,7 +8,6 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/profile"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/util"
 )
@@ -16,24 +15,22 @@ import (
 var cleanCmd = &cobra.Command{
 	Use:   "clean [path...]",
 	Short: "Remove orphaned files",
-	Long: `Remove orphaned files that are no longer in the source.
+	Long: `Remove orphaned files: targets mate deployed earlier that no longer come
+from any active source, usually because the file was deleted from the
+repository or its source was dropped from 'sources:'.
 
-Orphans are files that were previously managed but are no longer defined
-in any source directory. By default, this command prompts for confirmation
-before each deletion.
+With no arguments, the orphans are listed and nothing is removed. Name orphans
+to remove them, or pass --all for every one. Each removal is confirmed unless
+--force is given. Files you cannot write to are removed with sudo.
 
 Hooks matching the removed files run afterwards (see 'mate hooks'); --force
 also confirms them.
 
-Flags:
-  --force   Skip confirmation prompts
-  --all     Remove all orphans (otherwise specify paths)
-
-Example:
-  mate clean                              # list orphans
-  mate clean ~/.config/old/file.conf      # remove specific orphan
-  mate clean --all                        # remove all orphans (with prompts)
-  mate clean --all --force                # remove all orphans (no prompts)`,
+To stop tracking a file without deleting it, use 'mate forget'.`,
+	Example: `  mate clean                              # list orphans
+  mate clean ~/.config/old/file.conf      # remove one orphan
+  mate clean --all                        # remove every orphan, asking for each
+  mate clean --all --force                # remove every orphan without asking`,
 	RunE:              runClean,
 	ValidArgsFunction: completeOrphanedFiles,
 }
@@ -77,7 +74,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

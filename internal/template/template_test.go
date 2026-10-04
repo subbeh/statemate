@@ -290,6 +290,27 @@ nested:
 	}
 }
 
+// A var_file is encrypted when #encrypted is among its attributes, not only
+// when it is the last one.
+func TestLoadVarFileEncryptedNotLastAttribute(t *testing.T) {
+	dir := t.TempDir()
+	varFile := dir + "/secrets.yaml#encrypted#perm:600"
+	if err := os.WriteFile(varFile, []byte("ciphertext"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{VarFiles: []string{varFile}}
+	decrypt := func([]byte) ([]byte, error) { return []byte("token: plain\n"), nil }
+
+	ctx, err := NewContext(cfg, "", WithDecrypt(decrypt))
+	if err != nil {
+		t.Fatalf("NewContext failed: %v", err)
+	}
+	if ctx.Vars["token"] != "plain" {
+		t.Errorf("expected token from decrypted var file, got %v", ctx.Vars["token"])
+	}
+}
+
 func TestRenderFile(t *testing.T) {
 	dir := t.TempDir()
 	tmplFile := dir + "/config.tmpl"

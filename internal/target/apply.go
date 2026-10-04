@@ -1,7 +1,9 @@
 package target
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -289,7 +291,11 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 			return err
 		}
 
-		if entry.Attrs.Encrypted && a.enc != nil {
+		if entry.Attrs.Encrypted {
+			// Never fall through to writing the ciphertext as the target.
+			if a.enc == nil {
+				return errNoIdentity(entry)
+			}
 			content, err = a.enc.Decrypt(content)
 			if err != nil {
 				return fmt.Errorf("decrypting: %w", err)
@@ -391,7 +397,9 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 	fmt.Printf("\nConflict: %s\n", change.Entry.TargetPath)
 	fmt.Printf("  Target has been modified since last apply\n")
 
-	canImport := !change.Entry.Attrs.Template
+	// Importing a #symlink would write the target's content through the source
+	// link, into whatever it points at.
+	canImport := !change.Entry.Attrs.Template && !change.Entry.Attrs.Symlink
 	var prompt string
 	if canImport {
 		prompt = "  [o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort: "
@@ -404,6 +412,11 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 		char, err := util.ReadKey()
 		if err != nil {
 			fmt.Println()
+			// No terminal to answer on. A bare "EOF" read like a damaged file;
+			// say what is missing and how an unattended run gets past it.
+			if errors.Is(err, io.EOF) {
+				return "", fmt.Errorf("conflict on %s needs an answer, but there is no terminal to ask on (use --force to overwrite)", change.Entry.TargetPath)
+			}
 			return "", err
 		}
 
@@ -481,7 +494,12 @@ func (a *Applier) importFile(entry *source.Entry) error {
 		return fmt.Errorf("reading target: %w", err)
 	}
 
-	if entry.Attrs.Encrypted && a.enc != nil {
+	if entry.Attrs.Encrypted {
+		// Writing the target back unencrypted would put plaintext into the repo
+		// under an #encrypted name.
+		if a.enc == nil || !a.enc.CanEncrypt() {
+			return fmt.Errorf("%s is #encrypted but no age recipients are configured to re-encrypt it", entry.SourcePath)
+		}
 		content, err = a.enc.Encrypt(content)
 		if err != nil {
 			return fmt.Errorf("encrypting: %w", err)
@@ -555,6 +573,17 @@ func hashTarget(path string) (string, error) {
 }
 
 func (a *Applier) recordState(entry *source.Entry, sourceHash string) error {
+	if entry.Attrs.Symlink {
+		// The target is already the same link, and hashing it would follow it.
+		return a.db.SaveFile(&state.FileEntry{
+			SourcePath:  entry.SourcePath,
+			TargetPath:  entry.TargetPath,
+			SourceHash:  sourceHash,
+			AppliedHash: sourceHash,
+			Mode:        0777,
+		})
+	}
+
 	targetHash, err := hashTarget(entry.TargetPath)
 	if err != nil {
 		return err

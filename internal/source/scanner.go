@@ -1,6 +1,7 @@
 package source
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -54,7 +55,15 @@ func (s *Scanner) Scan(sources []string) (*Tree, error) {
 }
 
 func (s *Scanner) scanSource(sourceDir string, tree *Tree) error {
-	dirCfg, _ := config.LoadDirConfigRaw(sourceDir, s.templateRenderer)
+	dirCfg, err := config.LoadDirConfigRaw(sourceDir, s.templateRenderer)
+	// Skipping a .mate.yaml that fails to render or parse would drop its
+	// target_base and targets, deploying the source's files under the global
+	// target base instead (~ rather than /). Without a renderer the file is read
+	// unrendered, where template syntax is often not valid YAML, so only a
+	// rendering scanner can tell a broken file from a templated one.
+	if err != nil && s.templateRenderer != nil {
+		return fmt.Errorf("%s: %w", dirConfigPath(sourceDir), err)
+	}
 	if dirCfg != nil {
 		s.dirConfigs[sourceDir] = dirCfg
 	}
@@ -137,7 +146,10 @@ func (s *Scanner) buildEntry(sourceDir, fullPath, relPath string, info os.FileIn
 		if dirCfg.Group != "" && attrs.Group == "" {
 			attrs.Group = dirCfg.Group
 		}
-		if dirCfg.Perm != "" && attrs.Perm == 0 {
+		// perm: is the default mode for files. A file mode such as 644 lacks the
+		// execute bit a directory needs to be entered, so applying it to
+		// directories would lock apply out of them.
+		if dirCfg.Perm != "" && attrs.Perm == 0 && !info.IsDir() {
 			if p, err := strconv.ParseUint(dirCfg.Perm, 8, 32); err == nil {
 				attrs.Perm = uint32(p)
 			}
@@ -226,6 +238,18 @@ func (s *Scanner) getParentAttrs(relDir string) Attrs {
 		}
 	}
 	return attrs
+}
+
+// dirConfigPath names the source's .mate config file for error messages, in the
+// order config.LoadDirConfigRaw looks for it.
+func dirConfigPath(sourceDir string) string {
+	for _, name := range []string{".mate.yaml", ".mate.yml", ".mate.toml"} {
+		path := filepath.Join(sourceDir, name)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return filepath.Join(sourceDir, ".mate.yaml")
 }
 
 func (s *Scanner) shouldSkip(name string) bool {

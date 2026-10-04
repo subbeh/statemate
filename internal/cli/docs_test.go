@@ -191,7 +191,6 @@ func TestConfigKeysAreDocumented(t *testing.T) {
 		{"packages", config.PackageList{}, "docs/packages.md"},
 		{".mate.yaml", config.DirConfig{}, "docs/configuration.md"},
 		{"generate", config.GenerateConfig{}, "docs/configuration.md"},
-		{"scripts", config.DirScripts{}, "docs/scripts.md"},
 		{"hook", config.Hook{}, "docs/hooks.md"},
 		{"hook step", config.HookStep{}, "docs/hooks.md"},
 	}
@@ -226,6 +225,32 @@ func TestGuidesAreLinkedFromIndex(t *testing.T) {
 		}
 		if !strings.Contains(string(index), "("+e.Name()+")") {
 			t.Errorf("docs/%s is not linked from docs/README.md", e.Name())
+		}
+	}
+}
+
+// The docs site only shows pages listed in the mkdocs.yml nav, and the build does
+// not complain about one that is missing, so a new guide would be published
+// without any way to navigate to it.
+func TestGuidesAreInSiteNav(t *testing.T) {
+	dir := docsDir(t)
+
+	config, err := os.ReadFile(filepath.Join(filepath.Dir(dir), "mkdocs.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		if !regexp.MustCompile(`(?m)^\s*- (.*: )?` + regexp.QuoteMeta(e.Name()) + `$`).Match(config) {
+			t.Errorf("docs/%s is not in the nav in mkdocs.yml", e.Name())
 		}
 	}
 }

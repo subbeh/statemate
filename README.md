@@ -11,7 +11,8 @@ across machines.
 - **Encryption** — age encryption for sensitive files
 - **Secrets** — Bitwarden references resolved from an encrypted cache
 - **Packages** — declarative package management (brew, pacman, AUR)
-- **Scripts** — lifecycle scripts (before/after apply, run once, on change)
+- **Scripts and hooks** — run setup once, on a schedule, or when matching files change
+- **System files** — manage `/etc` with ownership and sudo handled for you
 
 ## Installation
 
@@ -20,23 +21,24 @@ across machines.
 brew install subbeh/tap/statemate
 
 # Arch (AUR)
-paru -S statemate-bin
+yay -S statemate-bin            # or: paru -S statemate-bin
 
-# Go
+# Go 1.25+
 go install github.com/subbeh/statemate/cmd/mate@latest
-
-# From source
-git clone https://github.com/subbeh/statemate
-cd statemate && make build-all
 ```
+
+Prebuilt binaries for Linux and macOS are on the
+[releases page](https://github.com/subbeh/statemate/releases/latest).
 
 ## Quick Start
 
 ```bash
 mkdir ~/dotfiles && cd ~/dotfiles
-mate init                      # create mate.yaml
+mate init                      # create mate.yaml and register the repository
 
+mkdir nvim                     # a source, then list it: sources: [nvim]
 mate add ~/.config/nvim/init.lua
+
 mate status                    # what would change
 mate diff                      # how it would change
 mate apply                     # make it so
@@ -57,24 +59,27 @@ Behavior is controlled by `#` suffixes on filenames, stripped from the target:
 
 ```
 .ssh/config#encrypted#perm:600         encrypted in the repo, mode 0600 deployed
-gitconfig#template                     rendered as a Go template
+.gitconfig#template                    rendered as a Go template
 .gitconfig#profile:work                only on machines matching the work profile
 .claude/settings.json#import           app owns it; changes flow back to the repo
 ```
 
 ## Documentation
 
-Full documentation is in [`docs/`](docs/README.md):
+Full documentation is at **[subbeh.github.io/statemate](https://subbeh.github.io/statemate/)**,
+built from [`docs/`](docs/README.md):
 
 | Guide | Contents |
 |-------|----------|
 | [Getting Started](docs/getting-started.md) | Install, create a repository, add your first file |
 | [Concepts](docs/concepts.md) | Sources, targets, state, and how a change is detected |
+| [How-to guides](docs/README.md#how-to-guides) | Repository layout, multiple machines, encryption, system files, new machines, tips |
 | [Configuration](docs/configuration.md) | `mate.yaml`, `.mate.yaml`, profiles, local overrides |
 | [File Attributes](docs/attributes.md) | Every `#` suffix and what it does |
 | [Templates](docs/templates.md) | Variables and functions available when rendering |
 | [Secrets](docs/secrets.md) | Bitwarden references and the encrypted cache |
 | [Scripts](docs/scripts.md) | Lifecycle scripts, frequency, timing |
+| [Hooks](docs/hooks.md) | Commands run when files matching a pattern change |
 | [Packages](docs/packages.md) | Declarative packages across brew, pacman, and the AUR |
 | [Command Reference](docs/commands/mate.md) | Every command and flag |
 
@@ -87,8 +92,11 @@ Full documentation is in [`docs/`](docs/README.md):
 sources: [nvim, zsh, git]
 
 profiles:
+  macos:
+    detection:
+      os: darwin
   work:
-    extends: base
+    extends: macos
     detection:
       hostname: "work-*"
     variables:

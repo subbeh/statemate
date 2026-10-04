@@ -9,23 +9,21 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/util"
 )
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete <path>",
 	Short: "Delete file from source and target",
-	Long: `Delete a file from both source and target.
+	Long: `Delete a managed file from the source and the target, and stop tracking it.
 
-This deletes the source file and optionally the target file,
-and removes the tracking entry from the database.
+Give the target path, meaning the deployed file. The target is deleted as well
+unless --keep-target is given, and the deletion is confirmed unless --force is.
 
 Hooks matching the removed target run afterwards (see 'mate hooks'); --force
-also confirms them. Nothing runs with --keep-target.
-
-Example:
-  mate delete ~/.config/nvim/init.lua`,
+also confirms them. Nothing runs with --keep-target.`,
+	Example: `  mate delete ~/.config/nvim/init.lua
+  mate delete --keep-target ~/.zshrc`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runDelete,
 	ValidArgsFunction: completeManagedFiles,
@@ -113,7 +111,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Removed target: %s\n", util.ShortenPath(entry.TargetPath))
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

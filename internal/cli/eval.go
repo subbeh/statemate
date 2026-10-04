@@ -16,14 +16,16 @@ import (
 var evalCmd = &cobra.Command{
 	Use:   "eval <file>",
 	Short: "Render a template file",
-	Long: `Render a template file and output the result to stdout.
+	Long: `Render a file as a template and print the result.
 
-Useful for debugging templates or previewing output before applying.
-If the file is encrypted, it will be decrypted first (requires age identity).
+Useful for debugging a template, or previewing what apply would deploy. Any
+file is rendered, whether or not it is marked #template. An encrypted file is
+decrypted first, which needs the age identity.
 
-Example:
-  mate eval ~/.statemate/files/config.tmpl
-  mate eval --profile work ~/.statemate/files/config.tmpl`,
+The path is used as given: absolute, starting with ~, or relative to the
+current directory. Use --profile to render it as another profile would.`,
+	Example: `  mate eval git/.config/git/config#template
+  mate eval --profile work git/.config/git/config#template`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runEval,
 	ValidArgsFunction: completeFilePaths,
@@ -69,8 +71,7 @@ func runEval(cmd *cobra.Command, args []string) error {
 	}
 
 	if enc != nil && enc.CanDecrypt() {
-		identitySource := cfg.Age.Identity
-		mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache)
+		mgr, err := secrets.NewManager(enc, cfg.SecretsCache)
 		if err == nil {
 			tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 				key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}

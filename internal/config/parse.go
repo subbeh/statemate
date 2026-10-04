@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,6 +20,15 @@ func Load(path string) (*Config, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	// The source dir is derived from this path and flows into every source and
+	// script path, template output (.SourceDir) and the state database. A config
+	// found in, or passed relative to, the current directory would otherwise
+	// make all of those relative -- "." for `mate config source-dir`.
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("resolving config path: %w", err)
 	}
 
 	data, err := os.ReadFile(path)
@@ -69,17 +79,14 @@ func FindConfig() (string, error) {
 	return findConfigInDir(".")
 }
 
-func SourceDir() string {
-	if envDir := os.Getenv("STATEMATE_DIR"); envDir != "" {
-		return expandHome(envDir)
-	}
-
+// LocalSourceDir returns the repository registered in the local config's
+// source_dir, or "" when none is. It deliberately has no fallback to the
+// current directory, so callers can tell whether anything is registered at all.
+func LocalSourceDir() string {
 	if lc := loadLocalConfig(); lc != nil && lc.SourceDirPath != "" {
 		return expandHome(lc.SourceDirPath)
 	}
-
-	cwd, _ := os.Getwd()
-	return cwd
+	return ""
 }
 
 func LocalConfigPath() string {
@@ -105,14 +112,64 @@ func loadLocalConfig() *Config {
 	return &cfg
 }
 
+// SaveLocalSourceDir sets source_dir in the local config and leaves every other
+// key alone: the local config is also where a machine keeps its profile, editor
+// and hook overrides, which registering a repository must not wipe. The file is
+// edited as a YAML node tree rather than re-marshalled from a Config so that
+// comments and key order survive too.
 func SaveLocalSourceDir(dir string) error {
 	path := LocalConfigPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
 
-	content := fmt.Sprintf("source_dir: %q\n", util.ShortenPath(dir))
-	return os.WriteFile(path, []byte(content), 0644)
+	data, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	// Refuse to touch a file we cannot parse: replacing it would lose whatever
+	// the user was in the middle of writing.
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	if len(doc.Content) == 0 {
+		// Missing, empty or comment-only file. Keep any comments yaml attached
+		// to the document node.
+		doc.Kind = yaml.DocumentNode
+		doc.Content = []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return fmt.Errorf("parsing %s: expected key/value pairs at the top level", path)
+	}
+
+	value := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Style: yaml.DoubleQuotedStyle, Value: util.ShortenPath(dir)}
+	replaced := false
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == "source_dir" {
+			value.LineComment = root.Content[i+1].LineComment
+			root.Content[i+1] = value
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		key := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "source_dir"}
+		root.Content = append([]*yaml.Node{key, value}, root.Content...)
+	}
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return err
+	}
+	if err := enc.Close(); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0644)
 }
 
 func expandHome(path string) string {

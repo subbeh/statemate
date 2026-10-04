@@ -1,14 +1,16 @@
-## mate config source-dir
+# mate config source-dir
 
 Print the resolved source directory
 
-### Synopsis
+## Synopsis
 
 Print the absolute path of the directory containing mate.yaml.
 
 The path is printed bare, with no label, so it can be used directly:
 
-  cd "$(mate config source-dir)"
+```
+cd "$(mate config source-dir)"
+```
 
 Resolution order matches the rest of mate: the --config flag, then the
 STATEMATE_DIR environment variable, then source_dir in the local config
@@ -18,20 +20,20 @@ STATEMATE_DIR environment variable, then source_dir in the local config
 mate config source-dir [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help   help for source-dir
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate config](mate_config.md)	 - Inspect resolved configuration
 

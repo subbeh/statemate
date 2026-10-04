@@ -7,11 +7,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
-	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/profile"
-	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -20,8 +17,14 @@ import (
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check if configuration is in sync",
-	Long:  "Exit 0 if in sync, 1 if changes pending. Useful for CI.",
-	RunE:  runCheck,
+	Long: `Exit 0 if every managed file is in sync, and 1 if any would change.
+
+Only files count: pending changes and conflicts. Orphans, missing packages,
+pending scripts and secrets do not. Hooks are validated as well, so a broken
+hook fails the check, and so does any other error, such as a config that does
+not load. Use -q to print nothing and rely on the exit code.`,
+	Example: `  mate check -q || echo "dotfiles out of sync"`,
+	RunE:    runCheck,
 }
 
 var checkQuiet bool
@@ -65,14 +68,9 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
 	}
 
-	// Hook script steps and run templates are only checked once scripts are
-	// discovered, so a broken hook is caught here rather than mid-apply.
-	allScripts, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover()
-	if err != nil {
-		return fmt.Errorf("discovering scripts: %w", err)
-	}
-	if _, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, allScripts); err != nil {
-		return fmt.Errorf("invalid hooks: %w", err)
+	// mate apply runs the same check before it writes anything.
+	if _, _, err := collectHooks(cfg, sourcePaths, scanner); err != nil {
+		return err
 	}
 
 	if tree.HasConflicts() {
@@ -88,17 +86,15 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
 
 	var enc *encrypt.AgeEncryptor
-	identitySource := ""
 	if cfg.Age != nil {
 		enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-		identitySource = cfg.Age.Identity
 	}
 
 	var ctxOpts []template.ContextOption
@@ -107,7 +103,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 	tmplCtx, _ := template.NewContext(cfg, profileName, ctxOpts...)
 
-	if mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache); err == nil {
+	if mgr, err := secrets.NewManager(enc, cfg.SecretsCache); err == nil {
 		tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 			key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
 			return mgr.Get(key)

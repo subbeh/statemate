@@ -1,0 +1,329 @@
+package cli
+
+import (
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"filippo.io/age"
+	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/packages"
+)
+
+// hookRepo is a throwaway repository for running mate apply end to end. Every
+// hook and script in it touches a file named after itself in marks, so a test
+// can tell what ran.
+type hookRepo struct {
+	dir, home, marks string
+}
+
+func writeFile(t *testing.T, path, content string, mode os.FileMode) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// newHookRepo builds a repository with two sources. app's one file triggers a
+// repo hook whose script: step lives in the repository root, a repo hook whose
+// script: step lives in the other source, and a hook from app's own .mate.yaml.
+// A repo-root #always#after script stands in for the lifecycle scripts a scoped
+// run must not run.
+//
+// HOME, the XDG directories and STATEMATE_DIR all point into the test's temp
+// dir, so nothing touches the real state database or config.
+func newHookRepo(t *testing.T, mateYAML string) *hookRepo {
+	t.Helper()
+	root := t.TempDir()
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
+	}
+	r := &hookRepo{
+		dir:   filepath.Join(root, "repo"),
+		home:  filepath.Join(root, "home"),
+		marks: filepath.Join(root, "marks"),
+	}
+	for _, d := range []string{r.home, r.marks} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("HOME", r.home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+	t.Setenv("STATEMATE_DIR", r.dir)
+	t.Setenv("MARKS", r.marks)
+
+	touch := func(name string) string { return "#!/bin/sh\ntouch \"$MARKS/" + name + "\"\n" }
+
+	writeFile(t, filepath.Join(r.dir, "mate.yaml"), mateYAML, 0644)
+	writeFile(t, filepath.Join(r.dir, ".matescripts", "hello.sh"), touch("hello.sh"), 0755)
+	writeFile(t, filepath.Join(r.dir, ".matescripts", "lifecycle.sh#always#after"), touch("lifecycle"), 0755)
+	writeFile(t, filepath.Join(r.dir, "app", ".config", "app", "app.conf"), "x\n", 0644)
+	writeFile(t, filepath.Join(r.dir, "app", ".mate.yaml"), `hooks:
+  own:
+    match: "*.conf"
+    do:
+      - run: touch "$MARKS/app-own"
+`, 0644)
+	writeFile(t, filepath.Join(r.dir, "other", ".config", "other", "other.txt"), "y\n", 0644)
+	writeFile(t, filepath.Join(r.dir, "other", ".matescripts", "elsewhere.sh"), touch("elsewhere.sh"), 0755)
+	return r
+}
+
+// repoHooks is a mate.yaml whose hooks call scripts outside the app source.
+const repoHooks = `sources: [app, other]
+hooks:
+  root-script:
+    match: "*.conf"
+    do:
+      - script: hello.sh
+  other-script:
+    match: "*.conf"
+    do:
+      - script: elsewhere.sh
+`
+
+// apply runs mate apply with --force, so hooks run without a terminal.
+func (r *hookRepo) apply(t *testing.T, args []string, sourceFlag string) error {
+	t.Helper()
+	cmd := &cobra.Command{Use: "apply", RunE: runApply}
+	cmd.Flags().String("config", "", "")
+	cmd.Flags().String("profile", "", "")
+	addScopeFlag(cmd)
+	if sourceFlag != "" {
+		if err := cmd.Flags().Set(scopeFlagName, sourceFlag); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	origForce := force
+	force = true
+	defer func() { force = origForce }()
+
+	return runApply(cmd, args)
+}
+
+func (r *hookRepo) ran(name string) bool {
+	_, err := os.Stat(filepath.Join(r.marks, name))
+	return err == nil
+}
+
+// A scoped apply used to drop every source and script before collecting hooks,
+// so source hooks were never loaded and any script: step failed as "not found"
+// after the files had already been written.
+func TestApplyScoped_RunsHooksForWrittenFiles(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		args   []string
+		source string
+		// lifecycle is whether the repo-root #after script should run.
+		lifecycle bool
+	}{
+		{name: "no scope", lifecycle: true},
+		{name: "path scope", args: []string{"app.conf"}},
+		{name: "source scope", source: "app"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newHookRepo(t, repoHooks)
+
+			if err := r.apply(t, tc.args, tc.source); err != nil {
+				t.Fatalf("apply failed: %v", err)
+			}
+
+			if _, err := os.Stat(filepath.Join(r.home, ".config", "app", "app.conf")); err != nil {
+				t.Errorf("app.conf was not written: %v", err)
+			}
+			for _, mark := range []string{"hello.sh", "elsewhere.sh", "app-own"} {
+				if !r.ran(mark) {
+					t.Errorf("hook step %s did not run", mark)
+				}
+			}
+			// Scoping still keeps lifecycle scripts out of the run.
+			if got := r.ran("lifecycle"); got != tc.lifecycle {
+				t.Errorf("repo-root #after script ran = %v, want %v", got, tc.lifecycle)
+			}
+		})
+	}
+}
+
+// A broken hook used to be noticed only after the files were written and the
+// packages prompted for, so the apply failed with its work half done.
+func TestApply_BrokenHookFailsBeforeWriting(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		mateYAML string
+		appYAML  string
+	}{
+		{
+			name: "unknown script",
+			mateYAML: `sources: [app]
+hooks:
+  missing:
+    match: "*.conf"
+    do:
+      - script: nope.sh
+`,
+		},
+		{
+			name: "run template does not parse",
+			mateYAML: `sources: [app]
+hooks:
+  bad:
+    match: "*.conf"
+    do:
+      - run: echo {{ .Files
+`,
+		},
+		{
+			name:     "source hook without match",
+			mateYAML: "sources: [app]\n",
+			appYAML: `hooks:
+  bad:
+    do:
+      - run: "true"
+`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newHookRepo(t, tc.mateYAML)
+			if tc.appYAML != "" {
+				writeFile(t, filepath.Join(r.dir, "app", ".mate.yaml"), tc.appYAML, 0644)
+			}
+
+			err := r.apply(t, nil, "")
+			if err == nil || !strings.Contains(err.Error(), "invalid hooks") {
+				t.Fatalf("want an invalid hooks error, got %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(r.home, ".config", "app", "app.conf")); err == nil {
+				t.Error("app.conf was written before the broken hook was reported")
+			}
+			if r.ran("lifecycle") {
+				t.Error("#after script ran despite the broken hook")
+			}
+		})
+	}
+}
+
+// With nothing to read an answer from (cron, CI, `< /dev/null`), the install
+// prompt cannot be confirmed. Every manager with missing packages has to be
+// named in a warning, as skipped scripts are, instead of the first failed
+// prompt silently abandoning the rest.
+func TestInstallMissingPackages_WarnsWithoutTerminal(t *testing.T) {
+	stdinR, stdinW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = stdinW.Close() // immediate EOF, like </dev/null
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	origIn, origOut, origErr := os.Stdin, os.Stdout, os.Stderr
+	os.Stdin, os.Stdout, os.Stderr = stdinR, stdoutW, stderrW
+	t.Cleanup(func() { os.Stdin, os.Stdout, os.Stderr = origIn, origOut, origErr })
+
+	missing := func(names ...string) []packages.PackageStatus {
+		var s []packages.PackageStatus
+		for _, n := range names {
+			s = append(s, packages.PackageStatus{Name: n, Status: packages.StatusMissing, Sources: []string{"config"}})
+		}
+		return s
+	}
+	results := []packages.SyncResult{
+		{Manager: "brew", Statuses: missing("ripgrep", "fd")},
+		{Manager: "pacman", Statuses: missing("neovim")},
+	}
+
+	runErr := installMissingPackages(results, &config.Config{}, false, false, Scope{})
+
+	_ = stdoutW.Close()
+	_ = stderrW.Close()
+	_, _ = io.ReadAll(stdoutR)
+	stderr, _ := io.ReadAll(stderrR)
+	os.Stdin, os.Stdout, os.Stderr = origIn, origOut, origErr
+
+	if runErr != nil {
+		t.Fatalf("unexpected error: %v", runErr)
+	}
+	got := string(stderr)
+	for _, want := range []string{
+		"no terminal to confirm on",
+		"brew: ripgrep, fd",
+		"pacman: neovim",
+		"--force",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("warning missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// A source's .mate.yaml can generate files from secrets (an SSH key per name in
+// a variable is the common case). On a fresh machine nothing is cached yet, and
+// rendering that file while scanning failed with "no secrets cache found"
+// before apply had reached the fetch that would have filled the cache.
+func TestApply_FetchesSecretsUsedByDirConfigBeforeScanning(t *testing.T) {
+	root := isolateHome(t)
+	home := filepath.Join(root, "home")
+	repo := filepath.Join(root, "repo")
+	t.Setenv("STATEMATE_DIR", repo)
+
+	id, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath := filepath.Join(root, "key.txt")
+	writeFile(t, keyPath, id.String()+"\n", 0600)
+
+	// A bw that is unlocked and holds one item with a custom field.
+	bin := filepath.Join(root, "bin")
+	writeFile(t, filepath.Join(bin, "bw"), `#!/bin/sh
+case "$1" in
+  status) echo '{"status":"unlocked"}' ;;
+  sync) echo synced ;;
+  list) echo '[{"id":"1","name":"api","fields":[{"name":"token","value":"s3cret"}]}]' ;;
+esac
+`, 0755)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	writeFile(t, filepath.Join(repo, "mate.yaml"), `sources: [app]
+age:
+  identity: "`+keyPath+`"
+  recipients: ["`+id.Recipient().String()+`"]
+`, 0644)
+	writeFile(t, filepath.Join(repo, "app", ".mate.yaml"), `generate:
+  - target: .config/app/token
+    content: '{{ bitwarden "api" "field" "token" }}'
+`, 0644)
+
+	cmd := &cobra.Command{Use: "apply", RunE: runApply}
+	cmd.Flags().String("config", "", "")
+	cmd.Flags().String("profile", "", "")
+	addScopeFlag(cmd)
+	origForce := force
+	force = true
+	defer func() { force = origForce }()
+
+	if err := runApply(cmd, nil); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(home, ".config", "app", "token"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "s3cret" {
+		t.Errorf("generated file = %q, want %q", got, "s3cret")
+	}
+}

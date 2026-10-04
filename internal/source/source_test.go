@@ -103,6 +103,26 @@ func TestAttrNamesAreParsed(t *testing.T) {
 	}
 }
 
+// mate decrypt drops the #encrypted attribute from a filename; it may sit
+// anywhere among the attributes, not only last.
+func TestRemoveAttr(t *testing.T) {
+	tests := []struct {
+		name, attr, want string
+	}{
+		{"x#encrypted", "encrypted", "x"},
+		{"x#encrypted#template", "encrypted", "x#template"},
+		{"x#perm:600#encrypted#template", "encrypted", "x#perm:600#template"},
+		{"x#template", "encrypted", "x#template"},
+		{"x#encrypted-backup", "encrypted", "x#encrypted-backup"},
+		{"x", "encrypted", "x"},
+	}
+	for _, tc := range tests {
+		if got := RemoveAttr(tc.name, tc.attr); got != tc.want {
+			t.Errorf("RemoveAttr(%q, %q) = %q, want %q", tc.name, tc.attr, got, tc.want)
+		}
+	}
+}
+
 func TestAttrsMerge(t *testing.T) {
 	parent := Attrs{Profile: "work", Perm: 0755}
 	child := Attrs{Perm: 0600}
@@ -263,6 +283,53 @@ func TestConflictsAreProfileAware(t *testing.T) {
 	}
 	if len(filtered.Conflicts[0].Sources) != 2 {
 		t.Errorf("expected 2 conflicting sources, got %v", filtered.Conflicts[0].Sources)
+	}
+}
+
+// A .mate.yaml that does not parse must fail the scan. Skipping it dropped its
+// target_base, so a source meant for / deployed its files under ~ instead.
+func TestScannerInvalidDirConfigFails(t *testing.T) {
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "etc")
+	if err := os.MkdirAll(filepath.Join(srcDir, "etc"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "etc", "hosts"), []byte("127.0.0.1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".mate.yaml"), []byte("target_base: /\n  bad: indent\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	render := func(data []byte) ([]byte, error) { return data, nil }
+	scanner := NewScannerWithRenderer("/home/user", dir, render)
+	_, err := scanner.Scan([]string{srcDir})
+	if err == nil {
+		t.Fatal("expected Scan to fail on an invalid .mate.yaml")
+	}
+	if !strings.Contains(err.Error(), filepath.Join(srcDir, ".mate.yaml")) {
+		t.Errorf("error should name the file, got: %v", err)
+	}
+}
+
+// A scanner without a renderer reads .mate.yaml unrendered, where template
+// syntax is often not valid YAML, so it cannot treat a parse error as fatal.
+func TestScannerUnrenderedDirConfigErrorTolerated(t *testing.T) {
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "app")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "config"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".mate.yaml"), []byte("{{ if eq .OS \"linux\" }}\ntarget_base: /\n{{ end }}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	scanner := NewScanner("/home/user", dir)
+	if _, err := scanner.Scan([]string{srcDir}); err != nil {
+		t.Fatalf("unrendered scan should tolerate template syntax, got: %v", err)
 	}
 }
 
@@ -479,6 +546,37 @@ func TestScannerPermRInheritance(t *testing.T) {
 	}
 	if files[0].TargetPath != "/home/testuser/.local/bin/script.sh" {
 		t.Errorf("expected target /home/testuser/.local/bin/script.sh, got %q", files[0].TargetPath)
+	}
+}
+
+// .mate.yaml perm: is a default for files. Applied to directories too, perm:
+// "644" left them without the execute bit, so nothing inside could be written.
+func TestScannerDirConfigPermIsFilesOnly(t *testing.T) {
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "app")
+	if err := os.MkdirAll(filepath.Join(srcDir, ".config", "app"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".config", "app", "config"), []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, ".mate.yaml"), []byte("perm: \"644\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tree, err := NewScanner("/home/testuser", dir).Scan([]string{srcDir})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	files := tree.Files()
+	if len(files) != 1 || files[0].Attrs.Perm != 0644 {
+		t.Fatalf("expected one file with perm 0644, got %v", files)
+	}
+	for _, d := range tree.Dirs() {
+		if d.Attrs.Perm != 0 {
+			t.Errorf("directory %s got perm %#o from .mate.yaml, want none", d.RelPath, d.Attrs.Perm)
+		}
 	}
 }
 

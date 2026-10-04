@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/state"
@@ -29,7 +30,7 @@ A script can describe itself with a comment in its first 10 lines:
   #!/usr/bin/env bash
   # Description: Bootstrap the development environment
 
-The description is shown by 'scripts list', 'mate status', and the
+The description is shown by 'mate scripts list', 'mate status', and the
 confirmation prompt during apply. Matching is case-insensitive.
 
 An '#onchange' script runs when its own source has pending changes -- the files
@@ -47,9 +48,13 @@ var scriptsListCmd = &cobra.Command{
 }
 
 var scriptsRunCmd = &cobra.Command{
-	Use:               "run <script>",
-	Short:             "Run a script",
-	Long:              "Manually run a script by name or path",
+	Use:   "run <script>",
+	Short: "Run a script",
+	Long: `Run a script now, by the name 'mate scripts list' shows or by path, whatever
+its frequency, timing or #profile:.
+
+There is no confirmation prompt. The run is recorded, so running a #once
+script this way marks it done.`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runScript,
 	ValidArgsFunction: completeScripts,
@@ -91,7 +96,7 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
@@ -108,7 +113,12 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			if profileName != "" {
 				tree = tree.FilterByProfile(profileChain)
 			}
-			if res, err := target.ComputeChanges(tree, db); err == nil {
+			// #encrypted files cannot be compared without the identity.
+			var enc *encrypt.AgeEncryptor
+			if cfg.Age != nil {
+				enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
+			}
+			if res, err := target.ComputeChanges(tree, db, target.ComputeOpts{Enc: enc}); err == nil {
 				changed = changedSources(res.Changes)
 			}
 		}
@@ -337,15 +347,17 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("script not found: %s", scriptArg)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
 
+	// A template script gets the context mate apply would give it, so cached
+	// secrets and encrypted var_files resolve here too.
 	var tmplCtx *template.Context
 	if script.Template {
-		tmplCtx, err = template.NewContext(cfg, profileName)
+		tmplCtx, err = newTemplateContext(cfg, profileName)
 		if err != nil {
 			return fmt.Errorf("creating template context: %w", err)
 		}

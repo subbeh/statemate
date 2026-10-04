@@ -1,16 +1,27 @@
-## mate check
+# mate check
 
 Check if configuration is in sync
 
-### Synopsis
+## Synopsis
 
-Exit 0 if in sync, 1 if changes pending. Useful for CI.
+Exit 0 if every managed file is in sync, and 1 if any would change.
+
+Only files count: pending changes and conflicts. Orphans, missing packages,
+pending scripts and secrets do not. Hooks are validated as well, so a broken
+hook fails the check, and so does any other error, such as a config that does
+not load. Use -q to print nothing and rely on the exit code.
 
 ```
 mate check [flags]
 ```
 
-### Options
+## Examples
+
+```
+  mate check -q || echo "dotfiles out of sync"
+```
+
+## Options
 
 ```
   -h, --help    help for check
@@ -18,14 +29,14 @@ mate check [flags]
       --sudo    use sudo to check files requiring elevated access
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

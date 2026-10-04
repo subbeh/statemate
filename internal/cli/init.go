@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,8 +15,20 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new statemate repository",
-	Long:  "Create a minimal mate.yaml or mate.toml configuration file with comments",
-	RunE:  runInit,
+	Long: `Set up the current directory as a statemate repository.
+
+In a directory without a config, mate init writes a commented mate.yaml (or
+mate.toml), writes a README.md with setup instructions unless one exists, and
+runs git init unless the directory is already inside a git repository. It then
+offers to register the directory.
+
+In a directory that already has a mate.yaml, mate.yml or mate.toml, such as a
+fresh clone on a new machine, it only registers the directory.
+
+Registering writes source_dir to the local config
+(~/.config/statemate/mate.yaml), so mate works from any directory. Other
+settings in that file are kept.`,
+	RunE: runInit,
 }
 
 var initFormat string
@@ -119,17 +130,17 @@ Managed with [statemate](https://github.com/subbeh/statemate).
 
 1. Install statemate:
    ` + "```" + `sh
-   # macOS
+   # Homebrew (macOS/Linux)
    brew install subbeh/tap/statemate
 
-   # Arch Linux
-   yay -S statemate
+   # Arch Linux (AUR)
+   paru -S statemate-bin    # or: yay -S statemate-bin
    ` + "```" + `
 
 2. Clone this repository:
    ` + "```" + `sh
-   git clone <your-repo-url> ~/.dotfiles
-   cd ~/.dotfiles
+   git clone <your-repo-url> ~/dotfiles
+   cd ~/dotfiles
    ` + "```" + `
 
 3. Register and apply:
@@ -140,7 +151,6 @@ Managed with [statemate](https://github.com/subbeh/statemate).
 `
 
 func runInit(cmd *cobra.Command, args []string) error {
-	reader := bufio.NewReader(os.Stdin)
 	format := initFormat
 
 	cwd, err := os.Getwd()
@@ -148,23 +158,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configExists := false
-	var existingConfigPath string
-	if _, err := os.Stat("mate.yaml"); err == nil {
-		configExists = true
-		existingConfigPath = "mate.yaml"
-	} else if _, err := os.Stat("mate.toml"); err == nil {
-		configExists = true
-		existingConfigPath = "mate.toml"
-	}
-
-	if configExists {
-		return handleExistingRepo(cwd, existingConfigPath)
+	// The same names, in the same order, that every other command looks for.
+	for _, name := range []string{"mate.yaml", "mate.yml", "mate.toml"} {
+		if _, err := os.Stat(name); err == nil {
+			return handleExistingRepo(cwd, name)
+		}
 	}
 
 	if format == "" {
 		fmt.Print("Config format [yaml/toml] (default: yaml): ")
-		input, err := reader.ReadString('\n')
+		input, err := util.ReadLine()
 		if err != nil {
 			return err
 		}
@@ -192,10 +195,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Created %s\n", filepath.Join(cwd, configPath))
 
-	if err := os.WriteFile("README.md", []byte(defaultReadme), 0644); err != nil {
-		return fmt.Errorf("writing README: %w", err)
+	// init is often run in a repository that already has a README of its own,
+	// so never replace one.
+	if _, err := os.Stat("README.md"); err == nil {
+		fmt.Printf("Kept existing %s\n", filepath.Join(cwd, "README.md"))
+	} else {
+		if err := os.WriteFile("README.md", []byte(defaultReadme), 0644); err != nil {
+			return fmt.Errorf("writing README: %w", err)
+		}
+		fmt.Printf("Created %s\n", filepath.Join(cwd, "README.md"))
 	}
-	fmt.Printf("Created %s\n", filepath.Join(cwd, "README.md"))
 
 	if err := initGitRepo(); err != nil {
 		return err
@@ -206,8 +215,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\nNext steps:")
-	fmt.Printf("  1. Add source directories to %s (e.g., sources: [nvim, zsh])\n", configPath)
-	fmt.Println("  2. Add files: mate add ~/.config/nvim/init.lua")
+	fmt.Printf("  1. Create a source directory and list it in %s:\n", configPath)
+	fmt.Println("       mkdir zsh      and set      sources: [zsh]")
+	fmt.Println("  2. Add files: mate add ~/.zshrc")
 	fmt.Println("  3. Check status: mate status")
 	fmt.Println("  4. Apply changes: mate apply")
 
@@ -217,7 +227,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 func handleExistingRepo(cwd, configPath string) error {
 	fmt.Printf("Found existing config: %s\n", configPath)
 
-	if localConfigExists() && config.SourceDir() == cwd {
+	if config.LocalSourceDir() == cwd {
 		fmt.Println("This directory is already registered as your dotfiles location.")
 		fmt.Println("\nRun 'mate apply' to apply your configuration.")
 		return nil
@@ -233,12 +243,16 @@ func handleExistingRepo(cwd, configPath string) error {
 }
 
 func registerSourceDir(cwd string) error {
-	existingSourceDir := config.SourceDir()
+	// Ask the local config directly: resolving the source dir the way other
+	// commands do falls back to the current directory when nothing is
+	// registered, which always equals cwd here and so hid the prompt on exactly
+	// the machines that needed it.
+	existingSourceDir := config.LocalSourceDir()
 	if existingSourceDir == cwd {
 		return nil
 	}
 
-	if localConfigExists() {
+	if existingSourceDir != "" {
 		fmt.Printf("\nLocal config already points to: %s\n", util.ShortenPath(existingSourceDir))
 		ok, err := util.Confirm("Update to this directory instead? [y/N]: ", false)
 		if err != nil {
@@ -263,11 +277,6 @@ func registerSourceDir(cwd string) error {
 		}
 	}
 	return nil
-}
-
-func localConfigExists() bool {
-	_, err := os.Stat(config.LocalConfigPath())
-	return err == nil
 }
 
 func initGitRepo() error {

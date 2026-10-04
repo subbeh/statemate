@@ -1,25 +1,29 @@
-## mate delete
+# mate delete
 
 Delete file from source and target
 
-### Synopsis
+## Synopsis
 
-Delete a file from both source and target.
+Delete a managed file from the source and the target, and stop tracking it.
 
-This deletes the source file and optionally the target file,
-and removes the tracking entry from the database.
+Give the target path, meaning the deployed file. The target is deleted as well
+unless --keep-target is given, and the deletion is confirmed unless --force is.
 
 Hooks matching the removed target run afterwards (see 'mate hooks'); --force
 also confirms them. Nothing runs with --keep-target.
-
-Example:
-  mate delete ~/.config/nvim/init.lua
 
 ```
 mate delete <path> [flags]
 ```
 
-### Options
+## Examples
+
+```
+  mate delete ~/.config/nvim/init.lua
+  mate delete --keep-target ~/.zshrc
+```
+
+## Options
 
 ```
   -f, --force         don't prompt for confirmation
@@ -27,14 +31,14 @@ mate delete <path> [flags]
       --keep-target   keep the target file, only delete source
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

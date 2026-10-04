@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/template"
@@ -26,20 +28,32 @@ var secretsCmd = &cobra.Command{
 var secretsFetchCmd = &cobra.Command{
 	Use:   "fetch [pattern]",
 	Short: "Fetch secrets from providers",
-	Long:  "Scan templates for secret references, fetch from providers, and update the encrypted cache. Optionally filter by item pattern (e.g., 'github*')",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runSecretsFetch,
+	Long: `Find every secret reference in templates, fetch the values from Bitwarden, and
+store them in the encrypted cache.
+
+Every reference is fetched again, not only missing ones. With a pattern, only
+the item with exactly that name is fetched, or every item whose name starts
+with a prefix ending in '*'.
+
+Needs the bw CLI, logged in, and an age identity to encrypt the cache with. A
+locked vault is unlocked for you.`,
+	Example: `  mate secrets fetch
+  mate secrets fetch 'github*'`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runSecretsFetch,
 }
 
 var secretsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List secrets referenced in templates and cache status",
+	Long:  "List every secret reference found in templates, with whether the cache holds it.",
 	RunE:  runSecretsList,
 }
 
 var secretsStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show secrets that need fetching",
+	Long:  "List the secret references the cache does not hold yet. 'mate apply' fetches these before deploying.",
 	RunE:  runSecretsStatus,
 }
 
@@ -91,6 +105,10 @@ func runSecretsFetch(cmd *cobra.Command, args []string) error {
 
 	result, err := mgr.Fetch(items)
 	if err != nil {
+		// Without an identity there is no cache to fall back on either.
+		if errors.Is(err, secrets.ErrNoIdentity) {
+			return err
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		if ok, _ := util.Confirm("Continue with cached secrets? [y/n]: ", false); !ok {
 			return err
@@ -211,22 +229,20 @@ func setupSecrets(cmd *cobra.Command) (*secrets.Manager, []secrets.FetchItem, er
 	sourcePaths := cfg.ResolveSourcePaths(sources)
 
 	var enc *encrypt.AgeEncryptor
-	identitySource := ""
 	if cfg.Age != nil {
 		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
 		if err != nil {
 			return nil, nil, fmt.Errorf("setting up encryption: %w", err)
 		}
-		identitySource = cfg.Age.Identity
 	}
 
-	mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache)
+	mgr, err := secrets.NewManager(enc, cfg.SecretsCache)
 	if err != nil {
 		return nil, nil, fmt.Errorf("setting up secrets: %w", err)
 	}
 
 	// Discover all bitwarden() calls by rendering templates
-	templateFiles := discoverTemplateFiles(cfg, sourcePaths)
+	templateFiles := discoverTemplateFiles(cfg, profileName, sourcePaths)
 
 	var decryptFn func([]byte) ([]byte, error)
 	var ctxOpts []template.ContextOption
@@ -245,7 +261,11 @@ func setupSecrets(cmd *cobra.Command) (*secrets.Manager, []secrets.FetchItem, er
 	return mgr, items, nil
 }
 
-func discoverTemplateFiles(cfg *config.Config, sourcePaths []string) []string {
+// discoverTemplateFiles lists the templates whose secrets mate apply would need:
+// the files and scripts it would actually render, filtered by profile the same
+// way apply filters them, so secrets are never fetched for another profile's
+// files.
+func discoverTemplateFiles(cfg *config.Config, profileName string, sourcePaths []string) []string {
 	var files []string
 
 	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
@@ -254,25 +274,32 @@ func discoverTemplateFiles(cfg *config.Config, sourcePaths []string) []string {
 		return files
 	}
 
+	profileChain := profile.InheritanceChain(cfg, profileName)
+	if profileName != "" {
+		tree = tree.FilterByProfile(profileChain)
+	}
+
 	for _, entry := range tree.Files() {
 		if entry.Attrs.Template {
 			files = append(files, entry.SourcePath)
 		}
 	}
 
-	// Also scan matescripts for template scripts
-	scriptsDir := cfg.SourceDir() + "/.matescripts"
-	if entries, err := os.ReadDir(scriptsDir); err == nil {
-		for _, e := range entries {
-			if strings.Contains(e.Name(), "#template") {
-				files = append(files, scriptsDir+"/"+e.Name())
+	// Template scripts, from the repo root and from every source's
+	// .matescripts/. Discover them the way apply does rather than listing a
+	// directory here, so the two cannot disagree on which scripts exist.
+	// Manual scripts are kept: 'mate scripts run' renders them with the cache.
+	if allScripts, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover(); err == nil {
+		for _, s := range allScripts.ByProfile(profileChain) {
+			if s.Template {
+				files = append(files, s.Path)
 			}
 		}
 	}
 
-	// Scan .mate.yaml files in source directories for generate directives
+	// Scan source directory configs for generate directives
 	for _, sourcePath := range sourcePaths {
-		for _, name := range []string{".mate.yaml", ".mate.yml"} {
+		for _, name := range []string{".mate.yaml", ".mate.yml", ".mate.toml"} {
 			path := filepath.Join(sourcePath, name)
 			if _, err := os.Stat(path); err == nil {
 				files = append(files, path)

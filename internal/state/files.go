@@ -97,6 +97,19 @@ func HashFile(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// HashLink hashes a symlink's own link text rather than whatever it points at.
+// A #symlink entry is up to date as long as the link says the same thing, and
+// its destination may be a directory or not exist at all -- neither of which
+// HashFile can read. The prefix keeps the hash distinct from that of a regular
+// file whose content happens to be the same path.
+func HashLink(path string) (string, error) {
+	dest, err := os.Readlink(path)
+	if err != nil {
+		return "", err
+	}
+	return HashBytes([]byte("symlink:" + dest)), nil
+}
+
 func HashBytes(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])

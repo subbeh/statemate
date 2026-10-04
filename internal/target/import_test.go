@@ -315,6 +315,21 @@ func TestImport_EncryptedSourceStaysEncrypted(t *testing.T) {
 	}
 }
 
+// Without recipients an import cannot re-encrypt, and writing the target back
+// as-is would put plaintext into the repo under an #encrypted name.
+func TestImport_EncryptedWithoutRecipientsErrors(t *testing.T) {
+	f := newImportFixture(t, "settings.json#encrypted#import", "ciphertext")
+	f.write(f.targetPath, `{"secret":1}`)
+
+	err := NewApplier(f.db, nil, nil, false, false, 0).importFile(f.tree.Files()[0])
+	if err == nil || !strings.Contains(err.Error(), "no age recipients") {
+		t.Fatalf("expected a missing-recipients error, got %v", err)
+	}
+	if got := f.read(f.sourcePath); got != "ciphertext" {
+		t.Errorf("source was overwritten with %q", got)
+	}
+}
+
 // A dry run must report the import without touching either side.
 func TestImport_DryRunChangesNothing(t *testing.T) {
 	f := newImportFixture(t, "settings.json#import", `{"a":1}`)

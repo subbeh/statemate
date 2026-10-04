@@ -1,11 +1,13 @@
 package packages
 
 import (
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/profile"
 )
 
 type SyncResult struct {
@@ -18,8 +20,9 @@ type SyncResult struct {
 }
 
 type syncOptions struct {
-	verbose bool
-	extras  bool
+	verbose  bool
+	extras   bool
+	renderer config.TemplateRenderer
 }
 
 type SyncOption func(*syncOptions)
@@ -36,6 +39,13 @@ func WithVerbose(v bool) SyncOption {
 // of which reports extras.
 func WithExtras(v bool) SyncOption {
 	return func(o *syncOptions) { o.extras = v }
+}
+
+// WithDirConfigRenderer renders each source's .mate.yaml as a template before
+// reading its packages, as the scanner does for the rest of that file. Without
+// it the file is read raw, so a templated package list is taken literally.
+func WithDirConfigRenderer(r config.TemplateRenderer) SyncOption {
+	return func(o *syncOptions) { o.renderer = r }
 }
 
 func (r *SyncResult) Missing() []string {
@@ -94,7 +104,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 		}
 		add := func(manager string, specs []string) {
 			for _, spec := range specs {
-				name, _ := ParsePackageSpec(spec)
+				name := spec
 				key := manager + "\x00" + name
 				if e, ok := entries[key]; ok {
 					e.sources = appendUnique(e.sources, source)
@@ -114,18 +124,25 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 		addPkgs(cfg.Packages, "config")
 	}
 
-	// Profile-specific packages
+	// Profile-specific packages, from every profile in the extends chain -- a
+	// profile inherits its parents' packages just as it inherits their sources
+	// and variables. Each is labelled with the profile that declared it.
 	if profileName != "" {
-		if profile, ok := cfg.Profiles[profileName]; ok {
-			if profile.Packages != nil {
-				addPkgs(profile.Packages, "profile:"+profileName)
+		for _, name := range profile.InheritanceChain(cfg, profileName) {
+			if p := cfg.Profiles[name]; p != nil && p.Packages != nil {
+				addPkgs(p.Packages, "profile:"+name)
 			}
 		}
 	}
 
 	// Source directory packages
 	for _, source := range sources {
-		dirCfg, _ := config.LoadDirConfig(source)
+		// A .mate.yaml that fails to render or parse is reported rather than
+		// skipped, which would silently drop every package the source declares.
+		dirCfg, err := config.LoadDirConfigRaw(source, o.renderer)
+		if err != nil {
+			return nil, fmt.Errorf("source %s: %w", filepath.Base(source), err)
+		}
 		if dirCfg != nil && dirCfg.Packages != nil {
 			addPkgs(dirCfg.Packages, filepath.Base(source))
 		}
@@ -140,7 +157,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 		if primaryManager == "" {
 			continue
 		}
-		name, _ := ParsePackageSpec(e.spec)
+		name := e.spec
 		targetKey := primaryManager + "\x00" + name
 		if existing, ok := entries[targetKey]; ok {
 			for _, s := range e.sources {
@@ -178,7 +195,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 
 		wantedMap := make(map[string]*pkgEntry)
 		for _, e := range pkgs {
-			name, _ := ParsePackageSpec(e.spec)
+			name := e.spec
 			wantedMap[name] = e
 		}
 
@@ -199,23 +216,16 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 		result := SyncResult{Manager: managerName, extrasComputed: o.extras}
 
 		for name, e := range wantedMap {
-			_, version := ParsePackageSpec(e.spec)
 			if inst, ok := queriedMap[name]; ok {
-				status := PackageStatus{
+				result.Statuses = append(result.Statuses, PackageStatus{
 					Name:      name,
-					Version:   version,
 					Status:    StatusInstalled,
 					Installed: inst.Version,
 					Sources:   e.sources,
-				}
-				if version != "" && inst.Version != "" && inst.Version != version {
-					status.Status = StatusVersionMismatch
-				}
-				result.Statuses = append(result.Statuses, status)
+				})
 			} else {
 				result.Statuses = append(result.Statuses, PackageStatus{
 					Name:    name,
-					Version: version,
 					Status:  StatusMissing,
 					Sources: e.sources,
 				})

@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -28,7 +27,7 @@ Files under the source directory are opened directly. If you pass a target
 path (a deployed file), the corresponding source file is opened instead --
 mate never edits deployed files in place.
 
-For encrypted files (with the '#encrypted' suffix), the file is decrypted to a
+For encrypted files (with the '#encrypted' attribute), the file is decrypted to a
 temporary location, opened in the editor, and re-encrypted after saving. The
 original file permissions are preserved.
 
@@ -38,10 +37,10 @@ The editor is determined by (in order):
   3. $EDITOR environment variable
   4. vi (fallback)
 
-Examples:
-  mate edit nvim/init.lua
-  mate edit .matedata/secrets.yaml#encrypted
-  mate edit ~/.config/nvim/init.lua`,
+The editor command may include arguments, such as 'code --wait'.`,
+	Example: `  mate edit ~/.config/nvim/init.lua      # opens the source in the repository
+  mate edit nvim/.config/nvim/init.lua
+  mate edit ~/.ssh/config                # decrypts, edits, re-encrypts`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runEdit,
 	ValidArgsFunction: completeFilePaths,
@@ -79,7 +78,7 @@ func runEdit(cmd *cobra.Command, args []string) error {
 
 	editor := getEditor(cfg)
 
-	if !strings.Contains(filepath.Base(editPath), "#encrypted") {
+	if !hasEncryptedAttr(editPath) {
 		if err := runEditor(editor, editPath); err != nil {
 			return err
 		}
@@ -118,7 +117,9 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("decrypting: %w", err)
 	}
 
-	baseName := strings.TrimSuffix(filepath.Base(editPath), "#encrypted")
+	// The temp file keeps the attribute-free name so the editor still sees the
+	// real extension.
+	baseName, _ := source.ParseAttrs(filepath.Base(editPath))
 	tmpFile, err := os.CreateTemp("", "mate-edit-*-"+baseName)
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
@@ -200,7 +201,7 @@ func getEditor(cfg *config.Config) string {
 }
 
 func runEditor(editor, path string) error {
-	cmd := exec.Command(editor, path)
+	cmd := util.UserCommand(editor, path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

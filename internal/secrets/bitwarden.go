@@ -111,8 +111,20 @@ func (b *BitwardenProvider) unlock() error {
 		return fmt.Errorf("reading password: %w", err)
 	}
 
-	cmd = exec.Command("bw", "unlock", "--raw", string(password))
-	out, err = cmd.Output()
+	return b.unlockWithPassword(password)
+}
+
+// bwPasswordEnv names the variable the master password is handed to bw in.
+const bwPasswordEnv = "MATE_BW_PASSWORD"
+
+func (b *BitwardenProvider) unlockWithPassword(password []byte) error {
+	// Pass the password through --passwordenv rather than as an argument: the
+	// command line of a running process is visible to every user on the machine
+	// (ps, /proc/<pid>/cmdline), its environment is not. The variable is set on
+	// this child only, never in mate's own environment.
+	cmd := exec.Command("bw", "unlock", "--raw", "--passwordenv", bwPasswordEnv)
+	cmd.Env = append(os.Environ(), bwPasswordEnv+"="+string(password))
+	out, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("unlocking vault: %w", err)
 	}

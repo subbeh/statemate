@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -133,6 +134,30 @@ packages:
 	}
 }
 
+// The scripts: key was removed from .mate.yaml (it never did anything). A file
+// that still has it must keep loading, since unknown keys are ignored.
+func TestLoadDirConfig_IgnoresRemovedScriptsKey(t *testing.T) {
+	for name, content := range map[string]string{
+		".mate.yaml": "scripts:\n  before_apply: [bin/prepare.sh]\npackages:\n  brew: [neovim]\n",
+		".mate.toml": "[scripts]\nbefore_apply = [\"bin/prepare.sh\"]\n\n[packages]\nbrew = [\"neovim\"]\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			cfg, err := LoadDirConfig(dir)
+			if err != nil {
+				t.Fatalf("LoadDirConfig failed: %v", err)
+			}
+			if cfg.Packages == nil || len(cfg.Packages.Brew) != 1 {
+				t.Errorf("rest of the file should still load, got packages %+v", cfg.Packages)
+			}
+		})
+	}
+}
+
 func TestValidateInvalidExtends(t *testing.T) {
 	cfg := &Config{
 		Sources: []string{"."},
@@ -177,6 +202,34 @@ func TestFindConfigAutodetect(t *testing.T) {
 
 	if filepath.Base(path) != "mate.yaml" {
 		t.Errorf("expected mate.yaml, got %s", path)
+	}
+}
+
+// A config found in, or passed relative to, the current directory must still
+// give an absolute source dir: it ends up in template output (.SourceDir), in
+// every source and script path, and in the state database.
+func TestLoadRelativePathGivesAbsoluteSourceDir(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("STATEMATE_DIR", "")
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mate.yaml"), []byte("sources: [nvim]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	want, _ := os.Getwd()
+
+	for _, path := range []string{"", "mate.yaml"} {
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("Load(%q): %v", path, err)
+		}
+		if cfg.SourceDir() != want {
+			t.Errorf("Load(%q): SourceDir() = %q, want %q", path, cfg.SourceDir(), want)
+		}
+		if got := cfg.ResolveSourcePaths(cfg.Sources); got[0] != filepath.Join(want, "nvim") {
+			t.Errorf("Load(%q): source path = %q, want it under %q", path, got[0], want)
+		}
 	}
 }
 
@@ -303,5 +356,97 @@ func TestValidateHooks(t *testing.T) {
 	cfg := &Config{Hooks: map[string]*Hook{"h": {Match: StringList{"*"}}}}
 	if err := cfg.Validate(); err == nil {
 		t.Error("a hook with no steps should fail validation")
+	}
+}
+
+// Registering a repository must only touch source_dir: the local config is also
+// where a machine keeps its profile, editor and hook overrides.
+func TestSaveLocalSourceDirPreservesOtherKeys(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	path := LocalConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	existing := "# this machine\nprofile: work\nsource_dir: /old/dotfiles\neditor: nvim\nhooks:\n  reload:\n    disabled: true\n"
+	if err := os.WriteFile(path, []byte(existing), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SaveLocalSourceDir("/new/dotfiles"); err != nil {
+		t.Fatalf("SaveLocalSourceDir: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+
+	lc := loadLocalConfig()
+	if lc == nil {
+		t.Fatalf("local config no longer parses:\n%s", got)
+	}
+	if lc.SourceDirPath != "/new/dotfiles" {
+		t.Errorf("source_dir = %q, want /new/dotfiles", lc.SourceDirPath)
+	}
+	if lc.Profile != "work" || lc.Editor != "nvim" {
+		t.Errorf("profile/editor lost: profile=%q editor=%q\n%s", lc.Profile, lc.Editor, got)
+	}
+	if lc.Hooks["reload"] == nil {
+		t.Errorf("hooks lost:\n%s", got)
+	}
+	if !strings.Contains(got, "# this machine") {
+		t.Errorf("comment lost:\n%s", got)
+	}
+	// The key is updated in place rather than moved to the end.
+	if strings.Index(got, "profile:") > strings.Index(got, "source_dir:") ||
+		strings.Index(got, "source_dir:") > strings.Index(got, "editor:") {
+		t.Errorf("key order changed:\n%s", got)
+	}
+}
+
+func TestSaveLocalSourceDirAddsKey(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	// No local config yet.
+	if err := SaveLocalSourceDir("/a/dotfiles"); err != nil {
+		t.Fatalf("SaveLocalSourceDir: %v", err)
+	}
+	if lc := loadLocalConfig(); lc == nil || lc.SourceDirPath != "/a/dotfiles" {
+		t.Fatalf("source_dir not written to a new local config: %+v", lc)
+	}
+
+	// A local config without source_dir gains the key and keeps the rest.
+	if err := os.WriteFile(LocalConfigPath(), []byte("profile: home\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := SaveLocalSourceDir("/b/dotfiles"); err != nil {
+		t.Fatalf("SaveLocalSourceDir: %v", err)
+	}
+	lc := loadLocalConfig()
+	if lc == nil || lc.SourceDirPath != "/b/dotfiles" || lc.Profile != "home" {
+		t.Errorf("got %+v, want source_dir /b/dotfiles and profile home", lc)
+	}
+}
+
+// A local config that does not parse is left alone rather than replaced.
+func TestSaveLocalSourceDirRefusesUnparseableConfig(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	path := LocalConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	broken := "profile: [unclosed\n"
+	if err := os.WriteFile(path, []byte(broken), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SaveLocalSourceDir("/new/dotfiles"); err == nil {
+		t.Error("expected an error for an unparseable local config")
+	}
+	if data, _ := os.ReadFile(path); string(data) != broken {
+		t.Errorf("unparseable local config was rewritten:\n%s", data)
 	}
 }

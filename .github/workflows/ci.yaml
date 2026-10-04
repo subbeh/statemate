@@ -73,3 +73,11 @@ jobs:
             git status --short -- docs/commands/
             exit 1
           fi
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      # Strict mode fails on broken links, catching them before they reach main
+      # and the published site.
+      - name: Build docs site
+        run: make docs-site

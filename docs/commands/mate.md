@@ -1,34 +1,35 @@
-## mate
+# mate
 
 Statemate - system configuration management
 
-### Synopsis
+## Synopsis
 
 Statemate manages your dotfiles, system configuration, and packages declaratively.
 
 Features:
-  - Stow-style multi-directory source management
-  - Profile-based configuration with auto-detection
-  - Template rendering with Go text/template
-  - Age encryption for sensitive files
-  - Declarative package management (brew, pacman, yay)
-  - System file management with permission control
+
+- Stow-style multi-directory source management
+- Profile-based configuration with auto-detection
+- Template rendering with Go text/template
+- Age encryption for sensitive files
+- Declarative package management (brew, pacman, and the AUR via yay or paru)
+- System file management with permission control
 
 Use "mate [command] --help" for more information about a command.
 
-### Options
+## Options
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -h, --help             help for mate
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate add](mate_add.md)	 - Add a file to source
 * [mate apply](mate_apply.md)	 - Apply configuration to target
-* [mate cat](mate_cat.md)	 - Display file contents
+* [mate cat](mate_cat.md)	 - Print a file, decrypting it if needed
 * [mate check](mate_check.md)	 - Check if configuration is in sync
 * [mate clean](mate_clean.md)	 - Remove orphaned files
 * [mate config](mate_config.md)	 - Inspect resolved configuration
@@ -48,6 +49,6 @@ Use "mate [command] --help" for more information about a command.
 * [mate rename](mate_rename.md)	 - Rename a managed file
 * [mate scripts](mate_scripts.md)	 - Manage scripts
 * [mate secrets](mate_secrets.md)	 - Manage secrets
-* [mate status](mate_status.md)	 - Show files that would change on apply
+* [mate status](mate_status.md)	 - Show what apply would change
 * [mate version](mate_version.md)	 - Print version information
 

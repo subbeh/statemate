@@ -1,16 +1,26 @@
 package secrets
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"filippo.io/age"
 	"github.com/subbeh/statemate/internal/encrypt"
 )
+
+// ErrNoIdentity is returned when the secrets cache is used without an age
+// identity to encrypt it with. The cache holds every secret the templates
+// reference, so it is never written in the clear.
+var ErrNoIdentity = errors.New("the secrets cache is encrypted with your age identity, but none is configured (set age.identity or age.identity_command)")
+
+// errUnencryptedCache marks a cache written in the clear by an older mate. Its
+// contents are never parsed or echoed; the next fetch replaces it.
+var errUnencryptedCache = errors.New("secrets cache is not encrypted (written by an older mate); run 'mate secrets fetch' to replace it")
 
 type CacheKey struct {
 	Provider string `json:"provider"`
@@ -52,13 +62,16 @@ type ProgressFunc func(key CacheKey, changed bool)
 type Manager struct {
 	providers  map[string]Provider
 	enc        *encrypt.AgeEncryptor
-	identity   age.Identity
 	cache      *Cache
 	cachePath  string
 	onProgress ProgressFunc
 }
 
-func NewManager(enc *encrypt.AgeEncryptor, identitySource string, cachePath string) (*Manager, error) {
+// NewManager creates a manager whose cache is encrypted to, and decrypted with,
+// the identities enc was configured with -- whether they came from age.identity
+// or age.identity_command. enc may be nil when no age block is configured; the
+// manager then refuses to read or write the cache.
+func NewManager(enc *encrypt.AgeEncryptor, cachePath string) (*Manager, error) {
 	m := &Manager{
 		providers: make(map[string]Provider),
 		enc:       enc,
@@ -74,16 +87,6 @@ func NewManager(enc *encrypt.AgeEncryptor, identitySource string, cachePath stri
 		m.cachePath = filepath.Join(stateDir, "secrets.age")
 	}
 
-	if identitySource != "" {
-		identities, err := loadIdentity(identitySource)
-		if err != nil {
-			return nil, fmt.Errorf("loading identity for secrets cache: %w", err)
-		}
-		if len(identities) > 0 {
-			m.identity = identities[0]
-		}
-	}
-
 	m.providers["bitwarden"] = NewBitwardenProvider()
 
 	return m, nil
@@ -96,7 +99,17 @@ func (m *Manager) SetProgress(fn ProgressFunc) {
 func (m *Manager) Fetch(items []FetchItem) (*FetchResult, error) {
 	result := &FetchResult{}
 
+	// Check before contacting any provider: without an identity the values
+	// could not be stored, so fetching them would only unlock the vault for
+	// nothing.
+	if !m.canUseCache() {
+		return nil, ErrNoIdentity
+	}
+
 	if err := m.loadCache(); err != nil {
+		if errors.Is(err, errUnencryptedCache) {
+			fmt.Fprintf(os.Stderr, "Warning: replacing unencrypted secrets cache %s with an encrypted one\n", m.cachePath)
+		}
 		m.cache = &Cache{Items: make(map[string]*CachedValue)}
 	}
 
@@ -177,31 +190,52 @@ func (m *Manager) CachePath() string {
 	return m.cachePath
 }
 
+func (m *Manager) canUseCache() bool {
+	return m.enc != nil && m.enc.CanDecrypt()
+}
+
 func (m *Manager) loadCache() error {
 	if m.cache != nil {
 		return nil
 	}
 
+	if !m.canUseCache() {
+		return ErrNoIdentity
+	}
+
 	data, err := os.ReadFile(m.cachePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("no secrets cache found")
+			return fmt.Errorf("no secrets cache found (run 'mate secrets fetch')")
 		}
 		return err
 	}
 
-	var plaintext []byte
-	if m.enc != nil && m.enc.CanDecrypt() {
-		plaintext, err = m.enc.Decrypt(data)
-		if err != nil {
-			return fmt.Errorf("decrypting secrets cache: %w", err)
-		}
-	} else {
-		plaintext = data
+	// Older versions wrote the cache as plain JSON when no age.identity was
+	// set. Handing that to age fails with an error quoting the first line of
+	// the file -- the secrets themselves -- so recognise it up front and never
+	// let its contents reach an error message.
+	if !isAgeFile(data) {
+		return errUnencryptedCache
 	}
 
-	m.cache = &Cache{}
-	return json.Unmarshal(plaintext, m.cache)
+	plaintext, err := m.enc.Decrypt(data)
+	if err != nil {
+		return fmt.Errorf("decrypting secrets cache: %w", err)
+	}
+
+	cache := &Cache{}
+	if err := json.Unmarshal(plaintext, cache); err != nil {
+		return fmt.Errorf("parsing secrets cache: %w", err)
+	}
+	m.cache = cache
+	return nil
+}
+
+// isAgeFile reports whether data is an age file, binary or armored.
+func isAgeFile(data []byte) bool {
+	return bytes.HasPrefix(data, []byte("age-encryption.org/")) ||
+		bytes.HasPrefix(data, []byte("-----BEGIN AGE ENCRYPTED FILE-----"))
 }
 
 func (m *Manager) saveCache() error {
@@ -214,19 +248,11 @@ func (m *Manager) saveCache() error {
 		return err
 	}
 
-	if m.identity != nil {
-		recipient, err := identityToRecipient(m.identity)
-		if err != nil {
-			return fmt.Errorf("deriving recipient from identity: %w", err)
-		}
-		localEnc, err := encrypt.NewAgeEncryptor("", "", []string{recipient})
-		if err != nil {
-			return err
-		}
-		return localEnc.EncryptToFile(data, m.cachePath)
+	ciphertext, err := m.enc.EncryptToIdentity(data)
+	if err != nil {
+		return fmt.Errorf("encrypting secrets cache: %w", err)
 	}
-
-	return os.WriteFile(m.cachePath, data, 0600)
+	return os.WriteFile(m.cachePath, ciphertext, 0600)
 }
 
 type FetchResult struct {
@@ -266,31 +292,4 @@ func expandPath(path string) string {
 		return filepath.Join(home, path[2:])
 	}
 	return path
-}
-
-func loadIdentity(source string) ([]age.Identity, error) {
-	if strings.HasPrefix(source, "AGE-SECRET-KEY-") {
-		identity, err := age.ParseX25519Identity(source)
-		if err != nil {
-			return nil, err
-		}
-		return []age.Identity{identity}, nil
-	}
-
-	path := expandPath(source)
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-
-	return age.ParseIdentities(f)
-}
-
-func identityToRecipient(id age.Identity) (string, error) {
-	x25519Id, ok := id.(*age.X25519Identity)
-	if !ok {
-		return "", fmt.Errorf("unsupported identity type for recipient derivation")
-	}
-	return x25519Id.Recipient().String(), nil
 }

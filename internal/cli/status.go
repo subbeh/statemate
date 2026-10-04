@@ -25,11 +25,12 @@ import (
 
 var statusCmd = &cobra.Command{
 	Use:   "status [path]",
-	Short: "Show files that would change on apply",
+	Short: "Show what apply would change",
 	Long: `Show pending changes that would be made on apply.
 
 Reports files to be created, modified, or in conflict, plus orphaned files,
-missing packages, pending scripts, and secrets needing refresh.
+missing packages, pending scripts, the hooks the changes would trigger, and
+secrets that need fetching.
 
 An empty directory in a source -- one with no files under it -- is reported until
 it exists on the target. Directories that hold files are not listed separately;
@@ -39,7 +40,12 @@ Markers: '+' new, '~' modified, '!' conflict, '<' will be imported into the
 source (an '#import' file whose target changed).
 
 The positional argument filters by file or path; use --source to limit the
-report to a single source.`,
+file report to a single source. Packages, scripts and secrets are always
+reported in full.
+
+--short prints one compact line for status bars, and nothing when there is
+nothing to do. It covers files, orphans, scripts and secrets, not packages or
+hooks.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runStatus,
 	ValidArgsFunction: completeManagedFiles,
@@ -96,17 +102,15 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(os.Stderr)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
 
 	var enc *encrypt.AgeEncryptor
-	identitySource := ""
 	if cfg.Age != nil {
 		enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-		identitySource = cfg.Age.Identity
 	}
 
 	var ctxOpts []template.ContextOption
@@ -115,7 +119,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 	tmplCtx, _ := template.NewContext(cfg, profileName, ctxOpts...)
 
-	if mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache); err == nil {
+	if mgr, err := secrets.NewManager(enc, cfg.SecretsCache); err == nil {
 		tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 			key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
 			return mgr.Get(key)
@@ -153,8 +157,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	var pendingSecrets int
 	{
-		if mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache); err == nil {
-			templateFiles := discoverTemplateFiles(cfg, sourcePaths)
+		if mgr, err := secrets.NewManager(enc, cfg.SecretsCache); err == nil {
+			templateFiles := discoverTemplateFiles(cfg, profileName, sourcePaths)
 			var decryptFn func([]byte) ([]byte, error)
 			if enc != nil && enc.CanDecrypt() {
 				decryptFn = enc.Decrypt
@@ -172,17 +176,21 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Missing packages are informational only -- a package manager being
-	// unavailable should never fail status.
+	// unavailable should never fail status. A failure is still reported, since
+	// a broken .mate.yaml would otherwise make the packages section vanish.
 	type missingPkgs struct {
 		manager  string
 		packages []string
 	}
 	var pendingPackages []missingPkgs
-	if syncResults, err := packages.ComputeSync(cfg, profileName, sourcePaths); err == nil {
-		for _, r := range syncResults {
-			if missing := r.Missing(); len(missing) > 0 {
-				pendingPackages = append(pendingPackages, missingPkgs{manager: r.Manager, packages: missing})
-			}
+	syncResults, err := packages.ComputeSync(cfg, profileName, sourcePaths,
+		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: not checking packages: %v\n", err)
+	}
+	for _, r := range syncResults {
+		if missing := r.Missing(); len(missing) > 0 {
+			pendingPackages = append(pendingPackages, missingPkgs{manager: r.Manager, packages: missing})
 		}
 	}
 

@@ -14,11 +14,15 @@ func newScanner(cfg *config.Config, profileName string) (*source.Scanner, error)
 		return nil, err
 	}
 
-	renderer := func(data []byte) ([]byte, error) {
+	return source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), dirConfigRenderer(tmplCtx), cfg.Ignore), nil
+}
+
+// dirConfigRenderer renders a source's .mate.yaml with tmplCtx. Everything that
+// reads that file must use it, or a templated value is taken literally.
+func dirConfigRenderer(tmplCtx *template.Context) config.TemplateRenderer {
+	return func(data []byte) ([]byte, error) {
 		return template.Render(data, tmplCtx)
 	}
-
-	return source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), renderer, cfg.Ignore), nil
 }
 
 // newTemplateContext builds a rendering context with decryption and secret
@@ -38,11 +42,7 @@ func newTemplateContext(cfg *config.Config, profileName string) (*template.Conte
 		return nil, err
 	}
 
-	identitySource := ""
-	if cfg.Age != nil {
-		identitySource = cfg.Age.Identity
-	}
-	mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache)
+	mgr, err := secrets.NewManager(enc, cfg.SecretsCache)
 	if err == nil {
 		tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 			key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}

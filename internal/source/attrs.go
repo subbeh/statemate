@@ -86,6 +86,21 @@ func ParseAttrs(name string) (baseName string, attrs Attrs) {
 	return baseName, attrs
 }
 
+// RemoveAttr returns name without the given flag attribute (e.g. "encrypted"),
+// wherever it appears among the attributes. Attributes are not ordered, so
+// x#encrypted#template is as valid as x#template#encrypted, and trimming a
+// suffix would miss the former.
+func RemoveAttr(name, attr string) string {
+	parts := strings.Split(name, "#")
+	kept := parts[:1]
+	for _, part := range parts[1:] {
+		if part != attr {
+			kept = append(kept, part)
+		}
+	}
+	return strings.Join(kept, "#")
+}
+
 func (a *Attrs) Merge(parent Attrs) {
 	if a.Profile == "" {
 		a.Profile = parent.Profile

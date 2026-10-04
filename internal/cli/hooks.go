@@ -212,7 +212,7 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("hook %s requires profile %q", h.Name, h.Profile)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(env.cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
@@ -234,6 +234,23 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("hook %s failed: %w", h.Name, err)
 	}
 	return nil
+}
+
+// collectHooks discovers every script of the given sources and collects the
+// hooks against them, returning both. Hook script steps and run templates are
+// only checked once scripts are discovered, so commands call this before they
+// change anything: a broken hook then stops the command up front rather than
+// failing it with its work half done.
+func collectHooks(cfg *config.Config, sourcePaths []string, scanner *source.Scanner) (hooks.Set, scripts.Scripts, error) {
+	all, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover()
+	if err != nil {
+		return nil, nil, fmt.Errorf("discovering scripts: %w", err)
+	}
+	set, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, all)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid hooks: %w", err)
+	}
+	return set, all, nil
 }
 
 // hookChanges turns the entries a command wrote into hook changes, noting which

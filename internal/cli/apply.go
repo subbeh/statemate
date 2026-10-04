@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -55,6 +55,13 @@ Hooks run for the files this apply wrote, after packages and before #after
 scripts, and are confirmed the same way (without [s]kip). A failed hook does
 not stop the others, but the apply exits non-zero. See 'mate hooks'.
 
+Missing secrets are fetched before anything is written, and missing packages
+are offered for install after the files are written.
+
+A target changed outside mate is a conflict, and is confirmed on its own:
+[o]verwrite, [i]mport into the source, [s]kip, [d]iff, or [a]bort. --force
+overwrites without asking; --dry-run still asks.
+
 A file marked '#import' is not prompted about when only its target changed: the
 target is treated as authoritative and copied back into the source. Use it for
 files an application rewrites, such as ~/.claude/settings.json. If the source
@@ -74,9 +81,9 @@ var (
 func init() {
 	rootCmd.AddCommand(applyCmd)
 	applyCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
-	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite modified targets and auto-confirm scripts")
+	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite conflicting targets and auto-confirm scripts, hooks and package installs")
 	applyCmd.Flags().BoolVar(&noScripts, "no-scripts", false, "skip all scripts")
-	applyCmd.Flags().CountVarP(&verbose, "verbose", "V", "increase verbosity (can be repeated)")
+	applyCmd.Flags().CountVarP(&verbose, "verbose", "V", "list every file written, and with --dry-run the files and steps of each hook")
 	addScopeFlag(applyCmd)
 }
 
@@ -99,6 +106,36 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	sources := profile.ResolveSources(cfg, profileName)
 	sourcePaths := cfg.ResolveSourcePaths(sources)
+
+	// Narrow the run before anything is applied, so every later phase (secrets,
+	// files, scripts, packages, orphans) sees the same scope.
+	scope, err := scopeFrom(cmd, args)
+	if err != nil {
+		return err
+	}
+
+	var enc *encrypt.AgeEncryptor
+	if cfg.Age != nil {
+		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
+		if err != nil {
+			return fmt.Errorf("setting up encryption: %w", err)
+		}
+	}
+
+	// Fetch missing secrets before scanning: a source's .mate.yaml is rendered
+	// during the scan, and one that generates files from secrets fails to
+	// render on a fresh machine whose cache does not have them yet. Discovery
+	// reads .mate.yaml unrendered, so it does not depend on the cache itself.
+	//
+	// A file-scoped run deploys files and nothing else, so it does not reach
+	// out to fetch secrets. Source scope still does, since its templates may
+	// need them.
+	mgr, mgrErr := secrets.NewManager(enc, cfg.SecretsCache)
+	if mgrErr == nil && scope.Path == "" {
+		if err := fetchMissingSecrets(cfg, mgr, enc, profileName, scope.FilterSourcePaths(sourcePaths), dryRun, verbose); err != nil {
+			return err
+		}
+	}
 
 	scanner, err := newScanner(cfg, profileName)
 	if err != nil {
@@ -125,35 +162,37 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolve conflicts before applying")
 	}
 
-	// Narrow the run before anything is applied, so every later phase (files,
-	// scripts, packages, orphans) sees the same scope.
-	scope, err := scopeFrom(cmd, args)
-	if err != nil {
-		return err
-	}
 	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
 		return err
 	}
 	tree = scope.FilterTree(tree, cfg.SourceDir())
 
-	// Narrow the source paths too. Secret discovery and script discovery both
-	// walk these directly, so leaving them unfiltered would make a scoped run
-	// fetch secrets for templates it is never going to render.
+	// Narrow the source paths too. Secret discovery walks these directly, so
+	// leaving them unfiltered would make a scoped run fetch secrets for
+	// templates it is never going to render.
+	//
+	// Hooks are the exception: they are collected from every active source,
+	// since a script: step may name a script anywhere in the repository and a
+	// source's own hooks live in its .mate.yaml. Only the files the scoped run
+	// writes decide which of them trigger.
+	allSourcePaths := sourcePaths
 	sourcePaths = scope.FilterSourcePaths(sourcePaths)
 
-	db, err := state.Open("")
+	// Collect hooks before fetching secrets, running scripts, or writing files,
+	// so a broken hook stops the apply before it has done anything. Every
+	// script is discovered, so hooks can resolve their script: steps, but only
+	// those the scope allows run as #before/#after scripts.
+	hookSet, discovered, err := collectHooks(cfg, allSourcePaths, scanner)
+	if err != nil {
+		return err
+	}
+	allScripts := scopedScripts(discovered, scope)
+
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
-
-	var enc *encrypt.AgeEncryptor
-	if cfg.Age != nil {
-		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-		if err != nil {
-			return fmt.Errorf("setting up encryption: %w", err)
-		}
-	}
 
 	var ctxOpts []template.ContextOption
 	if enc != nil && enc.CanDecrypt() {
@@ -165,33 +204,12 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating template context: %w", err)
 	}
 
-	identitySource := ""
-	if cfg.Age != nil {
-		identitySource = cfg.Age.Identity
-	}
-	mgr, mgrErr := secrets.NewManager(enc, identitySource, cfg.SecretsCache)
 	if mgrErr == nil {
 		tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 			key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
 			return mgr.Get(key)
 		}
-
-		// A file-scoped run deploys files and nothing else, so it does not reach
-		// out to fetch secrets. Source scope still does, since its templates may
-		// need them.
-		if scope.Path == "" {
-			if err := fetchMissingSecrets(cfg, mgr, enc, profileName, sourcePaths, dryRun, verbose); err != nil {
-				return err
-			}
-		}
 	}
-
-	discoverer := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths)
-	allScripts, err := discoverer.Discover()
-	if err != nil {
-		return fmt.Errorf("discovering scripts: %w", err)
-	}
-	allScripts = scopedScripts(allScripts, scope)
 
 	// Compute pending changes before applying anything, so #onchange scripts see
 	// the same set whether they run #before or #after -- once apply has written
@@ -244,14 +262,10 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if err := promptMissingPackages(cfg, profileName, sourcePaths, dryRun, force, scope); err != nil {
+	if err := promptMissingPackages(cfg, profileName, sourcePaths, tmplCtx, dryRun, force, scope); err != nil {
 		return err
 	}
 
-	hookSet, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, allScripts)
-	if err != nil {
-		return fmt.Errorf("invalid hooks: %w", err)
-	}
 	hookRunner := hooks.NewRunner(executor, tmplCtx, hooks.Options{
 		DryRun:       dryRun,
 		Verbose:      verbose > 0,
@@ -259,7 +273,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		NoScripts:    noScripts,
 		ProfileChain: profileChain,
 	})
-	hookRes, err := runTriggeredHooks(hookRunner, hookSet, hookChanges(result.Written, sourcePaths), profileChain, verbose > 0 || dryRun)
+	hookRes, err := runTriggeredHooks(hookRunner, hookSet, hookChanges(result.Written, allSourcePaths), profileChain, verbose > 0 || dryRun)
 	if err != nil {
 		return err
 	}
@@ -308,7 +322,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 }
 
 func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.AgeEncryptor, profileName string, sourcePaths []string, dryRun bool, verbose int) error {
-	templateFiles := discoverTemplateFiles(cfg, sourcePaths)
+	templateFiles := discoverTemplateFiles(cfg, profileName, sourcePaths)
 	if len(templateFiles) == 0 {
 		return nil
 	}
@@ -376,16 +390,29 @@ func warnSkippedScripts(res *scripts.ExecuteResult) {
 	fmt.Fprintln(os.Stderr, "Use --force to run them, or --no-scripts to silence this warning.")
 }
 
-func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, dryRun bool, autoConfirm bool, scope Scope) error {
+func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths []string, tmplCtx *template.Context, dryRun bool, autoConfirm bool, scope Scope) error {
 	// A file-scoped run touches files only.
 	if scope.Path != "" {
 		return nil
 	}
 
-	results, err := packages.ComputeSync(cfg, profileName, sourcePaths)
+	// Packages never fail an apply whose files are already written, but a
+	// broken .mate.yaml must not make them disappear without a word.
+	results, err := packages.ComputeSync(cfg, profileName, sourcePaths,
+		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "\nWarning: skipping packages: %v\n", err)
 		return nil
 	}
+
+	return installMissingPackages(results, cfg, dryRun, autoConfirm, scope)
+}
+
+func installMissingPackages(results []packages.SyncResult, cfg *config.Config, dryRun bool, autoConfirm bool, scope Scope) error {
+	// Installs that could not be confirmed because no answer could be read,
+	// as under cron or CI. Once stdin has failed every later prompt would too,
+	// so the rest are recorded without asking and reported together.
+	var skippedNoTTY []string
 
 	for _, result := range results {
 		// Under --source, install only what that source declares. Filter the
@@ -405,11 +432,20 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 			continue
 		}
 
+		if len(skippedNoTTY) > 0 {
+			skippedNoTTY = append(skippedNoTTY, result.Manager+": "+strings.Join(missing, ", "))
+			continue
+		}
+
 		fmt.Printf("\nMissing %s packages: %s\n", result.Manager, strings.Join(missing, ", "))
 		if !autoConfirm {
 			ok, err := util.Confirm("Install? [y/N] ", false)
-			if err != nil {
+			if errors.Is(err, util.ErrInterrupted) {
 				return nil
+			}
+			if err != nil {
+				skippedNoTTY = append(skippedNoTTY, result.Manager+": "+strings.Join(missing, ", "))
+				continue
 			}
 			if !ok {
 				continue
@@ -421,5 +457,19 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 		}
 	}
 
+	warnSkippedPackages(skippedNoTTY)
 	return nil
+}
+
+// warnSkippedPackages reports package installs that could not be confirmed
+// because there was no terminal to prompt on, matching warnSkippedScripts.
+func warnSkippedPackages(skipped []string) {
+	if len(skipped) == 0 {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\nWarning: %d package install(s) skipped (no terminal to confirm on):\n", len(skipped))
+	for _, s := range skipped {
+		fmt.Fprintf(os.Stderr, "  - %s\n", s)
+	}
+	fmt.Fprintln(os.Stderr, "Use --force to install them.")
 }

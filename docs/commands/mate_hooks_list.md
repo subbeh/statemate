@@ -1,8 +1,8 @@
-## mate hooks list
+# mate hooks list
 
 List all hooks
 
-### Synopsis
+## Synopsis
 
 List every hook with where it is declared, its patterns, and its status.
 
@@ -14,20 +14,20 @@ source name. STATUS shows 'disabled' for a hook switched off with
 mate hooks list [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help   help for list
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate hooks](mate_hooks.md)	 - Manage hooks
 

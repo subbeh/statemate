@@ -22,12 +22,20 @@ var renameCmd = &cobra.Command{
 
 This renames the source file, the target file, and updates tracking.
 
-Hooks matching the old or the new target path run afterwards, with a
-confirmation prompt (see 'mate hooks').
+Attributes belong to the source file only; the target is always named
+without them. If <new-name> has no attributes, the source keeps the ones it
+already has. If it has any, they replace the source's attributes, so give the
+full set. #encrypted cannot be added or dropped this way, since that would
+not change the content: use 'mate encrypt' or 'mate decrypt'.
 
-Examples:
-  mate rename nvim/init.lua init.vim
-  mate rename zsh/.zshrc .zshrc.bak`,
+Hooks matching the old or the new target path run afterwards, with a
+confirmation prompt (see 'mate hooks').`,
+	Example: `  mate rename nvim/init.lua init.vim
+  mate rename zsh/.zshrc .zshrc.bak
+  mate rename git/.gitconfig#template .gitconfig.local
+      (source becomes .gitconfig.local#template, target .gitconfig.local)
+  mate rename ssh/.ssh/config config#perm:600
+      (changes only the attributes; the target keeps its name)`,
 	Args:              cobra.ExactArgs(2),
 	RunE:              runRename,
 	ValidArgsFunction: completeFilePaths,
@@ -78,30 +86,38 @@ func runRename(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("file not found: %s", srcPattern)
 	}
 
-	newSourcePath := filepath.Join(filepath.Dir(entry.SourcePath), newName)
+	newSourceName, newTargetName, err := renamedNames(filepath.Base(entry.SourcePath), newName)
+	if err != nil {
+		return err
+	}
+	newSourcePath := filepath.Join(filepath.Dir(entry.SourcePath), newSourceName)
+	newTargetPath := filepath.Join(filepath.Dir(entry.TargetPath), newTargetName)
+	// Changing only the attributes leaves the target where it is.
+	targetRenamed := newTargetPath != entry.TargetPath
 
-	if _, err := os.Stat(newSourcePath); err == nil {
+	if _, err := os.Lstat(newSourcePath); err == nil {
 		return fmt.Errorf("target already exists: %s", newSourcePath)
+	}
+	// Checked before anything moves, so a clash does not leave the source
+	// renamed and the target not.
+	if targetRenamed {
+		if _, err := os.Lstat(newTargetPath); err == nil {
+			return fmt.Errorf("target already exists: %s", util.ShortenPath(newTargetPath))
+		}
 	}
 
 	if err := os.Rename(entry.SourcePath, newSourcePath); err != nil {
 		return fmt.Errorf("renaming file: %w", err)
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
 
-	newTargetPath := filepath.Join(filepath.Dir(entry.TargetPath), newName)
-
-	if _, err := os.Stat(newTargetPath); err == nil {
-		return fmt.Errorf("target already exists: %s", util.ShortenPath(newTargetPath))
-	}
-
 	targetMoved := false
-	if _, err := os.Stat(entry.TargetPath); err == nil {
+	if _, err := os.Lstat(entry.TargetPath); err == nil && targetRenamed {
 		if err := os.Rename(entry.TargetPath, newTargetPath); err != nil {
 			return fmt.Errorf("renaming target: %w", err)
 		}
@@ -114,12 +130,18 @@ func runRename(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("updating database: %w", err)
 		}
 
-		targetHash, err := state.HashFile(newTargetPath)
+		// A #symlink is tracked by its link text, as status compares it.
+		hashFn := state.HashFile
+		if entry.Attrs.Symlink {
+			hashFn = state.HashLink
+		}
+
+		targetHash, err := hashFn(newTargetPath)
 		if err != nil {
 			return fmt.Errorf("hashing new target: %w", err)
 		}
 
-		sourceHash, err := state.HashFile(newSourcePath)
+		sourceHash, err := hashFn(newSourcePath)
 		if err != nil {
 			return fmt.Errorf("hashing new source: %w", err)
 		}
@@ -137,7 +159,11 @@ func runRename(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Renamed:\n")
 	fmt.Printf("  source: %s -> %s\n", util.ShortenPath(entry.SourcePath), util.ShortenPath(newSourcePath))
-	fmt.Printf("  target: %s -> %s\n", util.ShortenPath(entry.TargetPath), util.ShortenPath(newTargetPath))
+	if targetRenamed {
+		fmt.Printf("  target: %s -> %s\n", util.ShortenPath(entry.TargetPath), util.ShortenPath(newTargetPath))
+	} else {
+		fmt.Printf("  target: %s (unchanged)\n", util.ShortenPath(entry.TargetPath))
+	}
 
 	if !targetMoved {
 		return nil
@@ -156,4 +182,39 @@ func runRename(cmd *cobra.Command, args []string) error {
 		{Path: newTargetPath, SourceDir: srcDir},
 	}
 	return runRemovalHooks(cfg, profileName, sourcePaths, scanner, db, changes, false)
+}
+
+// renamedNames works out the new source and target file names for renaming the
+// source file sourceName to newName. Attributes belong to the source only, so
+// the target is always the attribute-free name. A newName without attributes
+// keeps the source's existing ones, so a plain rename does not silently turn
+// a template or encrypted file into an ordinary one; a newName with attributes
+// replaces them.
+//
+// #encrypted describes the content rather than how it is deployed, so it can
+// only be changed by mate encrypt and mate decrypt, which convert the content
+// to match.
+func renamedNames(sourceName, newName string) (newSourceName, newTargetName string, err error) {
+	newBase, newAttrs := source.ParseAttrs(newName)
+	_, oldAttrs := source.ParseAttrs(sourceName)
+	if newBase == "" {
+		return "", "", fmt.Errorf("new name %q has no file name before its attributes", newName)
+	}
+
+	newSourceName = newName
+	if !strings.Contains(newName, "#") {
+		if i := strings.Index(sourceName, "#"); i != -1 {
+			newSourceName = newName + sourceName[i:]
+		}
+		newAttrs = oldAttrs
+	}
+
+	if newAttrs.Encrypted != oldAttrs.Encrypted {
+		if oldAttrs.Encrypted {
+			return "", "", fmt.Errorf("%s drops #encrypted from %s: use 'mate decrypt' to decrypt it", newName, sourceName)
+		}
+		return "", "", fmt.Errorf("%s adds #encrypted to %s: use 'mate encrypt' to encrypt it", newName, sourceName)
+	}
+
+	return newSourceName, newBase, nil
 }

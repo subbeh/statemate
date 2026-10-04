@@ -13,8 +13,11 @@ import (
 var profileCmd = &cobra.Command{
 	Use:   "profile",
 	Short: "Show active profile",
-	Long:  "Show which profile will be used and how it was determined",
-	RunE:  runProfile,
+	Long: `Show the active profile, how it was chosen, and the sources it resolves to.
+
+The profile is chosen by the first of: --profile, 'profile:' in the local
+config or mate.yaml, $STATEMATE_PROFILE, and automatic detection.`,
+	RunE: runProfile,
 }
 
 func init() {
@@ -34,20 +37,13 @@ func runProfile(cmd *cobra.Command, args []string) error {
 	var profileName string
 	var source string
 
+	// Same precedence as every other command (--profile, then profile.Detect),
+	// so this reports the profile they actually use.
 	if profileFlag != "" {
 		profileName = profileFlag
 		source = "--profile flag"
-	} else if envProfile := os.Getenv("STATEMATE_PROFILE"); envProfile != "" {
-		profileName = envProfile
-		source = "STATEMATE_PROFILE environment variable"
-	} else if cfg.Profile != "" {
-		profileName = cfg.Profile
-		source = "config file (profile field)"
 	} else {
-		profileName = profile.Detect(cfg)
-		if profileName != "" {
-			source = "auto-detected"
-		}
+		profileName, source = profile.DetectWithSource(cfg)
 	}
 
 	if profileName != "" {
@@ -58,7 +54,7 @@ func runProfile(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Profile: %s\n", profileName)
 		}
 		fmt.Printf("Source:  %s\n", source)
-		if source == "auto-detected" {
+		if source == profile.SourceDetected {
 			printDetectionReason(cfg, profileName)
 		}
 	} else {

@@ -11,7 +11,6 @@ import (
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/secrets"
 	"github.com/subbeh/statemate/internal/source"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -25,8 +24,9 @@ var diffCmd = &cobra.Command{
 The positional argument filters by file or path; use --source to limit the diff
 to a single source.
 
-Use --tool to specify an external diff tool (e.g., delta, difft, vimdiff).
-This can also be set in config with 'diff_tool'.`,
+Use --tool to specify an external diff tool (e.g., delta, difft, vimdiff), or
+set 'diff_tool' in config. The tool is run as '<tool> <old> <new>' and its
+output is captured, so it may include arguments but cannot be interactive.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runDiff,
 	ValidArgsFunction: completeManagedFiles,
@@ -83,7 +83,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolve conflicts before diffing")
 	}
 
-	db, err := state.Open("")
+	db, err := openState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
@@ -107,11 +107,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	{
-		identitySource := ""
-		if cfg.Age != nil {
-			identitySource = cfg.Age.Identity
-		}
-		mgr, err := secrets.NewManager(enc, identitySource, cfg.SecretsCache)
+		mgr, err := secrets.NewManager(enc, cfg.SecretsCache)
 		if err == nil {
 			tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
 				key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
@@ -169,6 +165,14 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
+		if change.Entry.Attrs.Symlink {
+			// What changes is the link text; diffing what it points at would fail
+			// for a directory or a destination that does not exist.
+			fmt.Printf("=== %s ===\n", util.ShortenPath(change.Entry.TargetPath))
+			fmt.Println(target.ColorizeDiff(symlinkDiff(change.Entry)))
+			continue
+		}
+
 		if !change.Entry.Generated && target.IsBinaryFile(change.Entry.SourcePath) {
 			fmt.Printf("Binary files differ: %s\n", util.ShortenPath(change.Entry.TargetPath))
 			continue
@@ -209,6 +213,21 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// symlinkDiff describes a pending #symlink change as the link the target has
+// now and the one apply will create.
+func symlinkDiff(entry *source.Entry) string {
+	var lines []string
+	if old, err := os.Readlink(entry.TargetPath); err == nil {
+		lines = append(lines, "- -> "+old)
+	} else if _, err := os.Lstat(entry.TargetPath); err == nil {
+		lines = append(lines, "- (not a symlink)")
+	}
+	if dest, err := os.Readlink(entry.SourcePath); err == nil {
+		lines = append(lines, "+ -> "+dest)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func generateEncryptedTemplateDiff(entry *source.Entry, enc *encrypt.AgeEncryptor, tmplCtx *template.Context, diffTool string) (string, error) {

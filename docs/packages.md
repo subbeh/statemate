@@ -17,16 +17,18 @@ packages:
 |-----|---------|-------------|
 | `brew` | Homebrew | `brew` on `$PATH` |
 | `pacman` | Arch's pacman | `pacman` on `$PATH` |
-| `aur` | An AUR helper | the helper on `$PATH` |
+| `aur` | An AUR helper (`yay` or `paru`) | the helper on `$PATH` |
 | `common` | Whichever of brew/pacman is present | — |
+
+Homebrew casks go under `brew:` too; there is no separate `cask:` key.
 
 A manager that is not available is ignored entirely, so one config can serve both
 a macOS and an Arch machine.
 
 ### `common`
 
-`common` resolves to the **primary** manager — brew if present, otherwise pacman.
-Use it for packages named identically everywhere:
+`common` resolves to the **primary** manager: brew if present, otherwise pacman.
+It never resolves to the AUR. Use it for packages named identically everywhere:
 
 ```yaml
 packages:
@@ -56,23 +58,26 @@ Statemate accepts either because Homebrew itself is inconsistent — `brew list
 fully qualified. One consequence is that two taps providing the same formula name
 cannot be told apart when comparing bare names.
 
-Statemate does not add taps for you. Run `brew tap <owner>/<name>` yourself, or add
-it to a [script](scripts.md).
+statemate does not run `brew tap` itself, but `brew install owner/tap/formula`
+taps automatically, which is another reason to prefer the qualified form.
 
 ### AUR helper
 
-Set explicitly, or leave it to be detected:
+When `aur_helper` is unset, statemate uses `yay` if it is on `$PATH`, otherwise
+`paru`. Set it to choose explicitly:
 
 ```yaml
 aur_helper: paru
 ```
+
+Without either helper, `aur:` packages are ignored, like any unavailable manager.
 
 AUR packages are queried separately from native ones, so an AUR package is not
 reported as an unexpected extra under pacman.
 
 ## Where packages can be declared
 
-All four are merged, and a package may appear in several:
+All of these are merged, and a package may appear in several:
 
 ```yaml
 # mate.yaml — every machine
@@ -88,39 +93,70 @@ include:
   - packages.yaml             # packages: and variables: only
 ```
 
+Profile packages are inherited along `extends`, like sources and variables: a
+profile that extends `base` gets `base`'s packages too. A profile can also have
+its own `include:`.
+
 ```yaml
 # nvim/.mate.yaml — only when this source is active
 packages:
   common: [neovim]
 ```
 
-`mate packages status` shows which source contributed each package, which is the
-quickest way to find out why something is on the list.
+`mate packages status` shows where each package was declared, which is the
+quickest way to find out why something is on the list: `config` for `mate.yaml`
+and its includes, `profile:<name>` for a profile, or the source's name.
+
+A `packages:` key in your [local config](configuration.md#local-config) replaces
+the repository's top-level packages rather than adding to them.
 
 ## Versions
 
-A package may pin a version with `@`:
+statemate does not pin versions. A package name is passed to the manager exactly
+as written, so Homebrew's versioned formulae work like any other package:
 
 ```yaml
 packages:
-  brew: [node@20]
+  brew: [node@20, python@3.12]
 ```
-
-The part before `@` is the package name; the rest is passed to the manager as
-written.
 
 ## Commands
 
 ```bash
-mate packages status           # what is missing
+mate packages status           # every declared package: ✓ installed, + missing
 mate packages status --all     # also list installed packages not in config
 mate packages status -v        # include package descriptions
 mate packages apply            # install what is missing
 mate packages apply --prune    # also remove packages not in config
+mate packages apply -y         # without the confirmation prompt
 ```
 
-`mate apply` prompts to install missing packages as part of a normal run, and
-`mate status` reports them under "Missing packages".
+`mate packages apply` asks once per manager before installing.
+
+`mate apply` also prompts, after writing files, once per manager:
+
+```
+Missing pacman packages: keyd, tlp
+Install? [y/N]
+```
+
+`--force` answers yes. `--dry-run` lists the packages without prompting. Without
+a terminal to prompt on, installs are skipped with a warning.
+
+`mate apply <path>` skips packages entirely, and `mate apply --source <name>`
+only considers that source's packages. `mate status` reports missing packages
+under "Missing packages".
+
+The commands statemate runs:
+
+| Manager | Install | Remove (`--prune`) |
+|---------|---------|--------------------|
+| Homebrew | `brew install …` | `brew uninstall …` |
+| pacman | `sudo pacman -S --noconfirm …` | `sudo pacman -R --noconfirm …` |
+| AUR | `<helper> -S --noconfirm …` | `<helper> -R --noconfirm …` |
+
+All of a manager's missing packages go into one command, so one bad name can
+fail the whole batch.
 
 ### `--all` and extras
 
@@ -149,8 +185,12 @@ no description for it (common for font casks). **`<unknown>`** means the manager
 matched no such package at all, which usually points at a mistake in your config —
 a typo (`github-cli` where Homebrew calls it `gh`), a name that only exists on
 another platform (`man`, `sudo` in a `common:` list on macOS), or a package that
-has since been renamed or removed. Such a package can never be installed, so
-`mate packages apply` will keep trying and failing until the name is corrected.
+has since been renamed or removed. Such a package can never be installed. It also
+fails the install of every other package in the same batch until the name is
+corrected.
+
+`<unknown>` is only reported for Homebrew; pacman and the AUR leave the
+description empty.
 
 A Homebrew alias is described under the formula it is installed as, so `kubectl`
 shows the description of `kubernetes-cli`. An alias of a formula that is *not*
@@ -165,10 +205,13 @@ declared" includes packages you installed deliberately but never wrote down, rev
 
 ## What counts as installed
 
-Only **explicitly installed** packages are considered, not those pulled in as
-dependencies (`brew leaves --installed-on-request`, `pacman -Qen`). A package that
-is present purely as another package's dependency is still reported as missing,
-because removing that other package would take it with it.
+A declared package counts as installed if it is present at all, including as a
+dependency of something else.
+
+Finding **extras**, for `--all` and `--prune`, is stricter. Only packages you
+installed explicitly count (`brew leaves --installed-on-request` plus every cask,
+`pacman -Qen`, and `<helper> -Qmtt` for the AUR), so dependencies are never
+offered for removal.
 
 Virtual packages and provides are resolved, so declaring `man` is satisfied by
 `man-db`.

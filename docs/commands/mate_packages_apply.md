@@ -1,16 +1,22 @@
-## mate packages apply
+# mate packages apply
 
-Sync packages
+Install missing packages
 
-### Synopsis
+## Synopsis
 
-Install missing packages. Use --prune to also remove packages not in config.
+Install packages that are declared but not installed.
+
+Missing packages are listed per package manager, and each manager's install is
+confirmed separately with [y/N]. Use -y/--yes to confirm all of them.
+
+Use --prune to also remove installed packages that are not in config. Removals
+are confirmed the same way, and -y/--yes confirms them too.
 
 ```
 mate packages apply [flags]
 ```
 
-### Options
+## Options
 
 ```
   -h, --help    help for apply
@@ -18,14 +24,14 @@ mate packages apply [flags]
   -y, --yes     auto-confirm all changes
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate packages](mate_packages.md)	 - Manage packages
 

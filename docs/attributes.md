@@ -9,7 +9,9 @@ They are stripped from the target name, so `config#encrypted#perm:600` deploys a
 ```
 
 Order does not matter, and any number can be combined. An unrecognised attribute
-is ignored silently.
+is ignored silently but still stripped, so a typo such as `config#templte`
+deploys an unrendered `config`. Everything after the first `#` in a name is
+attributes, so a file whose real name contains `#` cannot be managed.
 
 | Attribute | Effect |
 |-----------|--------|
@@ -26,9 +28,17 @@ is ignored silently.
 | [`#owner-r:user`](#recursive-attributes) | Owner for a directory and its children |
 | [`#group-r:group`](#recursive-attributes) | Group for a directory and its children |
 
-Attributes work on directories as well as files. On a directory, `#perm:`,
-`#owner:` and `#group:` apply to the directory itself; the `-r` variants also
-apply to everything beneath it.
+Attributes are written on directories too. There, only some take effect:
+
+| On a directory | Effect |
+|----------------|--------|
+| `#profile:name` | The directory and everything beneath it deploy only under that profile |
+| `#perm:`, `#owner:`, `#group:` | The directory itself |
+| `#perm-r:`, `#owner-r:`, `#group-r:` | The directory and everything beneath it |
+| anything else | Nothing, but it is still stripped from the name |
+
+The source directory's own name counts as well: a source named
+`etc#owner-r:root` makes every file in it root-owned.
 
 ## `#template`
 
@@ -59,8 +69,12 @@ the target holds plaintext while the repository holds ciphertext.
 .ssh/id_ed25519#encrypted#perm:600
 ```
 
-Requires an `age:` identity in [`mate.yaml`](configuration.md#age). Use
-`mate encrypt` and `mate decrypt` to convert a file in place — they add and
+Deploying needs an age identity (`identity` or `identity_command` in
+[`age:`](configuration.md#age)) to decrypt with. Without one, `mate apply` stops
+with an error rather than deploy ciphertext. Encrypting needs only the
+`recipients`. See [Encryption](encryption.md) for setting up a key.
+
+Use `mate encrypt` and `mate decrypt` to convert a file in place. They add and
 remove the suffix for you.
 
 `mate edit` decrypts to a temporary file, opens your editor, and re-encrypts on
@@ -84,22 +98,31 @@ ln -s /opt/homebrew/bin/nvim 'bin/vim#symlink'
 ~/bin/vim                           →  /opt/homebrew/bin/nvim
 ```
 
-Use it for links to paths outside your repository — a binary in `/opt`, a large
-directory you do not want to copy. Note that this does *not* link the target back
+Use it for links to paths outside your repository, such as a binary in `/opt` or a
+large directory you do not want to copy. Note that this does *not* link the target back
 at the source file, so editing the deployed file does not edit the repository.
 
-Applying a `#symlink` attribute to a regular file fails:
+The link text is copied verbatim, so a relative link resolves relative to the
+*target's* location, not the source's. Change detection compares the link text:
+retargeting the source link is a change, and a link that points nowhere on this
+machine is deployed as-is.
+
+A `#symlink` attribute on a regular file is an error, reported by `mate status`
+and `mate apply` alike:
 
 ```
-Error: creating symlink: readlink .../f.txt#symlink: invalid argument
+Error: computing changes: readlink .../f.txt#symlink: invalid argument
 ```
 
-Because the link destination is copied verbatim, `#template`, `#encrypted` and
-`#perm:` have no effect alongside `#symlink` — there is no content to render,
-decrypt, or chmod.
+Because the link destination is copied verbatim, `#template`, `#encrypted`,
+`#perm:`, `#owner:` and `#group:` have no effect alongside `#symlink`: there is
+no content to render, decrypt, chmod, or chown. Links are created without sudo,
+so a `#symlink` cannot target a directory you cannot write to.
 
 If a target is a symlink but the source is not marked `#symlink`, statemate treats
-it as a conflict rather than silently replacing it.
+it as a conflict the first time it sees it, rather than silently replacing it.
+This is what happens on the first apply after migrating from GNU Stow; answer
+`[o]verwrite` to replace the links with real files.
 
 ## `#import`
 
@@ -148,8 +171,12 @@ respected, so a file marked `#profile:base` also applies under a profile that
 .gitconfig#profile:work
 ```
 
-Under any other profile the file is skipped entirely — not deployed, not reported
-as a change.
+Under any other profile the file is skipped entirely: it is neither deployed nor
+reported as a change.
+
+> When **no** profile is active, there is nothing to filter by and every
+> `#profile:` file is deployed. Two variants of the same target then conflict.
+> Define a profile for every machine; see [Different Machines](machines.md).
 
 Several files may therefore claim the same target, one per profile:
 
@@ -171,13 +198,21 @@ Sets the file mode, in octal.
 .ssh/config#perm:600
 ```
 
-Without this attribute the source file's own mode is used. With it, a target whose
+Without this attribute the source file's own mode is used when the file is
+written, and the target's mode is not checked afterwards. With it, a target whose
 mode differs is reported as modified and corrected on apply.
+
+A value that is not valid octal, such as `#perm:rw`, is ignored.
 
 ## `#owner:user`
 
-Sets the file owner. Applying this needs elevated access, so statemate uses sudo
-for files whose owner it cannot otherwise set.
+Sets the file owner. statemate uses sudo for targets in locations you cannot
+write to, such as `/etc`. In a location you *can* write to, the chown runs as you
+and fails unless you are root, so `#owner:` belongs on system files.
+
+Ownership is applied when the file is written. Unlike `#perm:`, a target whose
+owner differs is not reported as modified, so adding `#owner:` to a file that is
+already deployed takes effect the next time its content changes.
 
 ```
 etc/nginx/nginx.conf#owner:root
@@ -199,7 +234,20 @@ etc/wireguard/wg0.conf#group:systemd-network
 
 `#perm-r:`, `#owner-r:` and `#group-r:` on a directory apply to that directory
 *and* everything inside it. Children inherit the value as a default, so an
-explicit attribute on a child still wins.
+explicit attribute on a child still wins, and the nearest ancestor's value wins
+over one further up.
+
+`#perm-r:` gives files and subdirectories the **same** mode. That suits `755`
+(a `bin` directory) and `700`, but `#perm-r:600` would leave subdirectories
+untraversable. For a private directory of private files, combine `#perm:700` on
+the directory with `#perm:600` on the files.
+
+The order of precedence for a file's mode, owner, and group:
+
+1. Its own attribute
+2. The nearest ancestor's `-r` attribute
+3. The `perm`, `owner` and `group` defaults in the source's
+   [`.mate.yaml`](configuration.md#source-directory-config)
 
 ```
 etc#owner-r:root#group-r:root/

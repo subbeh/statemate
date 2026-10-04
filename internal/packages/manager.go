@@ -73,7 +73,6 @@ func (p Package) String() string {
 
 type PackageStatus struct {
 	Name        string
-	Version     string
 	Status      Status
 	Sources     []string
 	Installed   string
@@ -91,7 +90,6 @@ const (
 	StatusInstalled Status = iota
 	StatusMissing
 	StatusExtra
-	StatusVersionMismatch
 )
 
 func (s Status) String() string {
@@ -102,18 +100,9 @@ func (s Status) String() string {
 		return "missing"
 	case StatusExtra:
 		return "extra"
-	case StatusVersionMismatch:
-		return "version mismatch"
 	default:
 		return "unknown"
 	}
-}
-
-func ParsePackageSpec(spec string) (name, version string) {
-	if idx := strings.Index(spec, "@"); idx != -1 {
-		return spec[:idx], spec[idx+1:]
-	}
-	return spec, ""
 }
 
 func GetManager(name string, aurHelper string) (Manager, error) {
@@ -127,10 +116,6 @@ func GetManager(name string, aurHelper string) (Manager, error) {
 	default:
 		return nil, fmt.Errorf("unknown package manager: %s", name)
 	}
-}
-
-func GetAvailableManagers() []Manager {
-	return GetAvailableManagersWithHelper("")
 }
 
 func GetAvailableManagersWithHelper(aurHelper string) []Manager {

@@ -130,6 +130,27 @@ func (e *AgeEncryptor) Encrypt(plaintext []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// EncryptToIdentity encrypts plaintext to the configured identities themselves
+// rather than to the configured recipients. It is meant for local state such as
+// the secrets cache, which only has to be readable on this machine: the shared
+// recipients list need not include the local key, and an identity that comes from
+// identity_command has no recipient configured anywhere.
+func (e *AgeEncryptor) EncryptToIdentity(plaintext []byte) ([]byte, error) {
+	var recipients []age.Recipient
+	for _, id := range e.identities {
+		switch id := id.(type) {
+		case *age.X25519Identity:
+			recipients = append(recipients, id.Recipient())
+		case *age.HybridIdentity:
+			recipients = append(recipients, id.Recipient())
+		}
+	}
+	if len(recipients) == 0 {
+		return nil, fmt.Errorf("no identity configured that can be encrypted to")
+	}
+	return (&AgeEncryptor{recipients: recipients}).Encrypt(plaintext)
+}
+
 func (e *AgeEncryptor) DecryptFile(path string) ([]byte, error) {
 	ciphertext, err := os.ReadFile(path)
 	if err != nil {

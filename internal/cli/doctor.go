@@ -7,14 +7,20 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/packages"
 )
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check configuration and dependencies",
-	Long:  "Verify that statemate is properly configured and dependencies are available",
-	RunE:  runDoctor,
+	Long: `Check that the configuration loads and validates, that every source directory
+exists, that every active hook matches some managed file, that the age identity
+and recipients work, and which package managers are available.
+
+Exits 1 if any check reports an error. Run it first when something behaves
+unexpectedly.`,
+	RunE: runDoctor,
 }
 
 func init() {
@@ -63,10 +69,12 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Dependencies:")
 
-	if _, err := exec.LookPath("age"); err != nil {
-		fmt.Println("[WARN] age not found (encryption unavailable)")
-	} else {
-		fmt.Println("[OK] age")
+	if cfg != nil {
+		level, msg := ageStatus(cfg)
+		fmt.Printf("[%s] %s\n", level, msg)
+		if level == "ERROR" {
+			issues++
+		}
 	}
 
 	if _, err := exec.LookPath("diff"); err != nil {
@@ -78,7 +86,11 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Println("Package Managers:")
 
-	managers := packages.GetAvailableManagers()
+	aurHelper := ""
+	if cfg != nil {
+		aurHelper = cfg.AURHelper
+	}
+	managers := packages.GetAvailableManagersWithHelper(aurHelper)
 	if len(managers) == 0 {
 		fmt.Println("[WARN] No package managers found")
 	} else {
@@ -130,4 +142,24 @@ func checkHooks(cmd *cobra.Command) int {
 		}
 	}
 	return 0
+}
+
+// ageStatus reports whether encryption works with the configured keys. age is
+// built into mate, so the age binary being installed or not says nothing; what
+// matters is whether the identity loads and both halves are present.
+func ageStatus(cfg *config.Config) (level, msg string) {
+	if cfg.Age == nil || (cfg.Age.Identity == "" && cfg.Age.IdentityCommand == "" && len(cfg.Age.Recipients) == 0) {
+		return "OK", "age: not configured (no #encrypted files or secrets cache)"
+	}
+	enc, err := encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
+	if err != nil {
+		return "ERROR", fmt.Sprintf("age: %v", err)
+	}
+	switch {
+	case !enc.CanDecrypt():
+		return "WARN", "age: recipients but no identity (#encrypted files cannot be deployed, secrets cannot be fetched)"
+	case !enc.CanEncrypt():
+		return "WARN", "age: identity but no recipients (files cannot be encrypted)"
+	}
+	return "OK", "age: identity and recipients"
 }

@@ -20,32 +20,44 @@ var addCmd = &cobra.Command{
 	Short: "Add a file to source",
 	Long: `Add an existing file to the source directory.
 
-The file is copied from its current location to the appropriate source directory,
-following stow-style conventions. The original file remains in place.
+The file is copied into a source, keeping its path relative to the target base
+(stow-style), and the original stays in place. Directories cannot be added;
+add the files in them one by one.
 
-Examples:
-  mate add ~/.config/nvim/init.lua
-  mate add --profile work ~/.gitconfig
+The source is the one named with --source, else 'default_source' from the
+config, else one you pick from a list of the configured sources. The source must
+already be listed under 'sources:' and exist as a directory.
+
+A file outside your home directory, such as one under /etc, needs a source that
+maps that location (see 'targets:' in a source's .mate.yaml); for a source
+without a .mate.yaml, mate offers to create one.
+
+--for-profile marks the file #profile:<name>, so it is only deployed for that
+profile. The global --profile only selects the active profile, which decides the
+sources you can add to, as it does for every other command.`,
+	Example: `  mate add ~/.config/nvim/init.lua
+  mate add --for-profile work ~/.gitconfig
   mate add --encrypt ~/.ssh/config`,
 	Args: cobra.ExactArgs(1),
 	RunE: runAdd,
 }
 
 var (
-	addProfile  string
-	addEncrypt  bool
-	addSource   string
-	addTemplate bool
+	addForProfile string
+	addEncrypt    bool
+	addSource     string
+	addTemplate   bool
 )
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().StringVar(&addProfile, "profile", "", "add file with profile suffix")
+	addCmd.Flags().StringVar(&addForProfile, "for-profile", "", "deploy the file only for this profile (adds #profile:<name>)")
 	addCmd.Flags().BoolVar(&addEncrypt, "encrypt", false, "encrypt file when adding")
 	addCmd.Flags().StringVarP(&addSource, "source", "s", "", "target source directory")
 	addCmd.Flags().BoolVar(&addTemplate, "template", false, "mark file as template")
 
 	_ = addCmd.RegisterFlagCompletionFunc("source", completeSources)
+	_ = addCmd.RegisterFlagCompletionFunc("for-profile", completeProfiles)
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
@@ -56,7 +68,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	profileName := profile.Detect(cfg)
+	profileName, _ := cmd.Flags().GetString("profile")
+	if profileName == "" {
+		profileName = profile.Detect(cfg)
+	}
 	sources := profile.ResolveSources(cfg, profileName)
 	absSources := cfg.ResolveSourcePaths(sources)
 	if len(absSources) == 0 {
@@ -143,8 +158,8 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	destName := filepath.Base(relPath)
-	if addProfile != "" {
-		destName = destName + "#profile:" + addProfile
+	if addForProfile != "" {
+		destName = destName + "#profile:" + addForProfile
 	}
 	if addEncrypt {
 		destName = destName + "#encrypted"
@@ -241,7 +256,12 @@ func promptSourceSelection(sources []string) (int, error) {
 }
 
 func resolveTargetBaseForAdd(sourceDir, targetPath, globalTargetBase string, tree *source.Tree, renderer config.TemplateRenderer) (string, error) {
-	dirCfg, _ := config.LoadDirConfigRaw(sourceDir, renderer)
+	dirCfg, err := config.LoadDirConfigRaw(sourceDir, renderer)
+	if err != nil {
+		// Treating a broken .mate.yaml as absent would offer to create one,
+		// overwriting it.
+		return "", fmt.Errorf("loading .mate.yaml in %s: %w", sourceDir, err)
+	}
 
 	// Check if file is under global target base
 	globalBase := expandPath(globalTargetBase)
@@ -256,7 +276,13 @@ func resolveTargetBaseForAdd(sourceDir, targetPath, globalTargetBase string, tre
 		if fileUnderGlobal {
 			return globalBase, nil
 		}
-		// File is outside global target base - need to create .mate.yaml with target_base
+		// File is outside global target base - need to create .mate.yaml with
+		// target_base. That base applies to the whole source, so refuse when the
+		// source already deploys files under the global base: they would move,
+		// ~/.zshrc becoming /etc/.zshrc.
+		if sourceHasFiles(sourceDir, tree) {
+			return "", fmt.Errorf("source %q has existing files under %s; cannot add file from %s", filepath.Base(sourceDir), globalBase, targetPath)
+		}
 		return promptCreateDirConfig(sourceDir, targetPath)
 	}
 

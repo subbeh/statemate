@@ -9,8 +9,9 @@ import (
 var version = "dev"
 
 var rootCmd = &cobra.Command{
-	Use:   "mate",
-	Short: "Statemate - system configuration management",
+	Use:     "mate",
+	Version: version,
+	Short:   "Statemate - system configuration management",
 	Long: `Statemate manages your dotfiles, system configuration, and packages declaratively.
 
 Features:
@@ -18,10 +19,17 @@ Features:
   - Profile-based configuration with auto-detection
   - Template rendering with Go text/template
   - Age encryption for sensitive files
-  - Declarative package management (brew, pacman, yay)
+  - Declarative package management (brew, pacman, and the AUR via yay or paru)
   - System file management with permission control
 
 Use "mate [command] --help" for more information about a command.`,
+	// By the time this runs, flags and arguments have been parsed and validated,
+	// so any later error is a runtime one -- no config, a conflict, a broken hook
+	// -- and the usage block would only bury it. Flag and argument errors happen
+	// earlier and still print the usage.
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		cmd.SilenceUsage = true
+	},
 }
 
 var versionCmd = &cobra.Command{
@@ -34,6 +42,7 @@ var versionCmd = &cobra.Command{
 
 func SetVersion(v string) {
 	version = v
+	rootCmd.Version = v
 }
 
 func Execute() error {
@@ -45,9 +54,12 @@ func RootCmd() *cobra.Command {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in current directory)")
+	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
 	rootCmd.AddCommand(versionCmd)
+	// --version (which the Homebrew formula test runs) prints exactly what
+	// `mate version` does.
+	rootCmd.SetVersionTemplate("mate version {{.Version}}\n")
 
 	_ = rootCmd.RegisterFlagCompletionFunc("profile", completeProfiles)
 }

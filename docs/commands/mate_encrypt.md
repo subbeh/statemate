@@ -1,8 +1,8 @@
-## mate encrypt
+# mate encrypt
 
 Encrypt a managed file
 
-### Synopsis
+## Synopsis
 
 Encrypt a file in place.
 
@@ -15,32 +15,37 @@ falling back to the source directory.
 
 The age recipients must be configured in mate.yaml:
 
-  age:
-    recipients:
-      - age1...
-
-Examples:
-  mate encrypt nvim/secrets.yaml
-  mate encrypt .matedata/secrets.yaml
+```
+age:
+  recipients:
+    - age1...
+```
 
 ```
 mate encrypt <source> [flags]
 ```
 
-### Options
+## Examples
+
+```
+  mate encrypt nvim/secrets.yaml
+  mate encrypt .matedata/secrets.yaml
+```
+
+## Options
 
 ```
   -h, --help   help for encrypt
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

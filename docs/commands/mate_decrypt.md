@@ -1,13 +1,15 @@
-## mate decrypt
+# mate decrypt
 
 Decrypt a managed file
 
-### Synopsis
+## Synopsis
 
 Decrypt a file in place.
 
 This reads the encrypted file, decrypts it using the configured age identity,
-writes it back, and removes the #encrypted suffix from the filename.
+writes it back, and removes the #encrypted attribute from the filename
+wherever it appears among the attributes (config#encrypted#template becomes
+config#template).
 
 The file can be a managed source file or any file path (e.g. a var_file
 in .matedata/). Paths are resolved relative to the current directory,
@@ -15,31 +17,36 @@ falling back to the source directory. The #encrypted suffix is optional.
 
 The age identity must be configured in mate.yaml:
 
-  age:
-    identity: "~/.config/statemate/key.txt"
-
-Examples:
-  mate decrypt nvim/secrets.yaml#encrypted
-  mate decrypt .matedata/secrets.yaml
+```
+age:
+  identity: "~/.config/statemate/key.txt"
+```
 
 ```
 mate decrypt <source> [flags]
 ```
 
-### Options
+## Examples
+
+```
+  mate decrypt nvim/secrets.yaml#encrypted
+  mate decrypt .matedata/secrets.yaml
+```
+
+## Options
 
 ```
   -h, --help   help for decrypt
 ```
 
-### Options inherited from parent commands
+## Options inherited from parent commands
 
 ```
-  -c, --config string    config file (default: mate.yaml in current directory)
+  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
   -p, --profile string   override auto-detected profile
 ```
 
-### SEE ALSO
+## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
 

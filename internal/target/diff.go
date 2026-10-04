@@ -13,6 +13,7 @@ import (
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 func isPermissionDenied(err error) bool {
@@ -121,6 +122,16 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 	// as an attribute it is a mistake worth naming.
 	if entry.Attrs.Import && entry.Attrs.Template {
 		return nil, fmt.Errorf("%s: #import cannot be combined with #template -- importing would overwrite the template with its rendered output", entry.SourcePath)
+	}
+
+	if entry.Attrs.Symlink {
+		return computeSymlinkChange(entry, db)
+	}
+
+	// Without an identity the source can only be compared and deployed as
+	// ciphertext, which status would then report as up to date.
+	if entry.Attrs.Encrypted && (opts.Enc == nil || !opts.Enc.CanDecrypt()) {
+		return nil, errNoIdentity(entry)
 	}
 
 	var sourceHash string
@@ -282,13 +293,79 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 	return change, nil
 }
 
+// computeSymlinkChange compares a #symlink entry by link text. What the link
+// points at is irrelevant -- apply copies the link verbatim -- and following it
+// fails outright for a directory or a destination that does not exist.
+func computeSymlinkChange(entry *source.Entry, db *state.DB) (*Change, error) {
+	change := &Change{Entry: entry}
+
+	sourceHash, err := state.HashLink(entry.SourcePath)
+	if err != nil {
+		return nil, err
+	}
+	change.NewHash = sourceHash
+
+	existing, err := db.GetFile(entry.TargetPath)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		change.OldHash = existing.AppliedHash
+	}
+
+	info, err := os.Lstat(entry.TargetPath)
+	if os.IsNotExist(err) {
+		if existing == nil {
+			change.Status = StatusNew
+		} else {
+			change.Status = StatusModified
+		}
+		return change, nil
+	}
+	if isPermissionDenied(err) {
+		change.Status = StatusSkipped
+		return change, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// A regular file or directory in the link's place never matches.
+	var targetHash string
+	if info.Mode()&os.ModeSymlink != 0 {
+		if targetHash, err = state.HashLink(entry.TargetPath); err != nil {
+			return nil, err
+		}
+	}
+
+	if targetHash == sourceHash {
+		// The link already says the right thing, whatever the state DB holds --
+		// including content hashes recorded before links were hashed this way.
+		if existing != nil && existing.SourceHash == sourceHash && existing.AppliedHash == sourceHash {
+			change.Status = StatusUnchanged
+		} else {
+			change.Status = StatusStateOnly
+		}
+		return change, nil
+	}
+
+	// Same rules as files: the source moved and the target is as last applied,
+	// so deploy; anything else in the target's place is a conflict.
+	if existing != nil && targetHash == existing.AppliedHash {
+		change.Status = StatusModified
+	} else {
+		change.Status = StatusConflict
+	}
+	return change, nil
+}
+
 func showDiff(sourcePath, targetPath string) error {
 	return ShowDiffWithTool(sourcePath, targetPath, "")
 }
 
 func ShowDiffWithTool(sourcePath, targetPath, diffTool string) error {
 	if diffTool != "" {
-		cmd := exec.Command(diffTool, targetPath, sourcePath)
+		cmd := util.UserCommand(diffTool, targetPath, sourcePath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
@@ -363,14 +440,10 @@ func GenerateDiffWithTool(sourcePath, targetPath, diffTool string) (string, erro
 // the usual one, since for those files the target is what will be written into
 // the source.
 func GenerateDiffBetween(oldPath, newPath, diffTool string) (string, error) {
-	tool := "diff"
-	args := []string{"-u", oldPath, newPath}
+	cmd := exec.Command("diff", "-u", oldPath, newPath)
 	if diffTool != "" {
-		tool = diffTool
-		args = []string{oldPath, newPath}
+		cmd = util.UserCommand(diffTool, oldPath, newPath)
 	}
-
-	cmd := exec.Command(tool, args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -399,6 +472,10 @@ func IsBinaryFile(path string) bool {
 		}
 	}
 	return false
+}
+
+func errNoIdentity(entry *source.Entry) error {
+	return fmt.Errorf("%s is #encrypted but no age identity is configured", entry.SourcePath)
 }
 
 func getRenderedHash(entry *source.Entry, opts *ComputeOpts) (string, error) {
