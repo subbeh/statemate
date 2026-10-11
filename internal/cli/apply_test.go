@@ -154,6 +154,40 @@ func TestApplyScoped_RunsHooksForWrittenFiles(t *testing.T) {
 	}
 }
 
+func TestApply_HookPatternsIgnoreSourceAttributes(t *testing.T) {
+	r := newHookRepo(t, `sources: [app]
+hooks:
+  attributed:
+    match: ".config#perm-r:700/app/*.conf#template#perm:600"
+    do:
+      - run: printf '%s' "$STATEMATE_HOOK_FILES" > "$MARKS/attributed"
+`)
+	plainDir := filepath.Join(r.dir, "app", ".config")
+	attrDir := plainDir + "#perm-r:700"
+	if err := os.Rename(plainDir, attrDir); err != nil {
+		t.Fatal(err)
+	}
+	plainFile := filepath.Join(attrDir, "app", "app.conf")
+	if err := os.Rename(plainFile, plainFile+"#template#perm:600"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, plainFile+"#template#perm:600", `{{ "rendered" }}`, 0644)
+
+	if err := r.apply(t, nil, ""); err != nil {
+		t.Fatalf("apply failed: %v", err)
+	}
+	target := filepath.Join(r.home, ".config", "app", "app.conf")
+	if content, err := os.ReadFile(target); err != nil || string(content) != "rendered" {
+		t.Fatalf("deployed content = %q, %v; want rendered", content, err)
+	}
+	if files, err := os.ReadFile(filepath.Join(r.marks, "attributed")); err != nil || string(files) != target {
+		t.Errorf("hook files = %q, %v; want %q", files, err, target)
+	}
+	if !r.ran("app-own") {
+		t.Error("plain source hook pattern should still match attributed source files")
+	}
+}
+
 // A broken hook used to be noticed only after the files were written and the
 // packages prompted for, so the apply failed with its work half done.
 func TestApply_BrokenHookFailsBeforeWriting(t *testing.T) {

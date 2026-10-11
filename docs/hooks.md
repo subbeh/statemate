@@ -79,8 +79,14 @@ Patterns match the **target** path, meaning where the file is deployed:
 a pattern naming a directory matches everything under it. A trailing `/`
 restricts a pattern to files inside the directory. Unlike
 [`ignore`](configuration.md#ignore), there is no `!` negation: a hook that should
-skip some files needs narrower patterns. Attributes such as `#template` are not part of the target
-path, so they never need to appear in a pattern. `target_base` and `targets:`
+skip some files needs narrower patterns. Attributes such as `#template` are not
+part of the target path, so they never need to appear in a pattern. If you include
+recognized source attributes in a pattern, they are ignored on both file and
+directory components: `.config#perm-r:700/tmux/*.conf#template` matches the same
+files as `.config/tmux/*.conf`. Attributes do not filter matches by profile or
+file type. Unknown `#` suffixes stay literal; use `[#]template` or `\#template`
+to match a literal `#template` in a target path (quote backslashes with single
+quotes in YAML). `target_base` and `targets:`
 mappings do not matter either: a unit deployed to `/etc/systemd/system` matches
 `*.service` and `/etc/systemd/system/*.service` alike.
 

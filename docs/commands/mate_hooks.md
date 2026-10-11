@@ -22,7 +22,8 @@ packages and before #after scripts. Hooks are confirmed like scripts; --force
 auto-confirms them and --no-scripts skips them.
 
 Hooks declared in a source's .mate.yaml are named &lt;source>/&lt;name> and match
-only that source's files.
+only that source's files. Patterns match target paths; source attributes such
+as #template and #perm:600 are ignored when included in a pattern.
 
 ## Options
 
