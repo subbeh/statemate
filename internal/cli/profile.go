@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -71,6 +72,7 @@ func runProfile(cmd *cobra.Command, args []string) error {
 
 	sources := profile.ResolveSources(cfg, profileName)
 	if len(sources) > 0 {
+		sort.Strings(sources)
 		fmt.Println("\nSources:")
 		for _, s := range sources {
 			fmt.Printf("  - %s\n", s)
