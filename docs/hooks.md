@@ -190,7 +190,7 @@ Run hook keyd (2 files)?
 
 Declining is not remembered. Once the files are written they are unchanged, so
 the hook will not trigger on the next apply; run it with `mate hooks run <name>`.
-`mate delete` and `mate clean` confirm hooks unless `--force` is given, and
+`mate delete` and `mate clean` confirm hooks unless `--force` (or `--noconfirm`) is given, and
 `mate rename` always asks.
 
 ## Failure

@@ -132,6 +132,7 @@ For unattended runs:
 |------|--------|
 | `--force` | Auto-confirm every script, hook, and package install, and overwrite conflicts |
 | `--no-scripts` | Skip all scripts silently |
+| `--noconfirm` | Apply without listing the file changes and asking first (implied by `--force`) |
 
 Without a terminal to prompt on, scripts are **skipped with a warning**. Automated
 runs must pass `--force` or `--no-scripts` explicitly.

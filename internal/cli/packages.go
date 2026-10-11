@@ -54,7 +54,7 @@ var packagesApplyCmd = &cobra.Command{
 	Long: `Install packages that are declared but not installed.
 
 Missing packages are listed per package manager, and each manager's install is
-confirmed separately with [y/N]. Use -y/--yes to confirm all of them.
+confirmed separately with [y/N]. Use -y/--yes (or --noconfirm) to confirm all of them.
 
 Use --prune to also remove installed packages that are not in config. Removals
 are confirmed the same way, and -y/--yes confirms them too.`,
@@ -76,6 +76,7 @@ func init() {
 	packagesStatusCmd.Flags().BoolVar(&packagesShowAll, "all", false, "also show extra packages not in config")
 	packagesStatusCmd.Flags().BoolVarP(&packagesVerbose, "verbose", "v", false, "show package descriptions")
 	packagesApplyCmd.Flags().BoolVarP(&packagesAutoConfirm, "yes", "y", false, "auto-confirm all changes")
+	packagesApplyCmd.Flags().BoolVar(&packagesAutoConfirm, "noconfirm", false, "same as --yes")
 	packagesApplyCmd.Flags().BoolVar(&packagesPrune, "prune", false, "remove packages not in config (dangerous)")
 }
 

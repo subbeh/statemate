@@ -35,6 +35,11 @@ The positional argument is always a file or path filter; --source is the only
 way to select a source. Repo-root scripts are not run under --source, since
 they apply to the whole repository.
 
+Before anything runs, the files about to change are listed (with the markers
+of 'mate status') and the apply asks to proceed. --noconfirm skips the list and
+the question; --force and --dry-run do too. Without a terminal to ask on, the
+apply stops: pass --noconfirm for automated runs.
+
 Scripts due to run are confirmed individually before executing:
 
   [y]es    run the script
@@ -75,6 +80,7 @@ var (
 	dryRun    bool
 	force     bool
 	noScripts bool
+	noConfirm bool
 	verbose   int
 )
 
@@ -83,6 +89,7 @@ func init() {
 	applyCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
 	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite conflicting targets and auto-confirm scripts, hooks and package installs")
 	applyCmd.Flags().BoolVar(&noScripts, "no-scripts", false, "skip all scripts")
+	applyCmd.Flags().BoolVar(&noConfirm, "noconfirm", false, "apply without listing the changes and asking first")
 	applyCmd.Flags().CountVarP(&verbose, "verbose", "V", "list every file written, and with --dry-run the files and steps of each hook")
 	addScopeFlag(applyCmd)
 }
@@ -217,6 +224,20 @@ func runApply(cmd *cobra.Command, args []string) error {
 	pending, err := target.ComputeChanges(tree, db, target.ComputeOpts{TmplCtx: tmplCtx, Enc: enc})
 	if err != nil {
 		return fmt.Errorf("computing changes: %w", err)
+	}
+
+	if !dryRun && !noConfirm && !force && len(pending.Changes) > 0 {
+		printChanges(pending.Changes)
+		ok, err := util.Confirm("\nApply these changes? [Y/n] ", true)
+		if errors.Is(err, util.ErrInterrupted) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("no terminal to confirm on; use --noconfirm to apply without asking")
+		}
+		if !ok {
+			return nil
+		}
 	}
 
 	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0).

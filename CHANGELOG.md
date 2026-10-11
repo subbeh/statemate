@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `mate apply` now lists the files it is about to change and asks for confirmation before doing anything. Pass `--noconfirm` to skip the prompt (`--force` and `--dry-run` skip it too). Without a terminal the apply stops, so unattended runs must pass `--noconfirm` or `--force`
+- `mate clean`, `mate delete` and `mate packages apply` accept `--noconfirm` as well, as an alias for their `--force` / `--yes` flag, so the same flag skips prompts on every command that asks
+
 ## [0.5.0] - 2026-10-05
 
 ### Added

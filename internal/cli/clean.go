@@ -21,7 +21,7 @@ repository or its source was dropped from 'sources:'.
 
 With no arguments, the orphans are listed and nothing is removed. Name orphans
 to remove them, or pass --all for every one. Each removal is confirmed unless
---force is given. Files you cannot write to are removed with sudo.
+--force (or --noconfirm) is given. Files you cannot write to are removed with sudo.
 
 Hooks matching the removed files run afterwards (see 'mate hooks'); --force
 also confirms them.
@@ -37,6 +37,7 @@ To stop tracking a file without deleting it, use 'mate forget'.`,
 
 func init() {
 	cleanCmd.Flags().Bool("force", false, "skip confirmation prompts")
+	cleanCmd.Flags().Bool("noconfirm", false, "same as --force")
 	cleanCmd.Flags().Bool("all", false, "remove all orphans")
 	rootCmd.AddCommand(cleanCmd)
 }
@@ -91,6 +92,8 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 
 	force, _ := cmd.Flags().GetBool("force")
+	noConfirm, _ := cmd.Flags().GetBool("noconfirm")
+	force = force || noConfirm
 	all, _ := cmd.Flags().GetBool("all")
 
 	if len(args) == 0 && !all {

@@ -19,6 +19,11 @@ The positional argument is always a file or path filter; --source is the only
 way to select a source. Repo-root scripts are not run under --source, since
 they apply to the whole repository.
 
+Before anything runs, the files about to change are listed (with the markers
+of 'mate status') and the apply asks to proceed. --noconfirm skips the list and
+the question; --force and --dry-run do too. Without a terminal to ask on, the
+apply stops: pass --noconfirm for automated runs.
+
 Scripts due to run are confirmed individually before executing:
 
 ```
@@ -64,6 +69,7 @@ mate apply [path] [flags]
       --force           overwrite conflicting targets and auto-confirm scripts, hooks and package installs
   -h, --help            help for apply
       --no-scripts      skip all scripts
+      --noconfirm       apply without listing the changes and asking first
   -s, --source string   limit to a single source
   -V, --verbose count   list every file written, and with --dry-run the files and steps of each hook
 ```
