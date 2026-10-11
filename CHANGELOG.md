@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `mate add <directory>` recursively adds its files, including hidden files, preserving their paths and applying `--for-profile`, `--encrypt`, and `--template` to each file. Files already in the selected source are left unchanged; files managed by another active source stop the command before copying. File symlinks are copied by content, while directory symlinks, empty directories, and configured source directories are skipped
+
 ### Changed
 - `mate apply` now lists the files it is about to change and asks for confirmation before doing anything. Pass `--noconfirm` to skip the prompt (`--force` and `--dry-run` skip it too). Without a terminal the apply stops, so unattended runs must pass `--noconfirm` or `--force`
 - `mate clean`, `mate delete` and `mate packages apply` accept `--noconfirm` as well, as an alias for their `--force` / `--yes` flag, so the same flag skips prompts on every command that asks

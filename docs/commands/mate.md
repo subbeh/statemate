@@ -27,7 +27,7 @@ Use "mate [command] --help" for more information about a command.
 
 ## SEE ALSO
 
-* [mate add](mate_add.md)	 - Add a file to source
+* [mate add](mate_add.md)	 - Add a file or directory to source
 * [mate apply](mate_apply.md)	 - Apply configuration to target
 * [mate cat](mate_cat.md)	 - Print a file, decrypting it if needed
 * [mate check](mate_check.md)	 - Check if configuration is in sync
