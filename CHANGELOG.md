@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `mate add <directory>` recursively adds its files, including hidden files, preserving their paths and applying `--for-profile`, `--encrypt`, and `--template` to each file. Files already in the selected source are left unchanged; files managed by another active source stop the command before copying. File symlinks are copied by content, while directory symlinks, empty directories, and configured source directories are skipped
+- A source's `.mate.yaml` accepts `include`, like `mate.yaml`. Included packages count as that source's packages, and included variables are available to every template while the source is active, including the `.mate.yaml` itself. Paths are relative to the source directory. Previously the key was silently ignored
 
 ### Changed
 - `mate apply` now lists the files it is about to change and asks for confirmation before doing anything. Pass `--noconfirm` to skip the prompt (`--force` and `--dry-run` skip it too). Without a terminal the apply stops, so unattended runs must pass `--noconfirm` or `--force`

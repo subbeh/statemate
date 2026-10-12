@@ -130,6 +130,10 @@ type DirConfig struct {
 	Packages   *PackageList      `yaml:"packages" toml:"packages"`
 	Generate   []GenerateConfig  `yaml:"generate" toml:"generate"`
 	Hooks      map[string]*Hook  `yaml:"hooks" toml:"hooks"`
+	Include    []string          `yaml:"include" toml:"include"`
+
+	// Variables holds what Include loaded; .mate.yaml cannot set them itself.
+	Variables map[string]any `yaml:"-" toml:"-"`
 }
 
 type GenerateConfig struct {
