@@ -38,7 +38,23 @@ func (d *DB) RecordScriptRun(scriptPath, contentHash string) error {
 		INSERT INTO script_runs (script_path, content_hash)
 		VALUES (?, ?)
 	`, scriptPath, contentHash)
+	if err != nil {
+		return err
+	}
+	_, err = d.db.Exec(`DELETE FROM script_failures WHERE script_path = ?`, scriptPath)
 	return err
+}
+
+// RecordScriptFailure marks a script as failed until its next recorded run.
+func (d *DB) RecordScriptFailure(scriptPath string) error {
+	_, err := d.db.Exec(`INSERT OR IGNORE INTO script_failures (script_path) VALUES (?)`, scriptPath)
+	return err
+}
+
+func (d *DB) HasScriptFailed(scriptPath string) (bool, error) {
+	var n int
+	err := d.db.QueryRow(`SELECT COUNT(*) FROM script_failures WHERE script_path = ?`, scriptPath).Scan(&n)
+	return n > 0, err
 }
 
 func (d *DB) HasScriptRun(scriptPath string) (bool, error) {

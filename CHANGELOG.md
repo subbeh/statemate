@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate clean`, `mate delete` and `mate packages apply` accept `--noconfirm` as well, as an alias for their `--force` / `--yes` flag, so the same flag skips prompts on every command that asks
 
 ### Fixed
+- An `#onchange` script that fails is offered again on the next `mate apply` and shown as pending by `mate status`, until it succeeds or is marked done. Before, an `#after` script that failed was never retried, because the changes that triggered it had already been applied
 - Hook match patterns now ignore source attributes such as `#template`, `#encrypted`, and `#perm:600` on files and directories, so patterns copied from source filenames match their deployed target paths
 - `mate profile`'s `Sources:` list is now sorted alphabetically. It used to list the global `sources:` first and then each profile's own `sources:` appended in inheritance order, so e.g. profile-only sources appeared out of order at the end, making it easy to miss that one was actually included
 

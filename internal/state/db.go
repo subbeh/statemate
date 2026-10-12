@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS script_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_script_path ON script_runs(script_path);
+
+CREATE TABLE IF NOT EXISTS script_failures (
+	script_path TEXT PRIMARY KEY
+);
 `
 
 func Open(path string) (*DB, error) {

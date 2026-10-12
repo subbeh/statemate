@@ -43,7 +43,7 @@ migrate.sh#once#before#profile:arch
 | Frequency | Runs |
 |-----------|------|
 | `once` | The first time only, on this machine |
-| `onchange` | When the script's own source has pending changes |
+| `onchange` | When the script's own source has pending changes, or its last run failed |
 | `always` | On every apply |
 | `daily` | At most once in 24 hours |
 | `weekly` | At most once in 7 days |
@@ -67,6 +67,10 @@ run one on demand.
 
 Pending changes are computed before any file is written, so an `onchange` script
 sees the same set whether its timing is `before` or `after`.
+
+A run that fails keeps the script due on later applies, even though the changes
+that triggered it have since been written, until it succeeds or you answer `s` to
+mark it done.
 
 To react to specific files rather than a whole source — `*.service`, say — use a
 [hook](hooks.md).
