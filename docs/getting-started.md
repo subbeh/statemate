@@ -89,8 +89,9 @@ the arrow keys, or press `/` to search:
 
 Skip the question with `--source zsh`, or set
 [`default_source`](configuration.md#keys) in `mate.yaml`. The source must
-already exist as a directory and be listed under `sources:`. `mate add` will
-not create one.
+be listed under `sources:`. If `--source` names one whose directory does not
+exist yet, `mate add` offers to create the directory and adds the file to it;
+it does not edit `mate.yaml`, so list the new source under `sources:` yourself.
 
 To add all files in a directory, including hidden files and nested directories:
 

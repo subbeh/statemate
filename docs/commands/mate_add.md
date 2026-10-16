@@ -16,7 +16,9 @@ Unreadable files, broken symlinks, and special files stop the command.
 
 The source is the one named with --source, else 'default_source' from the
 config, else one you pick from a list of the configured sources. The source must
-already be listed under 'sources:' and exist as a directory.
+already be listed under 'sources:' and exist as a directory. A named source
+whose directory does not exist yet is offered for creation: mate creates the
+directory and adds the file, but you still list it under 'sources:' yourself.
 
 A file outside your home directory, such as one under /etc, needs a source that
 maps that location (see 'targets:' in a source's .mate.yaml); for a source

@@ -454,3 +454,39 @@ func writeAddTestFile(t *testing.T, path, content string) {
 func osName() string {
 	return runtime.GOOS
 }
+
+// A source named with --source that does not exist yet is offered for creation.
+// mate only creates its directory: registering it in the config stays manual.
+func TestAddCreatesMissingSource(t *testing.T) {
+	cfgPath, file := addRepo(t)
+	withStdin(t, "y\n")
+
+	if err := executeAdd(t, "-c", cfgPath, "-s", "newsource", file); err != nil {
+		t.Fatalf("mate add -s newsource: %v", err)
+	}
+
+	want := filepath.Join(filepath.Dir(cfgPath), "newsource", ".gitconfig")
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("expected %s: %v", want, err)
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "newsource") {
+		t.Errorf("config was modified: %s", data)
+	}
+}
+
+func TestAddMissingSourceDeclined(t *testing.T) {
+	cfgPath, file := addRepo(t)
+	withStdin(t, "n\n")
+
+	err := executeAdd(t, "-c", cfgPath, "-s", "newsource", file)
+	if err == nil || !strings.Contains(err.Error(), "not in configured sources") {
+		t.Errorf("expected a not-configured error, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(cfgPath), "newsource")); !os.IsNotExist(err) {
+		t.Errorf("source directory created after declining: %v", err)
+	}
+}

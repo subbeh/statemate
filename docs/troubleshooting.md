@@ -55,7 +55,8 @@ be missing.
 
 `mate add --source` names a source that is not in the active list. Under a
 profile, the active list is the top-level `sources` plus the profile's own. Use
-`-p <profile>` to add to a source only another profile uses.
+`-p <profile>` to add to a source only another profile uses. A source that
+`mate add` created for you shows this until you list it under `sources:`.
 
 ### `no files match "zsh"; did you mean --source zsh?`
 

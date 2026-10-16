@@ -14,6 +14,7 @@ import (
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 var addCmd = &cobra.Command{
@@ -31,7 +32,9 @@ Unreadable files, broken symlinks, and special files stop the command.
 
 The source is the one named with --source, else 'default_source' from the
 config, else one you pick from a list of the configured sources. The source must
-already be listed under 'sources:' and exist as a directory.
+already be listed under 'sources:' and exist as a directory. A named source
+whose directory does not exist yet is offered for creation: mate creates the
+directory and adds the file, but you still list it under 'sources:' yourself.
 
 A file outside your home directory, such as one under /etc, needs a source that
 maps that location (see 'targets:' in a source's .mate.yaml); for a source
@@ -132,7 +135,14 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("source %q not in configured sources", sourceName)
+			notConfigured := fmt.Errorf("source %q not in configured sources", sourceName)
+			if _, err := os.Stat(sourceDir); !os.IsNotExist(err) {
+				return notConfigured
+			}
+			if err := promptCreateSource(sourceDir, notConfigured); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "Warning: source %q is not in the config; add it to 'sources:' so mate deploys it\n", sourceName)
 		}
 	} else {
 		// Must offer the same list that absSources is indexed from: cfg.Sources
@@ -504,6 +514,24 @@ func promptCreateDirConfig(sourceDir, targetPath string) (string, error) {
 
 	fmt.Printf("Created %s/.mate.yaml\n", sourceDir)
 	return targetBase, nil
+}
+
+// Only the directory is created; the config is left for the user to edit.
+func promptCreateSource(sourceDir string, declined error) error {
+	ok, err := util.Confirm(fmt.Sprintf("Create source directory %s? [y/N] ", util.ShortenPath(sourceDir)), false)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return declined
+	}
+
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		return fmt.Errorf("creating source directory: %w", err)
+	}
+
+	fmt.Printf("Created %s\n", sourceDir)
+	return nil
 }
 
 func promptAddTargetBase(sourceDir, targetPath string) (string, error) {
