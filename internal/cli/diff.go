@@ -30,7 +30,7 @@ set 'diff_tool' in config. The tool is run as '<tool> <old> <new>' and its
 output is captured, so it may include arguments but cannot be interactive.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runDiff,
-	ValidArgsFunction: completeManagedFiles,
+	ValidArgsFunction: completePendingFiles,
 }
 
 func init() {

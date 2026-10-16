@@ -1,9 +1,13 @@
 package cli
 
 import (
+	"path/filepath"
+	"slices"
+	"sort"
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/source"
 )
 
 // Commands that resolve their argument as an ordinary filesystem path must let the
@@ -77,4 +81,53 @@ func findCommand(t *testing.T, name string) *cobra.Command {
 	}
 	t.Fatalf("command %q not found", name)
 	return nil
+}
+
+// mate apply, status and diff complete only what apply would change, and the
+// directories holding it, relative to the current directory.
+func TestCompletePendingFiles(t *testing.T) {
+	r := newHookRepo(t, "sources: [app, other]\n")
+	if err := r.apply(t, nil, ""); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	writeFile(t, filepath.Join(r.dir, "app", ".config", "app", "app.conf"), "changed\n", 0644)
+	t.Chdir(r.home)
+
+	cmd := &cobra.Command{Use: "apply"}
+	cmd.Flags().String("config", "", "")
+	cmd.Flags().String("profile", "", "")
+	got, directive := completePendingFiles(cmd, nil, "")
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("directive = %v, want NoFileComp", directive)
+	}
+	sort.Strings(got)
+	want := []string{".config", ".config/app", ".config/app/app.conf"}
+	if !slices.Equal(got, want) {
+		t.Errorf("completions = %v, want %v (other.txt is up to date)", got, want)
+	}
+}
+
+// A directory given relative to the current directory scopes to the files under
+// it, which is what completing a directory offers.
+func TestMatchesPathRelativeDirectory(t *testing.T) {
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(home)
+	e := &source.Entry{
+		SourcePath: "/repo/app/.config/app/app.conf",
+		RelPath:    ".config/app/app.conf",
+		TargetPath: filepath.Join(home, ".config", "app", "app.conf"),
+	}
+	for pattern, want := range map[string]bool{
+		".config/app": true,
+		".config":     true,
+		".config/ap":  false,
+		"elsewhere":   false,
+	} {
+		if got := matchesPath(e, pattern, "/repo"); got != want {
+			t.Errorf("matchesPath(%q) = %v, want %v", pattern, got, want)
+		}
+	}
 }

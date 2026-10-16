@@ -15,8 +15,9 @@ mate apply -s <source>   apply that source's files, run its scripts, and
                          prompt for its packages
 ```
 
-The positional argument is always a file or path filter; --source is the only
-way to select a source. Repo-root scripts are not run under --source, since
+The positional argument is always a file or path filter, and a directory
+covers every file under it, relative to the current directory or not; --source
+is the only way to select a source. Repo-root scripts are not run under --source, since
 they apply to the whole repository.
 
 Before anything runs, the files about to change are listed (with the markers

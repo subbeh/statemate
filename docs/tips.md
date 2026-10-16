@@ -35,10 +35,10 @@ source <(mate completion bash)
 mate completion fish | source
 ```
 
-Completion is context-aware: `mate apply`, `diff` and `status` complete
-managed files, `mate clean` completes orphans, `mate scripts run` and
-`mate hooks run` complete script and hook names, and `--source` / `--profile`
-complete from your configuration.
+Completion is context-aware: `mate apply`, `diff` and `status` complete the
+files with pending changes and the directories holding them, `mate clean`
+completes orphans, `mate scripts run` and `mate hooks run` complete script and
+hook names, and `--source` / `--profile` complete from your configuration.
 
 ### Reload every open shell after a change
 

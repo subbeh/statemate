@@ -48,7 +48,7 @@ nothing to do. It covers files, orphans, scripts and secrets, not packages or
 hooks.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runStatus,
-	ValidArgsFunction: completeManagedFiles,
+	ValidArgsFunction: completePendingFiles,
 }
 
 func init() {
@@ -411,6 +411,17 @@ func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {
 	if strings.HasPrefix(relPath, pattern+"/") ||
 		strings.HasPrefix(entry.TargetPath, pattern+"/") {
 		return true
+	}
+	// A relative directory is also taken from the current directory, so
+	// `mate apply .config/nvim` run in ~ covers everything under ~/.config/nvim,
+	// and `.config` run inside a source covers that source's .config.
+	if !filepath.IsAbs(pattern) {
+		if cwd, err := os.Getwd(); err == nil {
+			abs := filepath.Join(cwd, pattern)
+			if strings.HasPrefix(entry.TargetPath, abs+"/") || strings.HasPrefix(entry.SourcePath, abs+"/") {
+				return true
+			}
+		}
 	}
 	return false
 }
