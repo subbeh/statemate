@@ -20,19 +20,19 @@ var decryptCmd = &cobra.Command{
 	Long: `Decrypt a file in place.
 
 This reads the encrypted file, decrypts it using the configured age identity,
-writes it back, and removes the #encrypted attribute from the filename
-wherever it appears among the attributes (config#encrypted#template becomes
-config#template).
+writes it back, and removes the #enc attribute from the filename
+wherever it appears among the attributes (config#enc#tmpl becomes
+config#tmpl).
 
 The file can be a managed source file or any file path (e.g. a var_file
 in .matedata/). Paths are resolved relative to the current directory,
-falling back to the source directory. The #encrypted suffix is optional.
+falling back to the source directory. The #enc suffix is optional.
 
 The age identity must be configured in mate.yaml:
 
   age:
     identity: "~/.config/statemate/key.txt"`,
-	Example: `  mate decrypt nvim/secrets.yaml#encrypted
+	Example: `  mate decrypt nvim/secrets.yaml#enc
   mate decrypt .matedata/secrets.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runDecrypt,
@@ -95,7 +95,7 @@ func runDecrypt(cmd *cobra.Command, args []string) error {
 		return decryptFileAt(entry.SourcePath, entry.Mode.Perm(), enc)
 	}
 
-	// Fall back to resolving as a path (try with #encrypted suffix too)
+	// Fall back to resolving as a path (try with #enc suffix too)
 	filePath := resolveEncryptedFilePath(srcPattern, cfg.SourceDir())
 	if filePath == "" {
 		return fmt.Errorf("file not found: %s", srcPattern)
@@ -122,11 +122,11 @@ func decryptFileAt(path string, perm os.FileMode, enc *encrypt.AgeEncryptor) err
 		return fmt.Errorf("decrypting: %w", err)
 	}
 
-	newPath := filepath.Join(filepath.Dir(path), source.RemoveAttr(filepath.Base(path), "encrypted"))
-	// Without an #encrypted attribute to drop, the plaintext would overwrite the
+	newPath := filepath.Join(filepath.Dir(path), source.RemoveAttr(filepath.Base(path), "enc"))
+	// Without an #enc attribute to drop, the plaintext would overwrite the
 	// ciphertext and the removal below would then delete it.
 	if newPath == path {
-		return fmt.Errorf("%s has no #encrypted attribute to remove", util.ShortenPath(path))
+		return fmt.Errorf("%s has no #enc attribute to remove", util.ShortenPath(path))
 	}
 
 	if err := os.WriteFile(newPath, plaintext, perm); err != nil {
@@ -141,10 +141,10 @@ func decryptFileAt(path string, perm os.FileMode, enc *encrypt.AgeEncryptor) err
 	return nil
 }
 
-// hasEncryptedAttr reports whether the file's own name carries the #encrypted
+// hasEncryptedAttr reports whether the file's own name carries the #enc
 // attribute, in any position among its attributes. A suffix test misses
-// x#encrypted#template; a substring test also matches x#encrypted-backup, or a
-// file inside a directory whose name contains "#encrypted".
+// x#enc#tmpl; a substring test also matches x#enc-backup, or a
+// file inside a directory whose name contains "#enc".
 func hasEncryptedAttr(path string) bool {
 	_, attrs := source.ParseAttrs(filepath.Base(path))
 	return attrs.Encrypted

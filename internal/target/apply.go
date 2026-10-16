@@ -397,7 +397,7 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 	fmt.Printf("\nConflict: %s\n", change.Entry.TargetPath)
 	fmt.Printf("  Target has been modified since last apply\n")
 
-	// Importing a #symlink would write the target's content through the source
+	// Importing a #link would write the target's content through the source
 	// link, into whatever it points at.
 	canImport := !change.Entry.Attrs.Template && !change.Entry.Attrs.Symlink
 	var prompt string
@@ -496,9 +496,9 @@ func (a *Applier) importFile(entry *source.Entry) error {
 
 	if entry.Attrs.Encrypted {
 		// Writing the target back unencrypted would put plaintext into the repo
-		// under an #encrypted name.
+		// under an #enc name.
 		if a.enc == nil || !a.enc.CanEncrypt() {
-			return fmt.Errorf("%s is #encrypted but no age recipients are configured to re-encrypt it", entry.SourcePath)
+			return fmt.Errorf("%s is #enc but no age recipients are configured to re-encrypt it", entry.SourcePath)
 		}
 		content, err = a.enc.Encrypt(content)
 		if err != nil {

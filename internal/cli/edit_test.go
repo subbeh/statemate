@@ -26,12 +26,12 @@ func editTestEnv(t *testing.T) (*config.Config, []*source.Entry, string) {
 		t.Fatal(err)
 	}
 
-	// an include file outside any source dir, with the #encrypted suffix
+	// an include file outside any source dir, with the #enc suffix
 	dataDir := filepath.Join(repo, ".matedata")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dataDir, "secrets.yaml#encrypted"), []byte("cipher"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dataDir, "secrets.yaml#enc"), []byte("cipher"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -79,11 +79,11 @@ func TestResolveEditPath_IncludeFileRelative(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, managed, err := resolveEditPath(".matedata/secrets.yaml#encrypted", cfg, entries)
+	got, managed, err := resolveEditPath(".matedata/secrets.yaml#enc", cfg, entries)
 	if err != nil {
 		t.Fatalf("expected include file to resolve, got error: %v", err)
 	}
-	want := filepath.Join(repo, ".matedata", "secrets.yaml#encrypted")
+	want := filepath.Join(repo, ".matedata", "secrets.yaml#enc")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

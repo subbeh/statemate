@@ -117,7 +117,7 @@ For files that are mostly the same, a [template](templates.md) is less to
 maintain than two copies:
 
 ```gotemplate
-# git/.config/git/config#template
+# git/.config/git/config#tmpl
 [user]
     email = {{ .Vars.email }}
 
@@ -175,7 +175,7 @@ would get without being on it:
 ```bash
 mate profile -p work                  # which sources it resolves to
 mate status -p work                   # what would change there
-mate eval -p work git/.config/git/config#template
+mate eval -p work git/.config/git/config#tmpl
 ```
 
 The results reflect *this* machine's files and state, so `status` is only a rough

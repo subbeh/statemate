@@ -20,7 +20,7 @@ var encryptCmd = &cobra.Command{
 	Long: `Encrypt a file in place.
 
 This reads the file, encrypts it using the configured age recipients,
-writes it back, and adds the #encrypted suffix to the filename.
+writes it back, and adds the #enc suffix to the filename.
 
 The file can be a managed source file or any file path (e.g. a var_file
 in .matedata/). Paths are resolved relative to the current directory,
@@ -122,39 +122,27 @@ func resolveFilePath(pattern string, sourceDir string) string {
 }
 
 func resolveEncryptedFilePath(pattern string, sourceDir string) string {
+	// The exact path, then its #enc variant.
+	find := func(p string) string {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+		if hasEncryptedAttr(p) {
+			return ""
+		}
+		return util.EncryptedVariant(p)
+	}
+
 	if filepath.IsAbs(pattern) {
-		if _, err := os.Stat(pattern); err == nil {
-			return pattern
-		}
-		if !strings.HasSuffix(pattern, "#encrypted") {
-			if _, err := os.Stat(pattern + "#encrypted"); err == nil {
-				return pattern + "#encrypted"
-			}
-		}
-		return ""
+		return find(pattern)
 	}
-	// Try relative to cwd (exact, then with #encrypted)
+	// Relative to cwd first, then to the source directory.
 	if abs, err := filepath.Abs(pattern); err == nil {
-		if _, err := os.Stat(abs); err == nil {
-			return abs
-		}
-		if !strings.HasSuffix(abs, "#encrypted") {
-			if _, err := os.Stat(abs + "#encrypted"); err == nil {
-				return abs + "#encrypted"
-			}
+		if p := find(abs); p != "" {
+			return p
 		}
 	}
-	// Try relative to source directory (exact, then with #encrypted)
-	p := filepath.Join(sourceDir, pattern)
-	if _, err := os.Stat(p); err == nil {
-		return p
-	}
-	if !strings.HasSuffix(p, "#encrypted") {
-		if _, err := os.Stat(p + "#encrypted"); err == nil {
-			return p + "#encrypted"
-		}
-	}
-	return ""
+	return find(filepath.Join(sourceDir, pattern))
 }
 
 func encryptFileAt(path string, perm os.FileMode, enc *encrypt.AgeEncryptor) error {
@@ -168,7 +156,7 @@ func encryptFileAt(path string, perm os.FileMode, enc *encrypt.AgeEncryptor) err
 		return fmt.Errorf("encrypting: %w", err)
 	}
 
-	newPath := path + "#encrypted"
+	newPath := path + "#enc"
 
 	if err := os.WriteFile(newPath, ciphertext, perm); err != nil {
 		return fmt.Errorf("writing encrypted file: %w", err)

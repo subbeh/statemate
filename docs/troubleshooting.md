@@ -9,7 +9,7 @@ mate doctor
 It loads and validates the configuration, checks that every source directory
 exists, that your age identity and recipients work, which package managers are
 available, that every active hook matches at least one file, and that every
-`#encrypted` file really is encrypted. It exits 1 if anything is an error.
+`#enc` file really is encrypted. It exits 1 if anything is an error.
 
 Other read-only commands that narrow a problem down:
 
@@ -82,12 +82,12 @@ filtered, so every variant is deployed and they collide.
 Profiles in the local config *replace* the repository's entirely, so a local
 `profiles:` block can cause this too.
 
-### `#import cannot be combined with #template`
+### `#import cannot be combined with #tmpl`
 
 Importing would write the rendered output over the template. Drop one of the two
 attributes; see [`#import`](attributes.md#import).
 
-### `… is #encrypted but no age identity is configured`
+### `… is #enc but no age identity is configured`
 
 The file can only be deployed after it is decrypted. Configure `age.identity` or
 `age.identity_command`, and check with `mate doctor`. See

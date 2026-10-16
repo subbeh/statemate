@@ -1,6 +1,7 @@
 package source
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -31,9 +32,47 @@ type Attrs struct {
 // with ParseAttrs below. TestAttrNamesAreParsed checks that every name here
 // actually parses, and the docs test checks that every name is documented.
 var AttrNames = []string{
-	"template", "tmpl", "encrypted", "symlink", "import",
+	"tmpl", "enc", "link", "import",
 	"profile:", "perm:", "owner:", "group:",
 	"perm-r:", "owner-r:", "group-r:",
+}
+
+// renamedAttrs maps the long attribute names mate used to accept to their
+// replacements, so the error for a file not yet renamed says what to do.
+var renamedAttrs = map[string]string{
+	"encrypted": "enc",
+	"template":  "tmpl",
+	"symlink":   "link",
+}
+
+// CheckAttrs reports the first attribute in name that is not recognised, or
+// whose mode does not parse. Unknown attributes used to be dropped silently, so a
+// typo such as config#templte deployed an unrendered config.
+func CheckAttrs(name string) error {
+	for _, part := range strings.Split(name, "#")[1:] {
+		if part == "" {
+			continue
+		}
+		if short, ok := renamedAttrs[part]; ok {
+			return fmt.Errorf("#%s was renamed to #%s", part, short)
+		}
+		known := false
+		for _, a := range AttrNames {
+			if part == a || (strings.HasSuffix(a, ":") && strings.HasPrefix(part, a)) {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return fmt.Errorf("unknown attribute #%s", part)
+		}
+		if key, val, _ := strings.Cut(part, ":"); key == "perm" || key == "perm-r" {
+			if _, err := strconv.ParseUint(val, 8, 32); err != nil {
+				return fmt.Errorf("#%s: %q is not an octal mode", part, val)
+			}
+		}
+	}
+	return nil
 }
 
 func ParseAttrs(name string) (baseName string, attrs Attrs) {
@@ -71,11 +110,11 @@ func ParseAttrs(name string) (baseName string, attrs Attrs) {
 			}
 		} else {
 			switch part {
-			case "encrypted":
+			case "enc":
 				attrs.Encrypted = true
-			case "template", "tmpl":
+			case "tmpl":
 				attrs.Template = true
-			case "symlink":
+			case "link":
 				attrs.Symlink = true
 			case "import":
 				attrs.Import = true
@@ -86,10 +125,10 @@ func ParseAttrs(name string) (baseName string, attrs Attrs) {
 	return baseName, attrs
 }
 
-// RemoveAttr returns name without the given flag attribute (e.g. "encrypted"),
+// RemoveAttr returns name without the given flag attribute (e.g. "enc"),
 // wherever it appears among the attributes. Attributes are not ordered, so
-// x#encrypted#template is as valid as x#template#encrypted, and trimming a
-// suffix would miss the former.
+// x#enc#tmpl is as valid as x#tmpl#enc, and trimming a suffix would miss the
+// former.
 func RemoveAttr(name, attr string) string {
 	parts := strings.Split(name, "#")
 	kept := parts[:1]

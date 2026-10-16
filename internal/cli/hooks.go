@@ -41,7 +41,7 @@ auto-confirms them and --no-scripts skips them.
 
 Hooks declared in a source's .mate.yaml are named <source>/<name> and match
 only that source's files. Patterns match target paths; source attributes such
-as #template and #perm:600 are ignored when included in a pattern.`,
+as #tmpl and #perm:600 are ignored when included in a pattern.`,
 }
 
 var hooksListCmd = &cobra.Command{

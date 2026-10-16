@@ -280,10 +280,10 @@ func addFileToSource(targetPath string, info os.FileInfo, sourceDir string, cfg 
 		destName = destName + "#profile:" + addForProfile
 	}
 	if addEncrypt {
-		destName = destName + "#encrypted"
+		destName = destName + "#enc"
 	}
 	if addTemplate {
-		destName = destName + "#template"
+		destName = destName + "#tmpl"
 	}
 
 	destPath := filepath.Join(resolveAttrsPath(sourceDir, filepath.Dir(relPath)), destName)

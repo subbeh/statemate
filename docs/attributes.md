@@ -1,24 +1,24 @@
 # File Attributes
 
 Attributes are `#`-suffixes on a filename that control how a file is deployed.
-They are stripped from the target name, so `config#encrypted#perm:600` deploys as
+They are stripped from the target name, so `config#enc#perm:600` deploys as
 `config`.
 
 ```
-.ssh/config#encrypted#perm:600      →  ~/.ssh/config, decrypted, mode 0600
+.ssh/config#enc#perm:600      →  ~/.ssh/config, decrypted, mode 0600
 ```
 
 Order does not matter, and any number can be combined. An unrecognised attribute
-is ignored silently but still stripped, so a typo such as `config#templte`
-deploys an unrendered `config`. Everything after the first `#` in a name is
+is an error: every command that reads the sources stops and names the file, so a
+typo such as `config#templte` cannot deploy an unrendered `config`. The same goes
+for a `#perm:` mode that is not octal. Everything after the first `#` in a name is
 attributes, so a file whose real name contains `#` cannot be managed.
 
 | Attribute | Effect |
 |-----------|--------|
-| [`#template`](#template) | Render as a Go template |
-| [`#tmpl`](#template) | Alias for `#template` |
-| [`#encrypted`](#encrypted) | Decrypt with age before deploying |
-| [`#symlink`](#symlink) | Recreate a symlink (source must be one) |
+| [`#tmpl`](#tmpl) | Render as a Go template |
+| [`#enc`](#enc) | Decrypt with age before deploying |
+| [`#link`](#link) | Recreate a symlink (source must be one) |
 | [`#import`](#import) | Target is authoritative; changes flow back to the source |
 | [`#profile:name`](#profilename) | Only deploy under this profile |
 | [`#perm:600`](#perm600) | Set file mode |
@@ -40,13 +40,13 @@ Attributes are written on directories too. There, only some take effect:
 The source directory's own name counts as well: a source named
 `etc#owner-r:root` makes every file in it root-owned.
 
-## `#template`
+## `#tmpl`
 
 Renders the file with Go's `text/template` before writing it. See
 [Templates](templates.md) for the available variables and functions.
 
 ```
-gitconfig#template
+gitconfig#tmpl
 ```
 
 ```gotemplate
@@ -54,19 +54,17 @@ gitconfig#template
     email = {{ .Vars.email }}
 ```
 
-`#tmpl` is an equivalent short form.
-
 Because the deployed content differs from the source, statemate compares the
 *rendered* output against the target. A template whose variables change is
 detected as modified even though the source file itself did not change.
 
-## `#encrypted`
+## `#enc`
 
 Marks the file as age-encrypted in the repository. It is decrypted on apply, so
 the target holds plaintext while the repository holds ciphertext.
 
 ```
-.ssh/id_ed25519#encrypted#perm:600
+.ssh/id_ed25519#enc#perm:600
 ```
 
 Deploying needs an age identity (`identity` or `identity_command` in
@@ -80,20 +78,20 @@ remove the suffix for you.
 `mate edit` decrypts to a temporary file, opens your editor, and re-encrypts on
 save, preserving the original mode. `mate cat` decrypts to stdout.
 
-Combines with `#template`: the file is decrypted first, then rendered.
+Combines with `#tmpl`: the file is decrypted first, then rendered.
 
-## `#symlink`
+## `#link`
 
 Reproduces a symlink at the target. **The source file must itself be a symlink**;
 statemate reads where it points and recreates a link to that same destination.
 
 ```bash
 cd ~/dotfiles/mysource
-ln -s /opt/homebrew/bin/nvim 'bin/vim#symlink'
+ln -s /opt/homebrew/bin/nvim 'bin/vim#link'
 ```
 
 ```
-~/dotfiles/mysource/bin/vim#symlink  →  /opt/homebrew/bin/nvim
+~/dotfiles/mysource/bin/vim#link  →  /opt/homebrew/bin/nvim
                                   ⇓ apply
 ~/bin/vim                           →  /opt/homebrew/bin/nvim
 ```
@@ -107,19 +105,19 @@ The link text is copied verbatim, so a relative link resolves relative to the
 retargeting the source link is a change, and a link that points nowhere on this
 machine is deployed as-is.
 
-A `#symlink` attribute on a regular file is an error, reported by `mate status`
+A `#link` attribute on a regular file is an error, reported by `mate status`
 and `mate apply` alike:
 
 ```
-Error: computing changes: readlink .../f.txt#symlink: invalid argument
+Error: computing changes: readlink .../f.txt#link: invalid argument
 ```
 
-Because the link destination is copied verbatim, `#template`, `#encrypted`,
-`#perm:`, `#owner:` and `#group:` have no effect alongside `#symlink`: there is
+Because the link destination is copied verbatim, `#tmpl`, `#enc`,
+`#perm:`, `#owner:` and `#group:` have no effect alongside `#link`: there is
 no content to render, decrypt, chmod, or chown. Links are created without sudo,
-so a `#symlink` cannot target a directory you cannot write to.
+so a `#link` cannot target a directory you cannot write to.
 
-If a target is a symlink but the source is not marked `#symlink`, statemate treats
+If a target is a symlink but the source is not marked `#link`, statemate treats
 it as a conflict the first time it sees it, rather than silently replacing it.
 This is what happens on the first apply after migrating from GNU Stow; answer
 `[o]verwrite` to replace the links with real files.
@@ -132,7 +130,7 @@ changes whenever you toggle a setting, so without `#import` every `mate apply`
 stops to ask about a drifted target, and the answer is always "import".
 
 ```
-claude/.claude/settings.json#encrypted#import
+claude/.claude/settings.json#enc#import
 ```
 
 | Source | Target | Result |
@@ -154,10 +152,10 @@ still prompts once, because no recorded state exists to say which side is newer.
 shows the diff in the import direction — target as the new side. `mate apply`
 prints `← path (imported)`.
 
-Composes with `#encrypted`: imported content is encrypted before being written to
+Composes with `#enc`: imported content is encrypted before being written to
 the source, so the repository never holds plaintext.
 
-**Cannot be combined with `#template`.** Importing would write the rendered output
+**Cannot be combined with `#tmpl`.** Importing would write the rendered output
 over the template, destroying the source. Statemate rejects the combination with
 an error rather than doing it.
 
@@ -264,7 +262,7 @@ real example, deploying to `/etc` as root:
 restic/
   .mate.yaml                    # targets: { etc: /etc }
   etc#owner-r:root/
-    ssh/ssh_config.d/50-storagebox.conf#template
+    ssh/ssh_config.d/50-storagebox.conf#tmpl
 ```
 
 Note that directories which already exist and carry no perm/owner/group attribute
@@ -280,7 +278,7 @@ socket directory, a cache directory some program refuses to create itself:
 ssh/
   .cache/ssh/controlmasters#perm:700/
     .gitkeep                    ← so git stores the directory at all
-  .ssh/config#template
+  .ssh/config#tmpl
 ```
 
 Git cannot store an empty directory, so the keep-file is unavoidable. Hide it

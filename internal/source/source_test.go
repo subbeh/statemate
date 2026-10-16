@@ -29,17 +29,27 @@ func TestParseAttrs(t *testing.T) {
 			wantAttr: Attrs{Perm: 0600},
 		},
 		{
-			input:    "config.yaml#encrypted",
+			input:    "config.yaml#enc",
 			wantName: "config.yaml",
 			wantAttr: Attrs{Encrypted: true},
 		},
 		{
-			input:    "config.yaml#template",
+			input:    "config.yaml#tmpl",
 			wantName: "config.yaml",
 			wantAttr: Attrs{Template: true},
 		},
 		{
-			input:    "config.yaml#profile:work#perm:600#encrypted#template",
+			input:    "config.yaml#enc#tmpl",
+			wantName: "config.yaml",
+			wantAttr: Attrs{Encrypted: true, Template: true},
+		},
+		{
+			input:    "config.yaml#link",
+			wantName: "config.yaml",
+			wantAttr: Attrs{Symlink: true},
+		},
+		{
+			input:    "config.yaml#profile:work#perm:600#enc#tmpl",
 			wantName: "config.yaml",
 			wantAttr: Attrs{Profile: "work", Perm: 0600, Encrypted: true, Template: true},
 		},
@@ -49,7 +59,7 @@ func TestParseAttrs(t *testing.T) {
 			wantAttr: Attrs{Owner: "root", Group: "wheel"},
 		},
 		{
-			input:    "link#symlink",
+			input:    "link#link",
 			wantName: "link",
 			wantAttr: Attrs{Symlink: true},
 		},
@@ -59,7 +69,7 @@ func TestParseAttrs(t *testing.T) {
 			wantAttr: Attrs{Import: true},
 		},
 		{
-			input:    "settings.json#profile:work#encrypted#import",
+			input:    "settings.json#profile:work#enc#import",
 			wantName: "settings.json",
 			wantAttr: Attrs{Profile: "work", Encrypted: true, Import: true},
 		},
@@ -103,18 +113,20 @@ func TestAttrNamesAreParsed(t *testing.T) {
 	}
 }
 
-// mate decrypt drops the #encrypted attribute from a filename; it may sit
+// mate decrypt drops the #enc attribute from a filename; it may sit
 // anywhere among the attributes, not only last.
 func TestRemoveAttr(t *testing.T) {
 	tests := []struct {
 		name, attr, want string
 	}{
-		{"x#encrypted", "encrypted", "x"},
-		{"x#encrypted#template", "encrypted", "x#template"},
-		{"x#perm:600#encrypted#template", "encrypted", "x#perm:600#template"},
-		{"x#template", "encrypted", "x#template"},
-		{"x#encrypted-backup", "encrypted", "x#encrypted-backup"},
-		{"x", "encrypted", "x"},
+		{"x#enc", "enc", "x"},
+		{"x#enc#tmpl", "enc", "x#tmpl"},
+		{"x#perm:600#enc#tmpl", "enc", "x#perm:600#tmpl"},
+		{"x#tmpl", "enc", "x#tmpl"},
+		{"x#enc-backup", "enc", "x#enc-backup"},
+		{"x#enc#tmpl", "enc", "x#tmpl"},
+		{"x#perm:600#enc", "enc", "x#perm:600"},
+		{"x", "enc", "x"},
 	}
 	for _, tc := range tests {
 		if got := RemoveAttr(tc.name, tc.attr); got != tc.want {
@@ -685,5 +697,46 @@ func TestEmptyDirTargets(t *testing.T) {
 	}
 	if len(empty) != 1 {
 		t.Errorf("expected exactly 1 empty directory, got %v", empty)
+	}
+}
+
+// An attribute mate does not know stops the scan instead of being dropped; the
+// renamed long forms say what replaced them.
+func TestCheckAttrs(t *testing.T) {
+	tests := []struct {
+		name, wantErr string
+	}{
+		{"f", ""},
+		{"f#enc#tmpl#link#import", ""},
+		{"f#profile:work#perm:600#owner:root#group-r:wheel", ""},
+		{"f##enc", ""},
+		{"f#encrypted", "#encrypted was renamed to #enc"},
+		{"f#template", "#template was renamed to #tmpl"},
+		{"f#symlink", "#symlink was renamed to #link"},
+		{"f#templte", "unknown attribute #templte"},
+		{"f#perm:rw", `"rw" is not an octal mode`},
+	}
+	for _, tc := range tests {
+		err := CheckAttrs(tc.name)
+		switch {
+		case tc.wantErr == "" && err != nil:
+			t.Errorf("CheckAttrs(%q) = %v, want nil", tc.name, err)
+		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
+			t.Errorf("CheckAttrs(%q) = %v, want %q", tc.name, err, tc.wantErr)
+		}
+	}
+}
+
+func TestScanRejectsUnknownAttribute(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "app")
+	if err := os.MkdirAll(filepath.Join(src, ".config#typo"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, ".config#typo", "a.conf"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewScanner("/home/testuser", "").Scan([]string{src})
+	if err == nil || !strings.Contains(err.Error(), ".config#typo: unknown attribute #typo") {
+		t.Errorf("Scan error = %v, want the directory and its unknown attribute", err)
 	}
 }

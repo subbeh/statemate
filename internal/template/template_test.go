@@ -341,11 +341,11 @@ nested:
 	}
 }
 
-// A var_file is encrypted when #encrypted is among its attributes, not only
+// A var_file is encrypted when #enc is among its attributes, not only
 // when it is the last one.
 func TestLoadVarFileEncryptedNotLastAttribute(t *testing.T) {
 	dir := t.TempDir()
-	varFile := dir + "/secrets.yaml#encrypted#perm:600"
+	varFile := dir + "/secrets.yaml#enc#perm:600"
 	if err := os.WriteFile(varFile, []byte("ciphertext"), 0600); err != nil {
 		t.Fatal(err)
 	}

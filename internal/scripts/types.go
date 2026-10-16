@@ -1,9 +1,11 @@
 package scripts
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -81,14 +83,34 @@ func (s *Script) IsExecutable() bool {
 	return info.Mode()&0111 != 0
 }
 
-// Script naming format: <order>-<name>.<ext>#<freq>#<timing>[#template][#profile:<name>]
+// Script naming format: <order>-<name>.<ext>#<freq>#<timing>[#tmpl][#profile:<name>]
 // Examples:
 //   01-setup.sh#once#before
 //   02-cleanup.sh#always#after
-//   03-render.sh#onchange#before#template
+//   03-render.sh#onchange#before#tmpl
 //   04-init.sh#once#before#profile:arch
 //   manual-task.sh (no attributes = manual)
 var orderPattern = regexp.MustCompile(`^(\d+)-(.+)$`)
+
+// scriptAttrs are the attributes a script name may carry; profile: takes a value.
+var scriptAttrs = []string{"once", "onchange", "always", "daily", "weekly", "monthly", "before", "after", "tmpl"}
+
+// CheckScriptName reports the first attribute in a script name that is not
+// recognised. Like a file's, an unknown attribute was dropped silently, so a typo
+// in #onchange left the script manual.
+func CheckScriptName(filename string) error {
+	for _, attr := range strings.Split(filename, "#")[1:] {
+		lower := strings.ToLower(attr)
+		switch {
+		case lower == "", slices.Contains(scriptAttrs, lower), strings.HasPrefix(lower, "profile:"):
+		case lower == "template":
+			return fmt.Errorf("#template was renamed to #tmpl")
+		default:
+			return fmt.Errorf("unknown attribute #%s", attr)
+		}
+	}
+	return nil
+}
 
 func ParseScriptName(filename string) (name string, freq Frequency, timing Timing, template bool, profile string, order int) {
 	parts := strings.Split(filename, "#")
@@ -126,7 +148,7 @@ func ParseScriptName(filename string) (name string, freq Frequency, timing Timin
 			timing = TimingBefore
 		case lower == "after":
 			timing = TimingAfter
-		case lower == "template":
+		case lower == "tmpl":
 			template = true
 		case strings.HasPrefix(lower, "profile:"):
 			profile = strings.TrimPrefix(attr, "profile:")

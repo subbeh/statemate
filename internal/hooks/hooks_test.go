@@ -41,25 +41,25 @@ func TestMatch(t *testing.T) {
 		{"tmux.conf/", "/home/u/.config/tmux/tmux.conf", false},
 		{"~", "/home/u/.zshrc", true},
 		// Source attributes in patterns do not appear in the deployed target.
-		{"*.service#template", "/etc/systemd/system/keyd.service", true},
-		{"*.service#template", "/etc/systemd/system/keyd.timer", false},
-		{".config#perm-r:700/tmux/*.conf#encrypted#template", "/home/u/.config/tmux/tmux.conf", true},
+		{"*.service#tmpl", "/etc/systemd/system/keyd.service", true},
+		{"*.service#tmpl", "/etc/systemd/system/keyd.timer", false},
+		{".config#perm-r:700/tmux/*.conf#enc#tmpl", "/home/u/.config/tmux/tmux.conf", true},
 		{"~/.config/tmux#owner-r:root/**/*.conf#profile:work", "/home/u/.config/tmux/a/b/c.conf", true},
 		{"/etc#group-r:root/keyd/*.conf#tmpl#perm:600", "/etc/keyd/default.conf", true},
 		{".config/tmux#perm:700/", "/home/u/.config/tmux/tmux.conf", true},
-		{"tmux.conf#template/", "/home/u/.config/tmux/tmux.conf", false},
-		{".config/tmux#perm:700/*.conf#template", "/home/u/.config/tmux/sub/a.conf", false},
+		{"tmux.conf#tmpl/", "/home/u/.config/tmux/tmux.conf", false},
+		{".config/tmux#perm:700/*.conf#tmpl", "/home/u/.config/tmux/sub/a.conf", false},
 		// Unknown hashes, escaped hashes, and glob classes remain literal.
-		{"note#draft#template", "/home/u/note#draft", true},
+		{"note#draft#tmpl", "/home/u/note#draft", true},
 		{"note#", "/home/u/note#", true},
 		{"note##draft", "/home/u/note##draft", true},
-		{"note#template-copy", "/home/u/note#template-copy", true},
-		{`note\#template`, "/home/u/note#template", true},
-		{"note[#]template", "/home/u/note#template", true},
-		{"note[#template]#template", "/home/u/note#", true},
-		{`note[\]]#template`, "/home/u/note]", true},
+		{"note#tmpl-copy", "/home/u/note#tmpl-copy", true},
+		{`note\#tmpl`, "/home/u/note#tmpl", true},
+		{"note[#]tmpl", "/home/u/note#tmpl", true},
+		{"note[#tmpl]#tmpl", "/home/u/note#", true},
+		{`note[\]]#tmpl`, "/home/u/note]", true},
 		// A literal attribute-like suffix in a real target is not stripped.
-		{"note", "/home/u/note#template", false},
+		{"note", "/home/u/note#tmpl", false},
 	}
 	for _, tc := range tests {
 		if got := match(tc.pattern, tc.target, home); got != tc.want {

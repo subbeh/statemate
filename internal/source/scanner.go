@@ -80,6 +80,9 @@ func (s *Scanner) scanSource(sourceDir string, tree *Tree) error {
 	}
 
 	sourceName := filepath.Base(sourceDir)
+	if err := CheckAttrs(sourceName); err != nil {
+		return fmt.Errorf("%s: %w", sourceDir, err)
+	}
 
 	return filepath.WalkDir(sourceDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -114,6 +117,10 @@ func (s *Scanner) scanSource(sourceDir string, tree *Tree) error {
 				return filepath.SkipDir
 			}
 			return nil
+		}
+
+		if err := CheckAttrs(d.Name()); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
 		}
 
 		info, err := d.Info()

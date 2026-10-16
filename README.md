@@ -58,8 +58,8 @@ A source directory is deployed relative to your home directory:
 Behavior is controlled by `#` suffixes on filenames, stripped from the target:
 
 ```
-.ssh/config#encrypted#perm:600         encrypted in the repo, mode 0600 deployed
-.gitconfig#template                    rendered as a Go template
+.ssh/config#enc#perm:600         encrypted in the repo, mode 0600 deployed
+.gitconfig#tmpl                    rendered as a Go template
 .gitconfig#profile:work                only on machines matching the work profile
 .claude/settings.json#import           app owns it; changes flow back to the repo
 ```

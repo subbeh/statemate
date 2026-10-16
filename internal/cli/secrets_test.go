@@ -19,16 +19,16 @@ func TestDiscoverTemplateFiles(t *testing.T) {
 	files := []string{
 		"mate.yaml",
 		"common/plain.conf",
-		"common/app.conf#template",
-		"common/work.conf#template#profile:work",
-		"common/home.conf#template#profile:home",
+		"common/app.conf#tmpl",
+		"common/work.conf#tmpl#profile:work",
+		"common/home.conf#tmpl#profile:home",
 		"common/.mate.toml",
-		"common/.matescripts/setup.sh#template",
-		"common/.matescripts/work.sh#template#profile:work",
+		"common/.matescripts/setup.sh#tmpl",
+		"common/.matescripts/work.sh#tmpl#profile:work",
 		"common/.matescripts/raw.sh",
-		".matescripts/root.sh#template",
-		".matescripts/nested/deep.sh#template",
-		".matescripts/home.sh#template#profile:home",
+		".matescripts/root.sh#tmpl",
+		".matescripts/nested/deep.sh#tmpl",
+		".matescripts/home.sh#tmpl#profile:home",
 	}
 	for _, f := range files {
 		path := filepath.Join(repo, f)
@@ -72,13 +72,13 @@ func TestDiscoverTemplateFiles(t *testing.T) {
 			// only its scripts; discovery must not fetch secrets for the rest.
 			profile: "home",
 			want: []string{
-				".matescripts/home.sh#template#profile:home",
-				".matescripts/nested/deep.sh#template",
-				".matescripts/root.sh#template",
+				".matescripts/home.sh#tmpl#profile:home",
+				".matescripts/nested/deep.sh#tmpl",
+				".matescripts/root.sh#tmpl",
 				"common/.mate.toml",
-				"common/.matescripts/setup.sh#template",
-				"common/app.conf#template",
-				"common/home.conf#template#profile:home",
+				"common/.matescripts/setup.sh#tmpl",
+				"common/app.conf#tmpl",
+				"common/home.conf#tmpl#profile:home",
 			},
 		},
 		{
@@ -86,13 +86,13 @@ func TestDiscoverTemplateFiles(t *testing.T) {
 			// without a #profile: attribute.
 			profile: "",
 			want: []string{
-				".matescripts/nested/deep.sh#template",
-				".matescripts/root.sh#template",
+				".matescripts/nested/deep.sh#tmpl",
+				".matescripts/root.sh#tmpl",
 				"common/.mate.toml",
-				"common/.matescripts/setup.sh#template",
-				"common/app.conf#template",
-				"common/home.conf#template#profile:home",
-				"common/work.conf#template#profile:work",
+				"common/.matescripts/setup.sh#tmpl",
+				"common/app.conf#tmpl",
+				"common/home.conf#tmpl#profile:home",
+				"common/work.conf#tmpl#profile:work",
 			},
 		},
 	}

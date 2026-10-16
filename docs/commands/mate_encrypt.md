@@ -7,7 +7,7 @@ Encrypt a managed file
 Encrypt a file in place.
 
 This reads the file, encrypts it using the configured age recipients,
-writes it back, and adds the #encrypted suffix to the filename.
+writes it back, and adds the #enc suffix to the filename.
 
 The file can be a managed source file or any file path (e.g. a var_file
 in .matedata/). Paths are resolved relative to the current directory,

@@ -211,13 +211,13 @@ func formatAttrs(a source.Attrs) string {
 		parts = append(parts, "group:"+a.Group)
 	}
 	if a.Encrypted {
-		parts = append(parts, "encrypted")
+		parts = append(parts, "enc")
 	}
 	if a.Template {
-		parts = append(parts, "template")
+		parts = append(parts, "tmpl")
 	}
 	if a.Symlink {
-		parts = append(parts, "symlink")
+		parts = append(parts, "link")
 	}
 	if a.Import {
 		parts = append(parts, "import")

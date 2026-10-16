@@ -90,7 +90,7 @@ func TestDiscoverPopulatesDescription(t *testing.T) {
 	if err := os.MkdirAll(scriptsDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeScript(t, scriptsDir, "01-setup#once#before.sh",
+	writeScript(t, scriptsDir, "01-setup.sh#once#before",
 		"#!/usr/bin/env bash\n# Description: Set things up\n")
 
 	found, err := NewDiscoverer(repo, nil).Discover()

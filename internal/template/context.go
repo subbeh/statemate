@@ -11,6 +11,7 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 type SecretLookup func(item, typ, field string) (string, error)
@@ -128,15 +129,13 @@ func (c *Context) loadVarFile(path string) error {
 
 	encrypted := false
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// Try the #encrypted variant
-		if _, err := os.Stat(path + "#encrypted"); err == nil {
-			path = path + "#encrypted"
-			encrypted = true
-		} else {
+		// Try the #enc variant
+		if path = util.EncryptedVariant(path); path == "" {
 			return nil
 		}
+		encrypted = true
 	} else if _, attrs := source.ParseAttrs(filepath.Base(path)); attrs.Encrypted {
-		// #encrypted may be any of the attributes, not only the last.
+		// #enc may be any of the attributes, not only the last.
 		encrypted = true
 	}
 

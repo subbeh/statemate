@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -68,7 +69,86 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("creating schema: %w", err)
 	}
 
-	return &DB{db: db}, nil
+	d := &DB{db: db}
+	if err := d.renameLongAttrs(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrating state: %w", err)
+	}
+	return d, nil
+}
+
+// renameLongAttrs rewrites recorded source and script paths from the long
+// attribute names (#encrypted, #template, #symlink) to the short ones that
+// replaced them. Scripts are looked up by path, so without this renaming the
+// sources would make every #once script look unrun. It runs once per database,
+// tracked by user_version.
+func (d *DB) renameLongAttrs() error {
+	var version int
+	if err := d.db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		return err
+	}
+	if version >= 1 {
+		return nil
+	}
+
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, col := range []struct{ table, column string }{
+		{"script_runs", "script_path"},
+		{"script_failures", "script_path"},
+		{"managed_files", "source_path"},
+	} {
+		rows, err := tx.Query(fmt.Sprintf(`SELECT DISTINCT %s FROM %s`, col.column, col.table))
+		if err != nil {
+			return err
+		}
+		var paths []string
+		for rows.Next() {
+			var p string
+			if err := rows.Scan(&p); err != nil {
+				_ = rows.Close()
+				return err
+			}
+			paths = append(paths, p)
+		}
+		_ = rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+
+		for _, old := range paths {
+			if renamed := shortAttrPath(old); renamed != old {
+				if _, err := tx.Exec(fmt.Sprintf(`UPDATE OR REPLACE %s SET %s = ? WHERE %s = ?`, col.table, col.column, col.column), renamed, old); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if _, err := tx.Exec(`PRAGMA user_version = 1`); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// shortAttrPath replaces the long attribute names in every component of path.
+func shortAttrPath(path string) string {
+	short := map[string]string{"encrypted": "enc", "template": "tmpl", "symlink": "link"}
+	components := strings.Split(path, "/")
+	for i, c := range components {
+		parts := strings.Split(c, "#")
+		for j := 1; j < len(parts); j++ {
+			if s, ok := short[parts[j]]; ok {
+				parts[j] = s
+			}
+		}
+		components[i] = strings.Join(parts, "#")
+	}
+	return strings.Join(components, "/")
 }
 
 func (d *DB) Close() error {

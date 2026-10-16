@@ -113,7 +113,7 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			if profileName != "" {
 				tree = tree.FilterByProfile(profileChain)
 			}
-			// #encrypted files cannot be compared without the identity.
+			// #enc files cannot be compared without the identity.
 			var enc *encrypt.AgeEncryptor
 			if cfg.Age != nil {
 				enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)

@@ -216,7 +216,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// symlinkDiff describes a pending #symlink change as the link the target has
+// symlinkDiff describes a pending #link change as the link the target has
 // now and the one apply will create.
 func symlinkDiff(entry *source.Entry) string {
 	var lines []string

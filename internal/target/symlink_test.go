@@ -9,7 +9,7 @@ import (
 	"github.com/subbeh/statemate/internal/state"
 )
 
-// symlinkFixture is one #symlink source in a scanned tree. Change detection for
+// symlinkFixture is one #link source in a scanned tree. Change detection for
 // these compares link text, so the destination may be anything -- a directory,
 // or nothing at all.
 type symlinkFixture struct {
@@ -31,7 +31,7 @@ func newSymlinkFixture(t *testing.T, dest string) *symlinkFixture {
 	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	sourcePath := filepath.Join(sourceDir, "link#symlink")
+	sourcePath := filepath.Join(sourceDir, "link#link")
 	if err := os.Symlink(dest, sourcePath); err != nil {
 		t.Fatal(err)
 	}

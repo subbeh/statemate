@@ -5,7 +5,7 @@ Check configuration and dependencies
 ## Synopsis
 
 Check that the configuration loads and validates, that every source directory
-exists, that every active hook matches some managed file, that every #encrypted
+exists, that every active hook matches some managed file, that every #enc
 file in any source really is age-encrypted, that the age identity and
 recipients work, and which package managers are available.
 

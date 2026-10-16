@@ -136,13 +136,13 @@ Loads variables from YAML or TOML files, merged in order after `variables`:
 ```yaml
 var_files:
   - .matedata/vars.yaml
-  - .matedata/secrets.yaml   # resolves .matedata/secrets.yaml#encrypted too
+  - .matedata/secrets.yaml   # resolves .matedata/secrets.yaml#enc too
 ```
 
 Paths are relative to the source directory, or absolute, or start with `~/`. A
 missing file is skipped without error, and so is a file that is not `.yaml`,
 `.yml` or `.toml`. If the plain path does not exist, statemate looks for the same
-path with an `#encrypted` suffix and decrypts it, so the config need not change
+path with an `#enc` suffix and decrypts it, so the config need not change
 when you encrypt a var file.
 
 ### `include`
@@ -152,7 +152,7 @@ Splits **packages and variables** across files:
 ```yaml
 include:
   - packages.yaml
-  - .matedata/secrets.yaml#encrypted
+  - .matedata/secrets.yaml#enc
 ```
 
 ```yaml
@@ -168,7 +168,7 @@ ignored. Package lists are appended (duplicates dropped) and variables merged, s
 an include adds to what `mate.yaml` already declares. Where both define the same
 variable, the include wins. A missing include file is skipped.
 
-An included file may be `#encrypted`, and as with `var_files` the suffix is found
+An included file may be `#enc`, and as with `var_files` the suffix is found
 automatically if the plain path does not exist. This is the usual way to keep a
 list of secret-bearing variables in the repository.
 
@@ -181,7 +181,7 @@ profiles:
 ```
 
 Every profile's includes are read when the config loads, including inactive
-profiles. An `#encrypted` include therefore needs a working age identity on every
+profiles. An `#enc` include therefore needs a working age identity on every
 machine, not only on those that use that profile.
 
 ### `ignore`
@@ -406,7 +406,7 @@ every template while the source is active, this `.mate.yaml` included, and win
 over profile variables of the same name. While statemate reads the `include` list,
 variables from the include are still unset and `bitwarden` returns an empty
 string, so a template that loops over an included variable must tolerate it being
-empty. `#encrypted` is not supported here. An included file inside the source is
+empty. `#enc` is not supported here. An included file inside the source is
 deployed like any other file unless it is listed under `ignore`.
 
 ### `targets`

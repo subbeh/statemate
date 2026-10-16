@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -66,6 +67,9 @@ func (d *Discoverer) discoverDir(dir, sourceDir string) (Scripts, error) {
 			return nil
 		}
 
+		if err := CheckScriptName(entry.Name()); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
 		name, freq, timing, template, profile, order := ParseScriptName(entry.Name())
 
 		contentHash, err := state.HashFile(path)

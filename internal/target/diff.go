@@ -121,7 +121,7 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 	// output, destroying the source. The conflict prompt already refuses this;
 	// as an attribute it is a mistake worth naming.
 	if entry.Attrs.Import && entry.Attrs.Template {
-		return nil, fmt.Errorf("%s: #import cannot be combined with #template -- importing would overwrite the template with its rendered output", entry.SourcePath)
+		return nil, fmt.Errorf("%s: #import cannot be combined with #tmpl -- importing would overwrite the template with its rendered output", entry.SourcePath)
 	}
 
 	if entry.Attrs.Symlink {
@@ -293,7 +293,7 @@ func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Chang
 	return change, nil
 }
 
-// computeSymlinkChange compares a #symlink entry by link text. What the link
+// computeSymlinkChange compares a #link entry by link text. What the link
 // points at is irrelevant -- apply copies the link verbatim -- and following it
 // fails outright for a directory or a destination that does not exist.
 func computeSymlinkChange(entry *source.Entry, db *state.DB) (*Change, error) {
@@ -475,7 +475,7 @@ func IsBinaryFile(path string) bool {
 }
 
 func errNoIdentity(entry *source.Entry) error {
-	return fmt.Errorf("%s is #encrypted but no age identity is configured", entry.SourcePath)
+	return fmt.Errorf("%s is #enc but no age identity is configured", entry.SourcePath)
 }
 
 func getRenderedHash(entry *source.Entry, opts *ComputeOpts) (string, error) {

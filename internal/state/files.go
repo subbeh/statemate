@@ -98,7 +98,7 @@ func HashFile(path string) (string, error) {
 }
 
 // HashLink hashes a symlink's own link text rather than whatever it points at.
-// A #symlink entry is up to date as long as the link says the same thing, and
+// A #link entry is up to date as long as the link says the same thing, and
 // its destination may be a directory or not exist at all -- neither of which
 // HashFile can read. The prefix keeps the hash distinct from that of a regular
 // file whose content happens to be the same path.

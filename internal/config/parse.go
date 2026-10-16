@@ -243,7 +243,7 @@ func LoadDirConfigRaw(dir string, render TemplateRenderer) (*DirConfig, error) {
 	}
 	setHookOrigin(cfg.Hooks, dir, false)
 
-	// ponytail: no age identity here, so an #encrypted source include fails; pass the encryptor in if that's needed.
+	// ponytail: no age identity here, so an #enc source include fails; pass the encryptor in if that's needed.
 	src := &Config{sourceDir: dir}
 	for _, f := range cfg.Include {
 		inc, err := src.loadInclude(f, nil)
@@ -345,21 +345,17 @@ func (c *Config) loadIncludes() error {
 
 func (c *Config) loadInclude(f string, dec *encrypt.AgeEncryptor) (*includeFile, error) {
 	path := c.resolveRelPath(f)
-	isEncrypted := strings.HasSuffix(path, "#encrypted")
+	plainPath, isEncrypted := util.TrimEncryptedSuffix(path)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// Try #encrypted variant
-		if !isEncrypted {
-			encPath := path + "#encrypted"
-			if _, err := os.Stat(encPath); err == nil {
-				path = encPath
-				isEncrypted = true
-			} else {
-				return nil, nil
-			}
-		} else {
+		// Try the #enc variant
+		if isEncrypted {
 			return nil, nil
 		}
+		if path = util.EncryptedVariant(path); path == "" {
+			return nil, nil
+		}
+		isEncrypted = true
 	}
 
 	data, err := os.ReadFile(path)
@@ -375,7 +371,7 @@ func (c *Config) loadInclude(f string, dec *encrypt.AgeEncryptor) (*includeFile,
 		if err != nil {
 			return nil, fmt.Errorf("decrypting: %w", err)
 		}
-		path = strings.TrimSuffix(path, "#encrypted")
+		path = plainPath
 	}
 
 	var inc includeFile

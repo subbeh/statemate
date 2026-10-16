@@ -8,11 +8,11 @@ import (
 	"github.com/subbeh/statemate/internal/source"
 )
 
-// mate diff shows a #symlink change as link text. Diffing the destinations
+// mate diff shows a #link change as link text. Diffing the destinations
 // failed for a link to a directory or to a path that does not exist.
 func TestSymlinkDiff(t *testing.T) {
 	dir := t.TempDir()
-	src := filepath.Join(dir, "link#symlink")
+	src := filepath.Join(dir, "link#link")
 	dst := filepath.Join(dir, "link")
 	if err := os.Symlink(dir, src); err != nil {
 		t.Fatal(err)

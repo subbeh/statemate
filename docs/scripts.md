@@ -18,7 +18,7 @@ a source:
 ## Naming
 
 ```
-<order>-<name>.<ext>#<frequency>#<timing>[#template][#profile:<name>]
+<order>-<name>.<ext>#<frequency>#<timing>[#tmpl][#profile:<name>]
 ```
 
 The order prefix is optional and controls execution order. Scripts are sorted by
@@ -31,7 +31,7 @@ README, so keep documentation elsewhere.
 
 ```
 01-setup.sh#once#before
-02-secrets.sh#onchange#before#template
+02-secrets.sh#onchange#before#tmpl
 50-fonts.sh#weekly#after
 99-cleanup.sh#always#after
 bootstrap.sh                          ← manual only
@@ -164,9 +164,9 @@ A failing script aborts the apply.
 
 The parent environment is inherited as well.
 
-### `#template`
+### `#tmpl`
 
-A script marked `#template` is rendered before execution, giving it access to
+A script marked `#tmpl` is rendered before execution, giving it access to
 [variables and secrets](templates.md):
 
 ```bash
@@ -176,7 +176,7 @@ echo "{{ bitwarden "api" "field" "token" }}" > ~/.config/app/token
 ```
 
 The rendered copy is what runs; the script in the repository is left alone. It
-is written to a temporary executable file and run directly, so a `#template`
+is written to a temporary executable file and run directly, so a `#tmpl`
 script **must** start with a shebang.
 
 ## Commands

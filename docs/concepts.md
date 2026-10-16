@@ -43,7 +43,7 @@ every file the first one manages as an orphan. Never run `mate clean --all`
 against a repository other than your usual one.
 
 Two hashes rather than one is what lets statemate tell *which side* of a file
-changed. For a plain file they are identical. For a `#template` or `#encrypted`
+changed. For a plain file they are identical. For a `#tmpl` or `#enc`
 file they differ, because the target holds rendered or decrypted content — and
 comparing the target against the source directly would report every such file as
 permanently modified.
@@ -85,7 +85,7 @@ Conflict: /home/you/.zshrc
 ```
 
 `[i]mport` copies the target's content back into the source. It is not offered for
-`#template` files, whose source is not the deployed content. `[d]iff` shows the
+`#tmpl` files, whose source is not the deployed content. `[d]iff` shows the
 difference and asks again. For files where importing is always the right answer,
 mark them [`#import`](attributes.md#import) and statemate stops asking.
 

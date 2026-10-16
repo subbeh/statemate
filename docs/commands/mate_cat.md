@@ -17,7 +17,7 @@ mate cat <file> [flags]
 ## Examples
 
 ```
-  mate cat ssh/.ssh/config#encrypted
+  mate cat ssh/.ssh/config#enc
   mate cat ~/.config/app/config.yaml
 ```
 

@@ -36,7 +36,7 @@ Add `#perm:600` to anything that holds a secret:
 ```
 restic/
   etc#owner-r:root/
-    restic/password#template#perm:600
+    restic/password#tmpl#perm:600
 ```
 
 Several mappings can share a source:

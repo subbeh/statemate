@@ -239,7 +239,7 @@ func TestAddDirectoryAppliesFlagsToEachFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"one", "nested/two"} {
-		path := filepath.Join(filepath.Dir(cfgPath), "extra", "configs", name+"#profile:work#template")
+		path := filepath.Join(filepath.Dir(cfgPath), "extra", "configs", name+"#profile:work#tmpl")
 		got, err := os.ReadFile(path)
 		if err != nil || string(got) != "{{ .Profile }}\n" {
 			t.Errorf("template %s: content = %q, err = %v", path, got, err)
@@ -400,7 +400,7 @@ func TestAddDirectoryEncrypted(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"one", "nested/two"} {
-		path := filepath.Join(filepath.Dir(cfgPath), "base", "secrets", name+"#encrypted")
+		path := filepath.Join(filepath.Dir(cfgPath), "base", "secrets", name+"#enc")
 		got, err := enc.DecryptFile(path)
 		if err != nil || string(got) != "secret "+name {
 			t.Fatalf("encrypted file %s: %q, %v", path, got, err)

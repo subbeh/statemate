@@ -1,10 +1,10 @@
 # Templates
 
-A file marked [`#template`](attributes.md#template) (or `#tmpl`) is rendered with
+A file marked [`#tmpl`](attributes.md#tmpl) (or `#tmpl`) is rendered with
 Go's [`text/template`](https://pkg.go.dev/text/template) before being deployed.
 
 ```
-gitconfig#template
+gitconfig#tmpl
 ```
 
 ```gotemplate
@@ -21,15 +21,15 @@ gitconfig#template
 Preview the result without applying:
 
 ```bash
-mate eval git/gitconfig#template
-mate eval --profile work git/gitconfig#template
+mate eval git/gitconfig#tmpl
+mate eval --profile work git/gitconfig#tmpl
 ```
 
 Templates are also rendered in:
 
 - a source's [`.mate.yaml`](configuration.md#source-directory-config), including
   its `generate` content
-- scripts marked [`#template`](scripts.md#template)
+- scripts marked [`#tmpl`](scripts.md#tmpl)
 - hook [`run:`](hooks.md#run) commands, which also get `.Files`
 
 The repository's own `mate.yaml`, var files, and include files are **not**
@@ -167,7 +167,7 @@ template file itself is untouched.
 ## Debugging
 
 `mate eval <file>` renders to stdout, which is the fastest way to find a mistake.
-It renders any file you give it, whether or not it is marked `#template`. A
+It renders any file you give it, whether or not it is marked `#tmpl`. A
 template that fails to parse reports the line:
 
 ```

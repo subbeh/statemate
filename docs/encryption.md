@@ -4,7 +4,7 @@ A dotfiles repository is usually public, or at least pushed somewhere you do not
 fully control. statemate keeps secrets out of it in two ways, and both rest on
 one [age](https://age-encryption.org) key:
 
-| | [`#encrypted` files](attributes.md#encrypted) | [Bitwarden references](secrets.md) |
+| | [`#enc` files](attributes.md#enc) | [Bitwarden references](secrets.md) |
 |---|---|---|
 | The repository holds | age ciphertext | only a reference, such as `{{ bitwarden "github" "field" "token" }}` |
 | The value lives | in the repository | in your Bitwarden vault |
@@ -43,7 +43,7 @@ age:
 
 ## 3. Back up the private key
 
-**Without the private key, every `#encrypted` file is unrecoverable.** Store a copy
+**Without the private key, every `#enc` file is unrecoverable.** Store a copy
 somewhere that does not depend on this repository. A password manager works well:
 statemate's author keeps it as a custom field of a Bitwarden item, which is also
 what makes [bootstrapping a new machine](new-machine.md) a single step.
@@ -64,7 +64,7 @@ To use a different key for one run, or on a machine whose config names none, set
 `STATEMATE_KEY_FILE` to its path. It overrides `identity` and `identity_command`:
 
 ```bash
-STATEMATE_KEY_FILE=~/backup/key.txt mate cat ssh/.ssh/config#encrypted
+STATEMATE_KEY_FILE=~/backup/key.txt mate cat ssh/.ssh/config#enc
 ```
 
 ## 4. Encrypt files
@@ -78,7 +78,7 @@ mate add --encrypt ~/.ssh/config
 Or encrypt one that is already managed:
 
 ```bash
-mate encrypt ssh/.ssh/config          # becomes ssh/.ssh/config#encrypted
+mate encrypt ssh/.ssh/config          # becomes ssh/.ssh/config#enc
 ```
 
 The repository now holds armored ciphertext, while `~/.ssh/config` stays plaintext.
@@ -86,17 +86,17 @@ To work with encrypted sources:
 
 ```bash
 mate edit ~/.ssh/config     # decrypt to a temp file, edit, re-encrypt on save
-mate cat ssh/.ssh/config#encrypted
+mate cat ssh/.ssh/config#enc
 mate diff                   # diffs the decrypted content
 ```
 
 To make `git diff` readable too, see
 [Tips: readable diffs](tips.md#readable-diffs-for-encrypted-files).
 
-Renaming a file to `#encrypted` by hand does not encrypt it. `mate doctor` reports
-any `#encrypted` file that holds plaintext, in every source and for every
+Renaming a file to `#enc` by hand does not encrypt it. `mate doctor` reports
+any `#enc` file that holds plaintext, in every source and for every
 profile, so it is caught before the secret is committed. To fix it, remove
-`#encrypted` from the name and run `mate encrypt` on the file.
+`#enc` from the name and run `mate encrypt` on the file.
 
 ### More than one key
 
@@ -105,7 +105,7 @@ Files are encrypted to the recipients at the time they are encrypted, so after
 adding a key, re-encrypt existing files for the new machine to read them:
 
 ```bash
-mate decrypt path/to/file#encrypted && mate encrypt path/to/file
+mate decrypt path/to/file#enc && mate encrypt path/to/file
 ```
 
 One shared key, kept in a password manager, avoids that bookkeeping.
@@ -116,7 +116,7 @@ For values that already live in your vault, reference them from a
 [template](templates.md) instead of committing them at all:
 
 ```gotemplate
-# git/.config/gh/hosts.yml#template
+# git/.config/gh/hosts.yml#tmpl
 github.com:
   oauth_token: {{ bitwarden "github.com" "field" "gh-cli-token" }}
 ```
@@ -168,10 +168,10 @@ the YAML block scalar. See [`generate`](configuration.md#generate).
 | Operation | Needs |
 |-----------|-------|
 | `mate encrypt`, `mate add --encrypt` | `recipients` |
-| Deploying, `mate cat`, `mate eval` on an `#encrypted` file | `identity` or `identity_command` |
-| `mate edit` on an `#encrypted` file | both |
+| Deploying, `mate cat`, `mate eval` on an `#enc` file | `identity` or `identity_command` |
+| `mate edit` on an `#enc` file | both |
 | `mate secrets fetch`, and the secrets cache in general | `identity` or `identity_command`, plus `bw` |
-| Importing into an `#encrypted` source ([`#import`](attributes.md#import)) | `recipients` |
+| Importing into an `#enc` source ([`#import`](attributes.md#import)) | `recipients` |
 
 Without the identity, statemate stops with an error instead of deploying
 ciphertext or writing the secrets cache unencrypted.

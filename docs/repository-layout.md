@@ -16,7 +16,7 @@ and the scripts that set it up.
   mate.yaml
   git/
     .mate.yaml                      ← packages: git, lazygit, gh
-    .config/git/config#template
+    .config/git/config#tmpl
   nvim/
     .mate.yaml                      ← packages: neovim, tree-sitter-cli
     .config/nvim/init.lua
@@ -146,7 +146,7 @@ only changes attributes is fine: `mate status` shows no change.
 Two changes need a command, because they touch more than the name:
 
 ```bash
-mate encrypt ssh/.ssh/config             # adds #encrypted and encrypts the content
-mate decrypt ssh/.ssh/config#encrypted   # removes it and decrypts the content
+mate encrypt ssh/.ssh/config             # adds #enc and encrypts the content
+mate decrypt ssh/.ssh/config#enc   # removes it and decrypts the content
 mate rename  zsh/.zshrc .zshrc.local     # renames the deployed file too
 ```

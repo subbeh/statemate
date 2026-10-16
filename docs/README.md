@@ -8,8 +8,8 @@ makes it so.
 ~/dotfiles/
   mate.yaml                          sources, profiles, packages, hooks
   zsh/.zshrc                      →  ~/.zshrc
-  git/.config/git/config#template →  ~/.config/git/config, rendered per machine
-  ssh/.ssh/config#encrypted       →  ~/.ssh/config, decrypted
+  git/.config/git/config#tmpl →  ~/.config/git/config, rendered per machine
+  ssh/.ssh/config#enc       →  ~/.ssh/config, decrypted
   arch/etc#owner-r:root/keyd/…    →  /etc/keyd/…, owned by root
   nvim/.mate.yaml                    packages: { common: [neovim] }
   nvim/.matescripts/
@@ -55,7 +55,7 @@ makes it so.
 | Reference | Contents |
 |-----------|----------|
 | [Configuration](configuration.md) | `mate.yaml`, `.mate.yaml`, profiles, local overrides |
-| [File Attributes](attributes.md) | `#template`, `#encrypted`, `#import`, `#perm:`, and the rest |
+| [File Attributes](attributes.md) | `#tmpl`, `#enc`, `#import`, `#perm:`, and the rest |
 | [Templates](templates.md) | Variables and functions available when rendering |
 | [Secrets](secrets.md) | Bitwarden references and the encrypted cache |
 | [Scripts](scripts.md) | Lifecycle scripts, frequency, timing |

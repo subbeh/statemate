@@ -18,3 +18,18 @@ func ShortenPath(path string) string {
 	}
 	return path
 }
+
+// EncryptedVariant returns path#enc when that file exists, so an encrypted file
+// can be named without its suffix, or "" when there is none.
+func EncryptedVariant(path string) string {
+	if _, err := os.Stat(path + "#enc"); err == nil {
+		return path + "#enc"
+	}
+	return ""
+}
+
+// TrimEncryptedSuffix strips a trailing #enc from path and reports whether there
+// was one.
+func TrimEncryptedSuffix(path string) (string, bool) {
+	return strings.CutSuffix(path, "#enc")
+}

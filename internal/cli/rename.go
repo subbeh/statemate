@@ -25,15 +25,15 @@ This renames the source file, the target file, and updates tracking.
 Attributes belong to the source file only; the target is always named
 without them. If <new-name> has no attributes, the source keeps the ones it
 already has. If it has any, they replace the source's attributes, so give the
-full set. #encrypted cannot be added or dropped this way, since that would
+full set. #enc cannot be added or dropped this way, since that would
 not change the content: use 'mate encrypt' or 'mate decrypt'.
 
 Hooks matching the old or the new target path run afterwards, with a
 confirmation prompt (see 'mate hooks').`,
 	Example: `  mate rename nvim/init.lua init.vim
   mate rename zsh/.zshrc .zshrc.bak
-  mate rename git/.gitconfig#template .gitconfig.local
-      (source becomes .gitconfig.local#template, target .gitconfig.local)
+  mate rename git/.gitconfig#tmpl .gitconfig.local
+      (source becomes .gitconfig.local#tmpl, target .gitconfig.local)
   mate rename ssh/.ssh/config config#perm:600
       (changes only the attributes; the target keeps its name)`,
 	Args:              cobra.ExactArgs(2),
@@ -130,7 +130,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("updating database: %w", err)
 		}
 
-		// A #symlink is tracked by its link text, as status compares it.
+		// A #link is tracked by its link text, as status compares it.
 		hashFn := state.HashFile
 		if entry.Attrs.Symlink {
 			hashFn = state.HashLink
@@ -191,7 +191,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 // a template or encrypted file into an ordinary one; a newName with attributes
 // replaces them.
 //
-// #encrypted describes the content rather than how it is deployed, so it can
+// #enc describes the content rather than how it is deployed, so it can
 // only be changed by mate encrypt and mate decrypt, which convert the content
 // to match.
 func renamedNames(sourceName, newName string) (newSourceName, newTargetName string, err error) {
@@ -211,9 +211,9 @@ func renamedNames(sourceName, newName string) (newSourceName, newTargetName stri
 
 	if newAttrs.Encrypted != oldAttrs.Encrypted {
 		if oldAttrs.Encrypted {
-			return "", "", fmt.Errorf("%s drops #encrypted from %s: use 'mate decrypt' to decrypt it", newName, sourceName)
+			return "", "", fmt.Errorf("%s drops #enc from %s: use 'mate decrypt' to decrypt it", newName, sourceName)
 		}
-		return "", "", fmt.Errorf("%s adds #encrypted to %s: use 'mate encrypt' to encrypt it", newName, sourceName)
+		return "", "", fmt.Errorf("%s adds #enc to %s: use 'mate encrypt' to encrypt it", newName, sourceName)
 	}
 
 	return newSourceName, newBase, nil

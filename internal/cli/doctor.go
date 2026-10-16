@@ -18,7 +18,7 @@ var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check configuration and dependencies",
 	Long: `Check that the configuration loads and validates, that every source directory
-exists, that every active hook matches some managed file, that every #encrypted
+exists, that every active hook matches some managed file, that every #enc
 file in any source really is age-encrypted, that the age identity and
 recipients work, and which package managers are available.
 
@@ -154,7 +154,7 @@ func checkHooks(cmd *cobra.Command) int {
 // matters is whether the identity loads and both halves are present.
 func ageStatus(cfg *config.Config) (level, msg string) {
 	if cfg.Age == nil || (cfg.Age.Identity == "" && cfg.Age.IdentityCommand == "" && len(cfg.Age.Recipients) == 0) {
-		return "OK", "age: not configured (no #encrypted files or secrets cache)"
+		return "OK", "age: not configured (no #enc files or secrets cache)"
 	}
 	enc, err := encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
 	if err != nil {
@@ -162,14 +162,14 @@ func ageStatus(cfg *config.Config) (level, msg string) {
 	}
 	switch {
 	case !enc.CanDecrypt():
-		return "WARN", "age: recipients but no identity (#encrypted files cannot be deployed, secrets cannot be fetched)"
+		return "WARN", "age: recipients but no identity (#enc files cannot be deployed, secrets cannot be fetched)"
 	case !enc.CanEncrypt():
 		return "WARN", "age: identity but no recipients (files cannot be encrypted)"
 	}
 	return "OK", "age: identity and recipients"
 }
 
-// checkEncrypted reports #encrypted files whose content is not age-encrypted,
+// checkEncrypted reports #enc files whose content is not age-encrypted,
 // meaning the plaintext is committed. It covers every source of every profile,
 // since a plaintext secret is committed no matter which machine it is for, and it
 // needs no identity: the age header is enough.
@@ -201,10 +201,10 @@ func checkEncrypted(cfg *config.Config) int {
 	fmt.Println()
 	fmt.Println("Encrypted files:")
 	for _, p := range plain {
-		fmt.Printf("[ERROR] %s is marked #encrypted but is not encrypted\n", util.ShortenPath(p))
+		fmt.Printf("[ERROR] %s is marked #enc but is not encrypted\n", util.ShortenPath(p))
 	}
 	if len(plain) == 0 {
-		fmt.Printf("[OK] %d #encrypted file(s) encrypted\n", checked)
+		fmt.Printf("[OK] %d #enc file(s) encrypted\n", checked)
 	}
 	return len(plain)
 }

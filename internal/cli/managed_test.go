@@ -41,19 +41,19 @@ func managedFilterEnv(t *testing.T) (targetDir string, ssh, git *source.Entry) {
 	if err := os.MkdirAll(sshSrcDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(sshSrcDir, "config#encrypted"), []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(sshSrcDir, "config#enc"), []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	ssh = &source.Entry{
-		SourcePath: filepath.Join(sshSrcDir, "config#encrypted"),
+		SourcePath: filepath.Join(sshSrcDir, "config#enc"),
 		TargetPath: filepath.Join(targetDir, ".ssh", "config"),
-		RelPath:    ".ssh/config#encrypted",
+		RelPath:    ".ssh/config#enc",
 	}
 	git = &source.Entry{
-		SourcePath: filepath.Join(repo, "git", ".config", "git", "config#template"),
+		SourcePath: filepath.Join(repo, "git", ".config", "git", "config#tmpl"),
 		TargetPath: filepath.Join(targetDir, ".config", "git", "config"),
-		RelPath:    ".config/git/config#template",
+		RelPath:    ".config/git/config#tmpl",
 	}
 	return targetDir, ssh, git
 }
@@ -62,10 +62,10 @@ func TestManagedFilter_AbsolutePathMatchesExactlyOne(t *testing.T) {
 	targetDir, ssh, git := managedFilterEnv(t)
 	filter := filepath.Join(targetDir, ".ssh", "config")
 
-	if !matchesManagedFilter(ssh, "ssh/.ssh/config#encrypted", filter) {
+	if !matchesManagedFilter(ssh, "ssh/.ssh/config#enc", filter) {
 		t.Error("absolute target path should match its own entry")
 	}
-	if matchesManagedFilter(git, "git/.config/git/config#template", filter) {
+	if matchesManagedFilter(git, "git/.config/git/config#tmpl", filter) {
 		t.Error("absolute target path must not match a different file with the same basename")
 	}
 }
@@ -80,10 +80,10 @@ func TestManagedFilter_BareNameResolvesAgainstCwd(t *testing.T) {
 	}
 
 	// "config" exists in cwd, so it is an exact path -- not a name fragment.
-	if !matchesManagedFilter(ssh, "ssh/.ssh/config#encrypted", "config") {
+	if !matchesManagedFilter(ssh, "ssh/.ssh/config#enc", "config") {
 		t.Error("bare name should match the file in the current directory")
 	}
-	if matchesManagedFilter(git, "git/.config/git/config#template", "config") {
+	if matchesManagedFilter(git, "git/.config/git/config#tmpl", "config") {
 		t.Error("bare name resolved to a real path must not also match other basenames")
 	}
 }
@@ -99,10 +99,10 @@ func TestManagedFilter_BareNameFallsBackToLooseMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !matchesManagedFilter(ssh, "ssh/.ssh/config#encrypted", "config") {
+	if !matchesManagedFilter(ssh, "ssh/.ssh/config#enc", "config") {
 		t.Error("expected loose match for ssh entry")
 	}
-	if !matchesManagedFilter(git, "git/.config/git/config#template", "config") {
+	if !matchesManagedFilter(git, "git/.config/git/config#tmpl", "config") {
 		t.Error("expected loose match for git entry")
 	}
 }
@@ -116,10 +116,10 @@ func TestManagedFilter_SourceNameStillFiltersLoosely(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !matchesManagedFilter(ssh, "ssh/.ssh/config#encrypted", "ssh") {
+	if !matchesManagedFilter(ssh, "ssh/.ssh/config#enc", "ssh") {
 		t.Error("source name should match entries in that source")
 	}
-	if matchesManagedFilter(git, "git/.config/git/config#template", "ssh") {
+	if matchesManagedFilter(git, "git/.config/git/config#tmpl", "ssh") {
 		t.Error("source name should not match an unrelated source")
 	}
 }
@@ -128,7 +128,7 @@ func TestManagedFilter_SourcePathMatches(t *testing.T) {
 	_, ssh, _ := managedFilterEnv(t)
 
 	// The absolute source path is also an unambiguous lookup.
-	if !matchesManagedFilter(ssh, "ssh/.ssh/config#encrypted", ssh.SourcePath) {
+	if !matchesManagedFilter(ssh, "ssh/.ssh/config#enc", ssh.SourcePath) {
 		t.Error("absolute source path should match its entry")
 	}
 }
@@ -152,7 +152,7 @@ func TestFormatAttrsListsEveryAttribute(t *testing.T) {
 
 	for _, want := range []string{
 		"profile:work", "perm:0600", "owner:root", "group:wheel",
-		"encrypted", "template", "symlink", "import",
+		"enc", "tmpl", "link", "import",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("formatAttrs() = %q, missing %q", got, want)
