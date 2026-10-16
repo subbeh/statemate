@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A source's `.mate.yaml` accepts `include`, like `mate.yaml`. Included packages count as that source's packages, and included variables are available to every template while the source is active, including the `.mate.yaml` itself. Paths are relative to the source directory. Previously the key was silently ignored
 
 ### Changed
-- The Homebrew package is now a cask instead of a formula. `brew install subbeh/tap/statemate` works as before, and existing formula installs are moved to the cask on `brew upgrade`
+- The Homebrew package is now a cask instead of a formula. `brew install subbeh/tap/statemate` works as before. `brew update` migrates an existing formula install, but Homebrew 7 only installs a trusted cask, so if it reports that the migration target is not trusted, run `brew uninstall --formula statemate`, `brew trust --cask subbeh/tap/statemate` and `brew install --cask subbeh/tap/statemate`
 - `mate apply` now lists the files it is about to change and asks for confirmation before doing anything. Pass `--noconfirm` to skip the prompt (`--force` and `--dry-run` skip it too). Without a terminal the apply stops, so unattended runs must pass `--noconfirm` or `--force`
 - `mate clean`, `mate delete` and `mate packages apply` accept `--noconfirm` as well, as an alias for their `--force` / `--yes` flag, so the same flag skips prompts on every command that asks
 - Pressing Enter at a script or hook prompt (`[Y]es / [n]o / [a]ll / [q]uit`) now runs it, as `y` does. Before, Enter was ignored and the prompt waited for a letter
