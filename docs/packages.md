@@ -46,8 +46,8 @@ name or bare, and both are recognised as installed:
 ```yaml
 packages:
   brew:
-    - jamf/internal-tap/hermes    # fully qualified
-    - hermes                      # equivalent for an installed formula
+    - hashicorp/tap/terraform   # fully qualified
+    - terraform                 # equivalent for an installed formula
 ```
 
 Prefer the qualified form: `brew install` needs it to find a formula that is not

@@ -242,7 +242,7 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 			}
 
 			// Compare on the unqualified name as well. brew reports a tap formula
-			// as jamf/internal-tap/hermes here but hermes elsewhere, so matching
+			// as hashicorp/tap/terraform here but terraform elsewhere, so matching
 			// only the exact string would list a declared package as an extra.
 			wantedShort := make(map[string]bool, len(wantedMap))
 			for name := range wantedMap {

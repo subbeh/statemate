@@ -29,8 +29,8 @@ func (b *BrewManager) IsAvailable() bool {
 // carry a tap prefix.
 //
 // Homebrew is inconsistent about which form it prints: `brew list --formula`
-// reports a tap formula by its bare name (hermes), while `brew leaves` reports the
-// fully-qualified one (jamf/internal-tap/hermes). Users may declare either. Index
+// reports a tap formula by its bare name (terraform), while `brew leaves` reports the
+// fully-qualified one (hashicorp/tap/terraform). Users may declare either. Index
 // both spellings so any combination matches, rather than reporting an installed
 // package as missing and reinstalling it on every apply.
 type brewIndex struct {
@@ -269,8 +269,8 @@ func (b *BrewManager) Describe(pkgs []string) (Descriptions, error) {
 // parseBrewDescriptions maps `brew info --json=v2` output to descriptions keyed by
 // every name the package answers to.
 //
-// brew reports a tap formula as name=hermes with
-// full_name=jamf/internal-tap/hermes, and a package may be declared either way, so
+// brew reports a tap formula as name=terraform with
+// full_name=hashicorp/tap/terraform, and a package may be declared either way, so
 // keying on only one spelling leaves tap packages with a blank description.
 //
 // A package brew knows but has no description for (desc is null, common for font
