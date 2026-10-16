@@ -85,6 +85,10 @@ built from [`docs/`](docs/README.md):
 
 `mate <command> --help` gives the same reference in the terminal.
 
+For a complete setup to borrow from, with profiles for macOS and Arch Linux,
+encrypted files, Bitwarden secrets, scripts and hooks, see the author's
+[dotfiles](https://github.com/subbeh/dotfiles).
+
 ## Configuration at a glance
 
 ```yaml
