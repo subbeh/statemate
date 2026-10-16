@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-17
+
 ### Added
 - `mate doctor` reports `#encrypted` files that are not actually encrypted, in every source and for every profile, so a plaintext secret is caught before it is committed
 - `STATEMATE_KEY_FILE` sets the path to the age private key, overriding `age.identity` and `age.identity_command` in `mate.yaml` and the local config
