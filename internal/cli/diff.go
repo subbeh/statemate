@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -196,7 +197,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("=== %s ===\n", util.ShortenPath(change.Entry.TargetPath))
 		if err != nil {
-			if strings.Contains(err.Error(), "secret not cached") {
+			if errors.As(err, new(*secrets.NotCachedError)) {
 				fmt.Fprintf(os.Stderr, "  (secrets not cached, run 'mate secrets fetch')\n")
 			} else {
 				return fmt.Errorf("generating diff for %s: %w", util.ShortenPath(change.Entry.TargetPath), err)

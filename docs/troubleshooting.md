@@ -109,8 +109,8 @@ that does not parse.
 
 ### `secrets not configured (run 'mate secrets fetch')` / `secret not cached`
 
-A template uses `bitwarden`, and the cache does not have the value yet. Run
-`mate secrets fetch`. `mate apply` fetches missing secrets itself, but `mate
+A template uses `bitwarden`, and the cache does not have the value yet. The error
+names the secret as `bitwarden:<item>:<type>:<field>`. Run `mate secrets fetch`. `mate apply` fetches missing secrets itself, but `mate
 eval`, `status` and `diff` only read the cache.
 
 ### `not logged in to Bitwarden. Run: bw login`

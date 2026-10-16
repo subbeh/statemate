@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pressing Enter at a script or hook prompt (`[Y]es / [n]o / [a]ll / [q]uit`) now runs it, as `y` does. Before, Enter was ignored and the prompt waited for a letter
 
 ### Fixed
+- A secret missing from the cache, or a cache that was never fetched, now fails with just `secret not cached: bitwarden:<item>:<type>:<field> (run 'mate secrets fetch')` instead of an error buried under the source path, template position and function call. A missing age identity is reported the same way
 - An `#onchange` script that fails is offered again on the next `mate apply` and shown as pending by `mate status`, until it succeeds or is marked done. Before, an `#after` script that failed was never retried, because the changes that triggered it had already been applied
 - Hook match patterns now ignore source attributes such as `#template`, `#encrypted`, and `#perm:600` on files and directories, so patterns copied from source filenames match their deployed target paths
 - `mate profile`'s `Sources:` list is now sorted alphabetically. It used to list the global `sources:` first and then each profile's own `sources:` appended in inheritance order, so e.g. profile-only sources appeared out of order at the end, making it easy to miss that one was actually included
