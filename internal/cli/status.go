@@ -29,8 +29,8 @@ var statusCmd = &cobra.Command{
 	Long: `Show pending changes that would be made on apply.
 
 Reports files to be created, modified, or in conflict, plus orphaned files,
-missing packages, pending scripts, the hooks the changes would trigger, and
-secrets that need fetching.
+missing packages, pending scripts, the hooks the changes would trigger or that
+an earlier apply left pending, and secrets that need fetching.
 
 An empty directory in a source -- one with no files under it -- is reported until
 it exists on the target. Directories that hold files are not listed separately;
@@ -235,7 +235,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			written = append(written, c.Entry)
 		}
 	}
-	pendingHooks := hookSet.Trigger(hookChanges(written, sourcePaths), profileChain)
+	// Plus the hooks an earlier apply triggered but did not run.
+	leftPending, err := db.PendingHooks()
+	if err != nil {
+		return fmt.Errorf("reading pending hooks: %w", err)
+	}
+	pendingHooks := hookSet.WithPending(hookSet.Trigger(hookChanges(written, sourcePaths), profileChain), leftPending, profileChain)
 
 	short, _ := cmd.Flags().GetBool("short")
 	if short {

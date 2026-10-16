@@ -45,7 +45,9 @@ skipped with a warning.
 
 Hooks run for the files this apply wrote, after packages and before #after
 scripts, and are confirmed the same way (without [s]kip). A failed hook does
-not stop the others, but the apply exits non-zero. See 'mate hooks'.
+not stop the others, but the apply exits non-zero. A hook that did not run, or
+failed, stays pending and is offered again on the next apply; [n]o settles it.
+See 'mate hooks'.
 
 Missing secrets are fetched before anything is written, and missing packages
 are offered for install after the files are written.

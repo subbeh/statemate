@@ -52,6 +52,8 @@ type Result struct {
 	SkippedNoTTY []string
 	// Declined lists hooks the user answered [n]o to.
 	Declined []string
+	// Done lists hooks that ran successfully. Dry runs leave it empty.
+	Done []string
 }
 
 // Err summarises the failures, or returns nil when there were none.
@@ -121,6 +123,7 @@ func (r *Runner) Run(triggered []*Triggered) (*Result, error) {
 			continue
 		}
 		res.Ran++
+		res.Done = append(res.Done, t.Name)
 	}
 	return res, nil
 }

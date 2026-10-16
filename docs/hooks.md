@@ -209,16 +209,32 @@ Run hook keyd (2 files)?
 - `--force` confirms without asking. `--no-scripts` skips hooks too.
 - Without a terminal, hooks are skipped with a warning.
 
-Declining is not remembered. Once the files are written they are unchanged, so
-the hook will not trigger on the next apply; run it with `mate hooks run <name>`.
-`mate delete` and `mate clean` confirm hooks unless `--force` (or `--noconfirm`) is given, and
-`mate rename` always asks.
+## Pending hooks
+
+Once the files are written they are unchanged, so a hook would not trigger again
+on its own. `mate apply` therefore records a triggered hook as pending as soon as
+its files are written, and keeps it pending until it runs. A pending hook:
+
+- is offered again on the next `mate apply`, even when no file changed, with the
+  files from both runs in `.Files`
+- is listed under "Pending hooks" by `mate status`
+- is settled by running it with `mate hooks run <name>`
+
+A hook stays pending when the apply was stopped before it ran (`[q]uit`, Ctrl-C,
+a package prompt quit), when it was skipped for want of a terminal or by
+`--no-scripts`, and when it failed. Answering `[n]o` settles it: declining is not
+remembered, so run it later with `mate hooks run <name>`.
+
+Only `mate apply` records pending hooks. `mate delete` and `mate clean` confirm
+hooks unless `--force` (or `--noconfirm`) is given, and `mate rename` always
+asks.
 
 ## Failure
 
 A failing step stops its hook; the remaining steps are skipped. Other hooks and
-the `#after` scripts still run, and the command exits non-zero. A failed hook is
-not retried on the next apply.
+the `#after` scripts still run, and the command exits non-zero. Under
+`mate apply`, a failed hook stays [pending](#pending-hooks) and is offered again
+on the next apply.
 
 ## Checking
 

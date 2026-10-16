@@ -7,7 +7,8 @@ Run a hook
 Run a hook manually, ignoring its patterns.
 
 There is no confirmation prompt, and no files triggered the run, so
-STATEMATE_HOOK_FILES and .Files are empty.
+STATEMATE_HOOK_FILES and .Files are empty. A successful run settles a hook that
+mate apply left pending.
 
 ```
 mate hooks run <name> [flags]

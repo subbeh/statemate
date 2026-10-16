@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pressing Enter at a script or hook prompt (`[Y]es / [n]o / [a]ll / [q]uit`) now runs it, as `y` does. Before, Enter was ignored and the prompt waited for a letter
 
 ### Fixed
+- A hook whose files `mate apply` wrote is no longer lost when the apply stops before the hook runs (Ctrl-C, `[q]uit`, a quit package prompt), the hook is skipped for lack of a terminal or by `--no-scripts`, or it fails. The hook stays pending: `mate status` lists it and the next `mate apply` offers it again, even when no file changed. Answering `[n]o` or running it with `mate hooks run` settles it
 - `mate apply`, `mate status` and `mate diff` now tab-complete only files with pending changes, and the directories that hold them. Before, they offered every managed file, including files belonging to other profiles
 - A directory given relative to the current directory now scopes `mate apply`, `status` and `diff`: `mate apply .config/nvim` run in `~` covers everything under `~/.config/nvim`. Before, it matched no files
 - A secret missing from the cache, or a cache that was never fetched, now fails with just `secret not cached: bitwarden:<item>:<type>:<field> (run 'mate secrets fetch')` instead of an error buried under the source path, template position and function call. A missing age identity is reported the same way

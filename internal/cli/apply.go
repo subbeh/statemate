@@ -59,7 +59,9 @@ skipped with a warning.
 
 Hooks run for the files this apply wrote, after packages and before #after
 scripts, and are confirmed the same way (without [s]kip). A failed hook does
-not stop the others, but the apply exits non-zero. See 'mate hooks'.
+not stop the others, but the apply exits non-zero. A hook that did not run, or
+failed, stays pending and is offered again on the next apply; [n]o settles it.
+See 'mate hooks'.
 
 Missing secrets are fetched before anything is written, and missing packages
 are offered for install after the files are written.
@@ -284,6 +286,23 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// The files are written now, so the hooks they trigger will not trigger
+	// again. Record them as pending before anything else can stop the apply --
+	// a package prompt, a hook prompt, Ctrl-C -- and offer the hooks an earlier
+	// apply left pending alongside them.
+	pendingHooks, err := db.PendingHooks()
+	if err != nil {
+		return fmt.Errorf("reading pending hooks: %w", err)
+	}
+	triggered := hookSet.WithPending(hookSet.Trigger(hookChanges(result.Written, allSourcePaths), profileChain), pendingHooks, profileChain)
+	if !dryRun {
+		for _, t := range triggered {
+			if err := db.SetPendingHook(t.Name, t.Files); err != nil {
+				return fmt.Errorf("recording pending hook %s: %w", t.Name, err)
+			}
+		}
+	}
+
 	if err := promptMissingPackages(cfg, profileName, sourcePaths, tmplCtx, dryRun, force, scope); err != nil {
 		return err
 	}
@@ -295,7 +314,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 		NoScripts:    noScripts,
 		ProfileChain: profileChain,
 	})
-	hookRes, err := runTriggeredHooks(hookRunner, hookSet, hookChanges(result.Written, allSourcePaths), profileChain, verbose > 0 || dryRun)
+	hookDB := db
+	if dryRun {
+		hookDB = nil // a dry run neither records nor clears pending hooks
+	}
+	hookRes, err := runTriggeredHooks(hookRunner, triggered, hookDB, verbose > 0 || dryRun)
 	if err != nil {
 		return err
 	}

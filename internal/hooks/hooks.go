@@ -5,6 +5,7 @@ package hooks
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	texttemplate "text/template"
@@ -213,6 +214,41 @@ func (s Set) Trigger(changes []Change, profileChain []string) []*Triggered {
 		sort.Strings(files)
 		out = append(out, &Triggered{Hook: h, Files: files})
 	}
+	return out
+}
+
+// WithPending adds the hooks an earlier apply triggered but did not finish,
+// merging their files into any this run triggered too, and returns the result in
+// name order. A pending hook that no longer exists, is disabled, or is not active
+// for the profile is left out.
+func (s Set) WithPending(triggered []*Triggered, pending map[string][]string, profileChain []string) []*Triggered {
+	byName := make(map[string]*Triggered, len(triggered))
+	for _, t := range triggered {
+		byName[t.Name] = t
+	}
+	for name, files := range pending {
+		h := s.Get(name)
+		if h == nil || !h.IsEnabled() || !h.ActiveFor(profileChain) {
+			continue
+		}
+		t := byName[name]
+		if t == nil {
+			t = &Triggered{Hook: h}
+			byName[name] = t
+		}
+		for _, f := range files {
+			if !slices.Contains(t.Files, f) {
+				t.Files = append(t.Files, f)
+			}
+		}
+		sort.Strings(t.Files)
+	}
+
+	out := make([]*Triggered, 0, len(byName))
+	for _, t := range byName {
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 

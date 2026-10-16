@@ -295,3 +295,41 @@ func TestRunNoScriptsAndNoTTY(t *testing.T) {
 		t.Errorf("dry run should report without running, got %+v, %v", res, err)
 	}
 }
+
+// Hooks left pending by an earlier apply join the triggered ones, with their
+// files merged; pending hooks that are gone, disabled or inactive are dropped.
+func TestWithPending(t *testing.T) {
+	disabled := false
+	cfg := &config.Config{Hooks: map[string]*config.Hook{
+		"a-new":  hook("/etc", config.HookStep{Run: "true"}),
+		"b-both": hook("/etc", config.HookStep{Run: "true"}),
+		"c-old":  hook("/etc", config.HookStep{Run: "true"}),
+		"off":    {Match: config.StringList{"/etc"}, Enabled: &disabled},
+		"arch":   {Match: config.StringList{"/etc"}, Do: []config.HookStep{{Run: "true"}}, Profile: "arch"},
+	}}
+	set, err := Collect(cfg, nil, func(string) *config.DirConfig { return nil }, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	triggered := []*Triggered{
+		{Hook: set.Get("a-new"), Files: []string{"/etc/a"}},
+		{Hook: set.Get("b-both"), Files: []string{"/etc/b2"}},
+	}
+	pending := map[string][]string{
+		"b-both": {"/etc/b1", "/etc/b2"},
+		"c-old":  {"/etc/c"},
+		"off":    {"/etc/x"},
+		"arch":   {"/etc/x"},
+		"gone":   {"/etc/x"},
+	}
+
+	var got []string
+	for _, tr := range set.WithPending(triggered, pending, []string{"base"}) {
+		got = append(got, tr.Name+"="+strings.Join(tr.Files, ","))
+	}
+	want := "a-new=/etc/a b-both=/etc/b1,/etc/b2 c-old=/etc/c"
+	if strings.Join(got, " ") != want {
+		t.Errorf("got %q, want %q", strings.Join(got, " "), want)
+	}
+}
