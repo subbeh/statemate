@@ -73,6 +73,7 @@ built from [`docs/`](docs/README.md):
 |-------|----------|
 | [Getting Started](docs/getting-started.md) | Install, create a repository, add your first file |
 | [Concepts](docs/concepts.md) | Sources, targets, state, and how a change is detected |
+| [Comparison](docs/comparison.md) | statemate next to chezmoi, yadm, GNU Stow, and dotbot |
 | [How-to guides](docs/README.md#how-to-guides) | Repository layout, multiple machines, encryption, system files, new machines, tips |
 | [Configuration](docs/configuration.md) | `mate.yaml`, `.mate.yaml`, profiles, local overrides |
 | [File Attributes](docs/attributes.md) | Every `#` suffix and what it does |

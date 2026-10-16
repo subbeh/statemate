@@ -37,6 +37,7 @@ makes it so.
 |-------|----------|
 | [Getting Started](getting-started.md) | Install, create a repository, add your first file, set up a second machine |
 | [Concepts](concepts.md) | Sources, targets, state, and how a change is detected |
+| [Comparison](comparison.md) | statemate next to chezmoi, yadm, GNU Stow, and dotbot |
 
 ## How-to guides
 
