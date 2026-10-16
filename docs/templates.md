@@ -59,8 +59,7 @@ values inside a block scalar, which need [`indent`](#statemates-own).
 1. [`variables`](configuration.md#keys), and variables from
    [`include`](configuration.md#include) files
 2. [`var_files`](configuration.md#var_files), in order
-3. [`variable_commands`](configuration.md#variable_commands)
-4. profile `variables`, parent first, so the active profile wins
+3. profile `variables`, parent first, so the active profile wins
 
 Each layer replaces top-level keys rather than merging into them: a profile that
 sets `color:` replaces the whole `color` map, not just the keys it names.
@@ -129,8 +128,9 @@ These take precedence over sprig where a name collides.
 {{ var "some-key-with-dashes" }}
 ```
 
-`cmd` returns an empty string if the command fails, so use `required` around it
-when the value matters.
+`cmd` fails rendering if the command exits non-zero, showing its stderr. Append
+`|| true` to the command to accept a failure and get its output, possibly empty.
+A variable can hold a `cmd` call too — see [variables](configuration.md#variables).
 
 `indent` is written for embedding a block inside structured output:
 

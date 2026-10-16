@@ -50,9 +50,7 @@ age:
 
 variables:
   email: "you@example.com"
-
-variable_commands:
-  gpg_key: "gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}'"
+  gpg_key: '{{ cmd "gpg --list-secret-keys --with-colons | awk -F: ''/^fpr/{print $10; exit}''" }}'
 
 var_files:
   - .matedata/secrets.yaml
@@ -86,8 +84,7 @@ secrets_cache: "~/.local/state/statemate/secrets.age"
 | `editor` | string | Editor for `mate edit`, with any arguments (`code --wait`). Overrides `$VISUAL` and `$EDITOR`; falls back to `vi` |
 | `diff_tool` | string | External diff tool for `mate diff`, with any arguments. Run as `<tool> <old> <new>` |
 | `age` | map | Encryption settings — see [age](#age) |
-| `variables` | map | Values available to templates as `.Vars` |
-| `variable_commands` | map | Variables whose values come from shell commands, run at load |
+| `variables` | map | Values available to templates as `.Vars`. Values may be templates — see [variables](#variables) |
 | `var_files` | list | YAML/TOML files to load variables from |
 | `packages` | map | Packages to install — see [Packages](packages.md) |
 | `hooks` | map | Commands to run when matching files change — see [Hooks](hooks.md) |
@@ -117,18 +114,28 @@ key that needs to read them. SSH keys are not supported as recipients.
 
 [Encryption](encryption.md) walks through creating a key and storing it.
 
-### `variable_commands`
+### `variables`
 
-Runs a shell command and stores its trimmed output as a variable:
+A variable's value may be a template, which is how a value comes from a shell
+command:
 
 ```yaml
-variable_commands:
-  hostname_short: "hostname -s"
-  gpg_key: "gpg --card-status | awk '/Signature key/{print $NF}'"
+variables:
+  hostname_short: '{{ cmd "hostname -s" }}'
+  gpg_keys:
+    - '{{ cmd "gpg --card-status | awk ''/Signature key/{print $NF}''" }}'
 ```
 
-Each command runs through `sh -c` whenever templates are rendered, which is most
-commands, so keep them fast. A failing command aborts the command you ran.
+Quote the value: an unquoted `{` starts a YAML map. Any string containing `{{` is
+rendered, including list items and nested keys, and so are the values from
+`include`, `var_files` and profile `variables`. All the
+[template functions](templates.md#functions) and variables such as `.OS` and
+`.Hostname` are available, except `bitwarden`. `.Vars` holds the unrendered
+values, so one templated variable cannot use another's result.
+
+Variables render whenever templates do, which is most commands, so keep commands
+fast. A failing `cmd` aborts the command you ran. To keep a literal `{{` in a
+value, write `{{ "{{" }}`.
 
 ### `var_files`
 
@@ -314,7 +321,7 @@ looks for `mate.yaml` in the current directory.
 
 Only a subset of keys is honoured here: `sources`, `default_source`,
 `target_base`, `profile`, `editor`, `age`, `variables`, `var_files`,
-`variable_commands`, `packages`, `profiles`, `diff_tool`, and `hooks`. Others,
+`packages`, `profiles`, `diff_tool`, and `hooks`. Others,
 including `include`, `ignore`, `aur_helper` and `secrets_cache`, are ignored.
 
 Each key **replaces** the repository's value; nothing is merged. A local

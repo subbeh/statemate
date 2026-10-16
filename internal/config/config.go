@@ -13,7 +13,6 @@ type Config struct {
 	Age           *AgeConfig          `yaml:"age" toml:"age"`
 	Variables     map[string]any      `yaml:"variables" toml:"variables"`
 	VarFiles      []string            `yaml:"var_files" toml:"var_files"`
-	VarCmds       map[string]string   `yaml:"variable_commands" toml:"variable_commands"`
 	Packages     *PackageList `yaml:"packages" toml:"packages"`
 	Include      []string     `yaml:"include" toml:"include"`
 	Ignore       []string     `yaml:"ignore" toml:"ignore"`
@@ -52,9 +51,6 @@ func (c *Config) ApplyOverrides(override *Config) {
 	}
 	if len(override.VarFiles) > 0 {
 		c.VarFiles = override.VarFiles
-	}
-	if override.VarCmds != nil {
-		c.VarCmds = override.VarCmds
 	}
 	if override.Packages != nil {
 		c.Packages = override.Packages

@@ -304,9 +304,6 @@ func (c *Config) setDefaults() error {
 	if c.Variables == nil {
 		c.Variables = make(map[string]any)
 	}
-	if c.VarCmds == nil {
-		c.VarCmds = make(map[string]string)
-	}
 
 	return nil
 }

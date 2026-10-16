@@ -118,10 +118,13 @@ generate:
 	}
 }
 
-func TestContextVarCommands(t *testing.T) {
+func TestContextTemplatedVars(t *testing.T) {
 	cfg := &config.Config{
-		VarCmds: map[string]string{
-			"test_var": "echo hello",
+		Variables: map[string]any{
+			"plain":  "{not a template}",
+			"host":   `{{ cmd "echo hello" }}`,
+			"keys":   []any{`{{ cmd "echo k1" }}`, "k2"},
+			"nested": map[string]any{"os": "{{ .OS }}"},
 		},
 	}
 
@@ -130,8 +133,22 @@ func TestContextVarCommands(t *testing.T) {
 		t.Fatalf("NewContext failed: %v", err)
 	}
 
-	if ctx.Vars["test_var"] != "hello" {
-		t.Errorf("expected test_var=hello, got %v", ctx.Vars["test_var"])
+	if ctx.Vars["plain"] != "{not a template}" || ctx.Vars["host"] != "hello" {
+		t.Errorf("plain=%v host=%v", ctx.Vars["plain"], ctx.Vars["host"])
+	}
+	if keys, _ := ctx.Vars["keys"].([]any); len(keys) != 2 || keys[0] != "k1" || keys[1] != "k2" {
+		t.Errorf("keys=%v", ctx.Vars["keys"])
+	}
+	if nested, _ := ctx.Vars["nested"].(map[string]any); nested["os"] != runtime.GOOS {
+		t.Errorf("nested=%v", ctx.Vars["nested"])
+	}
+	if cfg.Variables["host"] != `{{ cmd "echo hello" }}` {
+		t.Errorf("rendering modified the config: %v", cfg.Variables["host"])
+	}
+
+	cfg.Variables = map[string]any{"bad": []any{`{{ cmd "echo oops >&2; false" }}`}}
+	if _, err := NewContext(cfg, ""); err == nil || !strings.Contains(err.Error(), "variable bad") || !strings.Contains(err.Error(), "oops") {
+		t.Errorf("expected a failing cmd to name the variable and its stderr, got %v", err)
 	}
 }
 

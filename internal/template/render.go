@@ -75,7 +75,7 @@ func mateFuncs(ctx *Context) template.FuncMap {
 		"var": func(name string) any {
 			return ctx.Vars[name]
 		},
-		"cmd": func(cmd string) string {
+		"cmd": func(cmd string) (string, error) {
 			return ctx.Cmd(cmd)
 		},
 		"default": func(def, val any) any {
