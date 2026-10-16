@@ -100,13 +100,21 @@ func LocalSourceDir() string {
 	return ""
 }
 
+// LocalConfigPath returns statemate/config.yaml in the XDG config dir, or
+// config.yml when only that one exists.
 func LocalConfigPath() string {
 	configDir := os.Getenv("XDG_CONFIG_HOME")
 	if configDir == "" {
 		home, _ := os.UserHomeDir()
 		configDir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(configDir, "statemate", "mate.yaml")
+	dir := filepath.Join(configDir, "statemate")
+	if _, err := os.Stat(filepath.Join(dir, "config.yaml")); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(dir, "config.yml")); err == nil {
+			return filepath.Join(dir, "config.yml")
+		}
+	}
+	return filepath.Join(dir, "config.yaml")
 }
 
 func loadLocalConfig() *Config {

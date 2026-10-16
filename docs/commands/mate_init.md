@@ -15,7 +15,7 @@ In a directory that already has a mate.yaml, mate.yml or mate.toml, such as a
 fresh clone on a new machine, it only registers the directory.
 
 Registering writes source_dir to the local config
-(~/.config/statemate/mate.yaml), so mate works from any directory. Other
+(~/.config/statemate/config.yaml), so mate works from any directory. Other
 settings in that file are kept.
 
 ```

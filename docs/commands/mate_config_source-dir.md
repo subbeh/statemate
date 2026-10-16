@@ -14,7 +14,7 @@ cd "$(mate config source-dir)"
 
 Resolution order matches the rest of mate: the --config flag, then the
 STATEMATE_DIR environment variable, then source_dir in the local config
-(~/.config/statemate/mate.yaml), then the current directory.
+(~/.config/statemate/config.yaml), then the current directory.
 
 ```
 mate config source-dir [flags]

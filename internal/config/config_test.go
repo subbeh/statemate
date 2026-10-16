@@ -297,7 +297,7 @@ hooks:
 	if err := os.MkdirAll(filepath.Join(xdg, "statemate"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(xdg, "statemate", "mate.yaml"), []byte(local), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(xdg, "statemate", "config.yaml"), []byte(local), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -427,6 +427,37 @@ func TestSaveLocalSourceDirAddsKey(t *testing.T) {
 	lc := loadLocalConfig()
 	if lc == nil || lc.SourceDirPath != "/b/dotfiles" || lc.Profile != "home" {
 		t.Errorf("got %+v, want source_dir /b/dotfiles and profile home", lc)
+	}
+}
+
+// The local config is config.yaml, or config.yml when only that exists. The
+// old mate.yaml name is not read.
+func TestLocalConfigPathNames(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	dir := filepath.Join(xdg, "statemate")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	write := func(name, sourceDir string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("source_dir: "+sourceDir+"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("mate.yaml", "/old")
+	if got := LocalSourceDir(); got != "" {
+		t.Errorf("mate.yaml was read: source_dir %q", got)
+	}
+	write("config.yml", "/yml")
+	if got := LocalSourceDir(); got != "/yml" {
+		t.Errorf("with config.yml: source_dir %q, want /yml", got)
+	}
+	write("config.yaml", "/yaml")
+	if got := LocalSourceDir(); got != "/yaml" {
+		t.Errorf("with config.yaml and config.yml: source_dir %q, want /yaml", got)
 	}
 }
 

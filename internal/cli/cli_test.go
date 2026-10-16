@@ -18,7 +18,7 @@ func TestInitCommand(t *testing.T) {
 
 	cwd, _ := os.Getwd()
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".config", "statemate"), 0755)
-	_ = os.WriteFile(filepath.Join(tmpDir, ".config", "statemate", "mate.yaml"), []byte("source_dir: "+cwd+"\n"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".config", "statemate", "config.yaml"), []byte("source_dir: "+cwd+"\n"), 0644)
 
 	initFormat = "yaml"
 	defer func() { initFormat = "" }()
@@ -51,7 +51,7 @@ func TestInitCommandTOML(t *testing.T) {
 
 	cwd, _ := os.Getwd()
 	_ = os.MkdirAll(filepath.Join(tmpDir, ".config", "statemate"), 0755)
-	_ = os.WriteFile(filepath.Join(tmpDir, ".config", "statemate", "mate.yaml"), []byte("source_dir: "+cwd+"\n"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, ".config", "statemate", "config.yaml"), []byte("source_dir: "+cwd+"\n"), 0644)
 
 	initFormat = "toml"
 	defer func() { initFormat = "" }()

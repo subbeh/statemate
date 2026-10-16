@@ -56,7 +56,7 @@ In TOML the same structure is `[hooks.keyd]` with `[[hooks.keyd.do]]` steps.
 | File | Matches |
 |------|---------|
 | `mate.yaml` | Files from every source |
-| Local config (`~/.config/statemate/mate.yaml`) | Files from every source |
+| Local config (`~/.config/statemate/config.yaml`) | Files from every source |
 | A source's `.mate.yaml` | Only that source's files, and only while the source is active |
 
 Hooks from `mate.yaml` and the local config share one namespace. A local hook
@@ -64,7 +64,7 @@ with the same name **replaces** the repository one entirely; fields are not
 merged. To switch a repository hook off on one machine:
 
 ```yaml
-# ~/.config/statemate/mate.yaml
+# ~/.config/statemate/config.yaml
 hooks:
   systemd-reload: { enabled: false }
 ```

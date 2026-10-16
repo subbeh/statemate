@@ -158,7 +158,7 @@ There is one state database per user, shared by every repository. Files the
 other repository deployed have no source in this one, so they look orphaned.
 **Do not run `mate clean --all` there.**
 
-### A setting in `~/.config/statemate/mate.yaml` has no effect
+### A setting in `~/.config/statemate/config.yaml` has no effect
 
 The local config honours only some keys, and a file that fails to parse is
 ignored silently. See [Local config](configuration.md#local-config) for the list,

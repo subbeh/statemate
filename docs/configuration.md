@@ -5,15 +5,16 @@ Statemate reads three levels of configuration:
 | File | Purpose |
 |------|---------|
 | `mate.yaml` in the repository | The configuration itself, committed and shared |
-| `~/.config/statemate/mate.yaml` | Machine-local overrides, not committed |
+| `~/.config/statemate/config.yaml` | Machine-local overrides, not committed |
 | `.mate.yaml` in a source directory | Settings scoped to one source |
 
 The repository config may be YAML or TOML: `mate.yaml`, `mate.yml` and
 `mate.toml` are looked for in that order, and the same goes for `.mate.yaml` in a
-source. The local config is always `mate.yaml`. The **directory containing the
-config file is the source directory**, and relative paths in `sources`,
-`var_files` and `include` resolve against it. Other paths, such as
-`age.identity` and `secrets_cache`, should be absolute or start with `~/`.
+source. The local config is YAML only: `config.yaml`, or `config.yml`. The
+**directory containing the config file is the source directory**, and relative
+paths in `sources`, `var_files` and `include` resolve against it. Other paths,
+such as `age.identity` and `secrets_cache`, should be absolute or start with
+`~/`.
 
 Unknown keys are ignored without a warning, so a misspelt key simply has no
 effect. `mate doctor` and `mate check` catch most of the mistakes that matter.
@@ -299,7 +300,7 @@ sources or variables, and only files tagged with that exact name pass the
 
 ## Local config
 
-`~/.config/statemate/mate.yaml` (or `$XDG_CONFIG_HOME/statemate/mate.yaml`) holds
+`~/.config/statemate/config.yaml` (or `$XDG_CONFIG_HOME/statemate/config.yaml`) holds
 machine-specific settings that should not be committed:
 
 ```yaml

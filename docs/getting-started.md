@@ -42,7 +42,7 @@ mate init
 
 ```
 Register this directory as your dotfiles location? [Y/n]: y
-Saved to ~/.config/statemate/mate.yaml
+Saved to ~/.config/statemate/config.yaml
 ```
 
 Registering writes `source_dir: "~/dotfiles"` to the

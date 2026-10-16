@@ -164,7 +164,7 @@ Use the driver.
 - **A source's packages ignore its `profile:` key.** `internal/packages/sync.go`
   collects `dirCfg.Packages` unconditionally; `profile:` in `.mate.yaml` gates
   *files* only. You cannot hide a package behind a non-matching profile.
-- **`mate` resolves the repo from config, not cwd.** `~/.config/statemate/mate.yaml`
+- **`mate` resolves the repo from config, not cwd.** `~/.config/statemate/config.yaml`
   sets `source_dir`, which beats the current directory. `cd`-ing into a scratch
   repo is **not** enough — you must set `STATEMATE_DIR` (the driver does).
 - **Resolve symlinks in scratch paths.** On macOS `mktemp -d` returns
