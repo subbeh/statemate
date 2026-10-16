@@ -38,7 +38,7 @@ func TestFindUnmanaged(t *testing.T) {
 
 	want := []string{
 		filepath.Join(root, ".bashrc"),
-		filepath.Join(root, ".config/htop") + "/",
+		filepath.Join(root, ".config/htop/htoprc"),
 		filepath.Join(root, ".config/nvim/lazy.json"),
 		filepath.Join(root, "empty/stray"),
 	}

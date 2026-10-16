@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
@@ -21,10 +20,9 @@ With no argument, lists the current directory; otherwise the given directory.
 A file counts as managed when any source deploys it, for any profile, matching
 what 'mate managed' lists.
 
-Only directories that contain managed files are descended into. A directory
-holding nothing managed is listed once, with a trailing slash, rather than
-file by file. Paths are relative to the current directory, so they can be passed
-to 'mate add'.`,
+Only files are listed, never directories, so a directory holding nothing
+managed shows every file inside it. Paths are relative to the current
+directory, so they can be passed to 'mate add'.`,
 	Example: `  mate unmanaged                  # unmanaged files here
   mate unmanaged ~/.config        # unmanaged files in ~/.config`,
 	Args: cobra.MaximumNArgs(1),
@@ -85,11 +83,7 @@ func runUnmanaged(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	for _, p := range paths {
-		// Rel drops the trailing slash that marks a directory.
 		if rel, err := filepath.Rel(cwd, p); err == nil {
-			if strings.HasSuffix(p, string(filepath.Separator)) {
-				rel += string(filepath.Separator)
-			}
 			p = rel
 		}
 		fmt.Println(p)
@@ -97,20 +91,15 @@ func runUnmanaged(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// findUnmanaged walks root and returns the absolute paths of everything no
-// target accounts for. It only descends into directories that are a target or
-// hold one, so an unmanaged directory is returned once, with a trailing slash.
+// findUnmanaged walks root and returns the absolute paths of the files no
+// target accounts for. Directories are walked but never returned.
 //
-// ponytail: symlinked directories are not followed, so managed files reached
-// through one (a symlinked ~/.config) are neither listed nor descended into.
+// ponytail: symlinked directories are not followed, so files reached through
+// one (a symlinked ~/.config) are not listed.
 func findUnmanaged(root string, targets []string) ([]string, error) {
-	// A target and all its ancestors are kept: files are managed, directories
-	// are descended into.
-	keep := make(map[string]bool)
+	managed := make(map[string]bool, len(targets))
 	for _, t := range targets {
-		for p := t; !keep[p]; p = filepath.Dir(p) {
-			keep[p] = true
-		}
+		managed[t] = true
 	}
 
 	var unmanaged []string
@@ -122,14 +111,9 @@ func findUnmanaged(root string, targets []string) ([]string, error) {
 			// An unreadable directory below root is skipped, not fatal.
 			return nil
 		}
-		if path == root || keep[path] {
-			return nil
+		if !d.IsDir() && !managed[path] {
+			unmanaged = append(unmanaged, path)
 		}
-		if d.IsDir() {
-			unmanaged = append(unmanaged, path+string(filepath.Separator))
-			return filepath.SkipDir
-		}
-		unmanaged = append(unmanaged, path)
 		return nil
 	})
 	return unmanaged, err

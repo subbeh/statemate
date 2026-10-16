@@ -10,10 +10,9 @@ With no argument, lists the current directory; otherwise the given directory.
 A file counts as managed when any source deploys it, for any profile, matching
 what 'mate managed' lists.
 
-Only directories that contain managed files are descended into. A directory
-holding nothing managed is listed once, with a trailing slash, rather than
-file by file. Paths are relative to the current directory, so they can be passed
-to 'mate add'.
+Only files are listed, never directories, so a directory holding nothing
+managed shows every file inside it. Paths are relative to the current
+directory, so they can be passed to 'mate add'.
 
 ```
 mate unmanaged [path] [flags]

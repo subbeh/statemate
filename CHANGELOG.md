@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `mate add -s <name>` offers to create the source when its directory does not exist yet, then adds the file to it. The config is not changed: mate warns that the new source must still be listed under `sources:` before it is deployed
-- `mate unmanaged [dir]` lists the files under the current directory, or the given one, that no source deploys for any profile. A directory holding nothing managed is shown once as `dir/` instead of file by file, and paths are relative to the current directory so they can be passed to `mate add`
+- `mate unmanaged [dir]` lists the files under the current directory, or the given one, that no source deploys for any profile. Only files are listed, not directories, and paths are relative to the current directory so they can be passed to `mate add`
 
 ### Changed
 - **Breaking:** `variable_commands` is removed. A variable's value may now be a template instead, so `variable_commands: {key: "gpg ..."}` becomes `variables: {key: '{{ cmd "gpg ..." }}'}`. Template values are rendered in `variables`, `include`, `var_files` and profile variables, including list items and nested keys, so a list such as `gpg_keys` can come from commands too. A leftover `variable_commands` key is ignored, leaving those variables undefined
