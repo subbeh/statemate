@@ -20,6 +20,7 @@ hooks:
 
   session-env:
     match: .config/environment.d/*.conf
+    profile: linux
     do:
       - run: dbus-update-activation-environment --systemd --all
 
@@ -30,6 +31,15 @@ hooks:
       - script: keyd-restart.sh
       - run: notify-send "keyd reloaded ({{ len .Files }} files)"
 ```
+
+- `systemd-reload` reloads systemd when a unit or timer changes. `profile: arch`
+  keeps it to machines using the `arch` profile.
+- `tmux` makes the running tmux server re-read its config.
+- `session-env` passes the environment to systemd user services and D-Bus
+  activated applications after an `environment.d` file changes. Both are Linux
+  only, hence `profile: linux`.
+- `keyd` combines step types: a command, a [script](#script), and a command
+  rendered as a template, where `.Files` holds the files that changed.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -75,20 +85,24 @@ Patterns match the **target** path, meaning where the file is deployed:
 | `~/.config/environment.d/*.conf` | Relative to `~`, spelled out |
 | `/etc/keyd/*.conf` | Absolute |
 
-`*` matches within one path segment, `**` matches any number of directories, and
-a pattern naming a directory matches everything under it. A trailing `/`
-restricts a pattern to files inside the directory. Unlike
-[`ignore`](configuration.md#ignore), there is no `!` negation: a hook that should
-skip some files needs narrower patterns. Attributes such as `#template` are not
-part of the target path, so they never need to appear in a pattern. If you include
-recognized source attributes in a pattern, they are ignored on both file and
-directory components: `.config#perm-r:700/tmux/*.conf#template` matches the same
-files as `.config/tmux/*.conf`. Attributes do not filter matches by profile or
-file type. Unknown `#` suffixes stay literal; use `[#]template` or `\#template`
-to match a literal `#template` in a target path (quote backslashes with single
-quotes in YAML). `target_base` and `targets:`
-mappings do not matter either: a unit deployed to `/etc/systemd/system` matches
-`*.service` and `/etc/systemd/system/*.service` alike.
+- `*` matches within one path segment, and `**` matches any number of
+  directories.
+- A pattern naming a directory matches everything under it. A trailing `/`
+  limits it to files inside the directory.
+- There is no `!` negation, unlike [`ignore`](configuration.md#ignore). A hook
+  that should skip some files needs narrower patterns.
+- Attributes such as `#template` are not part of the target path, so a pattern
+  never needs them. Recognized source attributes in a pattern are ignored, on
+  file and directory components alike:
+  `.config#perm-r:700/tmux/*.conf#template` matches the same files as
+  `.config/tmux/*.conf`. Attributes do not filter matches by profile or file
+  type.
+- Unknown `#` suffixes stay literal. To match a literal `#template` in a target
+  path, write `[#]template` or `\#template`. In YAML, a pattern containing a
+  backslash must be in single quotes.
+- `target_base` and `targets:` mappings make no difference: a unit deployed to
+  `/etc/systemd/system` matches both `*.service` and
+  `/etc/systemd/system/*.service`.
 
 ## When hooks run
 
