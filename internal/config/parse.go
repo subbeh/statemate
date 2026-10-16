@@ -56,6 +56,17 @@ func Load(path string) (*Config, error) {
 	localCfg := loadLocalConfig()
 	cfg.ApplyOverrides(localCfg)
 
+	// STATEMATE_KEY_FILE wins over identity and identity_command in either
+	// config, as STATEMATE_DIR wins over source_dir. Applied before includes,
+	// which may need the key to decrypt.
+	if key := os.Getenv("STATEMATE_KEY_FILE"); key != "" {
+		if cfg.Age == nil {
+			cfg.Age = &AgeConfig{}
+		}
+		cfg.Age.Identity = key
+		cfg.Age.IdentityCommand = ""
+	}
+
 	if err := cfg.setDefaults(); err != nil {
 		return nil, err
 	}

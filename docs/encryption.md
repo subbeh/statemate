@@ -60,6 +60,13 @@ age:
 The command must print only the `AGE-SECRET-KEY-1…` line. `cat`-ing the file
 `age-keygen` wrote does not work, because that file also contains comment lines.
 
+To use a different key for one run, or on a machine whose config names none, set
+`STATEMATE_KEY_FILE` to its path. It overrides `identity` and `identity_command`:
+
+```bash
+STATEMATE_KEY_FILE=~/backup/key.txt mate cat ssh/.ssh/config#encrypted
+```
+
 ## 4. Encrypt files
 
 Add a file encrypted from the start:

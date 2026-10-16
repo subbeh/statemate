@@ -470,6 +470,7 @@ content assembled from variables or secrets.
 |----------|--------|
 | `STATEMATE_DIR` | Where to find `mate.yaml`. Overrides `source_dir` and the current directory, but not `--config` |
 | `STATEMATE_PROFILE` | Selects a profile, below config but above detection |
+| `STATEMATE_KEY_FILE` | Path to the age private key. Overrides `age.identity` and `age.identity_command` in either config |
 | `XDG_CONFIG_HOME` | Where the local config lives. Default `~/.config` |
 | `XDG_DATA_HOME` | Where `state.db` lives. Default `~/.local/share` |
 | `XDG_STATE_HOME` | Where the secrets cache lives. Default `~/.local/state` |

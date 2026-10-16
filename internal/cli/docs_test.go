@@ -147,7 +147,7 @@ func TestHookEnvVarsAreDocumented(t *testing.T) {
 func TestEnvVarsAreDocumented(t *testing.T) {
 	guides := readGuides(t)
 
-	for _, v := range []string{"STATEMATE_DIR", "STATEMATE_PROFILE"} {
+	for _, v := range []string{"STATEMATE_DIR", "STATEMATE_PROFILE", "STATEMATE_KEY_FILE"} {
 		if !strings.Contains(guides, v) {
 			t.Errorf("environment variable %s is not mentioned in docs/ -- add it to docs/configuration.md", v)
 		}
