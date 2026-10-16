@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
@@ -32,8 +33,8 @@ func init() {
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
-	fmt.Println("Statemate Doctor")
-	fmt.Println("================")
+	fmt.Println(bold("Statemate Doctor"))
+	fmt.Println(bold("================"))
 	fmt.Println()
 
 	issues := 0
@@ -41,27 +42,27 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	cfgPath, _ := cmd.Flags().GetString("config")
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		fmt.Printf("[ERROR] Configuration: %v\n", err)
+		fmt.Printf("%s Configuration: %v\n", tag("ERROR"), err)
 		issues++
 	} else {
-		fmt.Println("[OK] Configuration loaded")
+		fmt.Println(tag("OK"), "Configuration loaded")
 
 		if err := cfg.Validate(); err != nil {
-			fmt.Printf("[ERROR] Configuration validation: %v\n", err)
+			fmt.Printf("%s Configuration validation: %v\n", tag("ERROR"), err)
 			issues++
 		} else {
-			fmt.Println("[OK] Configuration valid")
+			fmt.Println(tag("OK"), "Configuration valid")
 		}
 
 		for _, source := range cfg.AbsoluteSources() {
 			if info, err := os.Stat(source); err != nil {
-				fmt.Printf("[ERROR] Source directory missing: %s\n", source)
+				fmt.Printf("%s Source directory missing: %s\n", tag("ERROR"), source)
 				issues++
 			} else if !info.IsDir() {
-				fmt.Printf("[ERROR] Source is not a directory: %s\n", source)
+				fmt.Printf("%s Source is not a directory: %s\n", tag("ERROR"), source)
 				issues++
 			} else {
-				fmt.Printf("[OK] Source directory: %s\n", source)
+				fmt.Printf("%s Source directory: %s\n", tag("OK"), source)
 			}
 		}
 	}
@@ -72,24 +73,24 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println("Dependencies:")
+	fmt.Println(bold("Dependencies:"))
 
 	if cfg != nil {
 		level, msg := ageStatus(cfg)
-		fmt.Printf("[%s] %s\n", level, msg)
+		fmt.Println(tag(level), msg)
 		if level == "ERROR" {
 			issues++
 		}
 	}
 
 	if _, err := exec.LookPath("diff"); err != nil {
-		fmt.Println("[WARN] diff not found (diff output unavailable)")
+		fmt.Println(tag("WARN"), "diff not found (diff output unavailable)")
 	} else {
-		fmt.Println("[OK] diff")
+		fmt.Println(tag("OK"), "diff")
 	}
 
 	fmt.Println()
-	fmt.Println("Package Managers:")
+	fmt.Println(bold("Package Managers:"))
 
 	aurHelper := ""
 	if cfg != nil {
@@ -97,22 +98,34 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 	managers := packages.GetAvailableManagersWithHelper(aurHelper)
 	if len(managers) == 0 {
-		fmt.Println("[WARN] No package managers found")
+		fmt.Println(tag("WARN"), "No package managers found")
 	} else {
 		for _, m := range managers {
-			fmt.Printf("[OK] %s\n", m.Name())
+			fmt.Printf("%s %s\n", tag("OK"), m.Name())
 		}
 	}
 
 	fmt.Println()
 	if issues > 0 {
-		fmt.Printf("Found %d issue(s)\n", issues)
+		fmt.Println(color.RedString("Found %d issue(s)", issues))
 		os.Exit(1)
 	} else {
-		fmt.Println("No issues found")
+		fmt.Println(color.GreenString("No issues found"))
 	}
 
 	return nil
+}
+
+// tag colors a check's [OK], [WARN] or [ERROR] label.
+func tag(level string) string {
+	switch level {
+	case "OK":
+		return color.GreenString("[OK]")
+	case "WARN":
+		return color.YellowString("[WARN]")
+	default:
+		return color.RedString("[ERROR]")
+	}
 }
 
 // checkHooks reports hooks that fail to load, and warns about active hooks
@@ -121,8 +134,8 @@ func checkHooks(cmd *cobra.Command) int {
 	env, err := loadHookEnv(cmd)
 	if err != nil {
 		fmt.Println()
-		fmt.Println("Hooks:")
-		fmt.Printf("[ERROR] %v\n", err)
+		fmt.Println(bold("Hooks:"))
+		fmt.Printf("%s %v\n", tag("ERROR"), err)
 		return 1
 	}
 	if len(env.set) == 0 {
@@ -130,7 +143,7 @@ func checkHooks(cmd *cobra.Command) int {
 	}
 
 	fmt.Println()
-	fmt.Println("Hooks:")
+	fmt.Println(bold("Hooks:"))
 
 	matched := make(map[string]bool)
 	for _, t := range env.set.Trigger(hookChanges(env.files, env.sourcePaths), env.profileChain) {
@@ -141,9 +154,9 @@ func checkHooks(cmd *cobra.Command) int {
 		case !h.IsEnabled(), !h.ActiveFor(env.profileChain):
 			continue
 		case matched[h.Name]:
-			fmt.Printf("[OK] %s\n", h.Name)
+			fmt.Printf("%s %s\n", tag("OK"), h.Name)
 		default:
-			fmt.Printf("[WARN] %s matches no managed files\n", h.Name)
+			fmt.Printf("%s %s matches no managed files\n", tag("WARN"), h.Name)
 		}
 	}
 	return 0
@@ -178,8 +191,8 @@ func checkEncrypted(cfg *config.Config) int {
 	tree, err := scanner.Scan(cfg.ResolveSourcePaths(profile.AllSources(cfg)))
 	if err != nil {
 		fmt.Println()
-		fmt.Println("Encrypted files:")
-		fmt.Printf("[ERROR] scanning sources: %v\n", err)
+		fmt.Println(bold("Encrypted files:"))
+		fmt.Printf("%s scanning sources: %v\n", tag("ERROR"), err)
 		return 1
 	}
 
@@ -199,12 +212,12 @@ func checkEncrypted(cfg *config.Config) int {
 	}
 
 	fmt.Println()
-	fmt.Println("Encrypted files:")
+	fmt.Println(bold("Encrypted files:"))
 	for _, p := range plain {
-		fmt.Printf("[ERROR] %s is marked #enc but is not encrypted\n", util.ShortenPath(p))
+		fmt.Printf("%s %s is marked #enc but is not encrypted\n", tag("ERROR"), util.ShortenPath(p))
 	}
 	if len(plain) == 0 {
-		fmt.Printf("[OK] %d #enc file(s) encrypted\n", checked)
+		fmt.Printf("%s %d #enc file(s) encrypted\n", tag("OK"), checked)
 	}
 	return len(plain)
 }

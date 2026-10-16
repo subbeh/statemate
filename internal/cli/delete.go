@@ -85,7 +85,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	}
 
 	if !deleteForce {
-		fmt.Printf("Will remove:\n")
+		fmt.Println(bold("Will remove:"))
 		fmt.Printf("  Source: %s\n", util.ShortenPath(entry.SourcePath))
 		if !deleteKeepTarget {
 			fmt.Printf("  Target: %s\n", util.ShortenPath(entry.TargetPath))

@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/fatih/color"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -502,12 +503,12 @@ func (e *Executor) run(script *Script, extraEnv ...string) (err error) {
 	}
 	cmd.Env = append(cmd.Env, extraEnv...)
 
-	fmt.Printf(">>> running: %s (%s/%s)\n", script.Name, script.Frequency, script.Timing)
+	fmt.Printf("%s %s (%s/%s)\n", color.CyanString(">>> running:"), script.Name, script.Frequency, script.Timing)
 	err = cmd.Run()
 	if err != nil {
-		fmt.Printf("<<< failed:  %s (%v)\n", script.Name, err)
+		fmt.Printf("%s  %s (%v)\n", color.RedString("<<< failed:"), script.Name, err)
 	} else {
-		fmt.Printf("<<< done:    %s\n", script.Name)
+		fmt.Printf("%s    %s\n", color.GreenString("<<< done:"), script.Name)
 	}
 	return err
 }

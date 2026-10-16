@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"filippo.io/age"
+	"github.com/fatih/color"
 
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/source"
@@ -787,5 +788,24 @@ func TestPromptConflict_NoTerminalExplainsItself(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}
+	}
+}
+
+func TestChangeStatusMarker(t *testing.T) {
+	saved := color.NoColor
+	t.Cleanup(func() { color.NoColor = saved })
+
+	color.NoColor = true
+	for status, want := range map[ChangeStatus]string{
+		StatusNew: "+", StatusModified: "~", StatusConflict: "!", StatusImport: "<", StatusUnchanged: "",
+	} {
+		if got := status.Marker(); got != want {
+			t.Errorf("%s: Marker() = %q, want %q", status, got, want)
+		}
+	}
+
+	color.NoColor = false
+	if got := StatusNew.Marker(); got != "\x1b[32m+\x1b[0m" {
+		t.Errorf("colored StatusNew.Marker() = %q, want green +", got)
 	}
 }

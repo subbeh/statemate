@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
@@ -286,7 +287,7 @@ func runTriggeredHooks(runner *hooks.Runner, triggered []*hooks.Triggered, db *s
 		return nil, nil
 	}
 	if announce {
-		fmt.Println("Running hooks...")
+		fmt.Println(bold("Running hooks..."))
 	}
 
 	// Report what was skipped even when the user quit part-way.
@@ -302,7 +303,7 @@ func runTriggeredHooks(runner *hooks.Runner, triggered []*hooks.Triggered, db *s
 		fmt.Printf("  skipped hook %s; run it later with 'mate hooks run %s'\n", name, name)
 	}
 	if len(res.SkippedNoTTY) > 0 {
-		fmt.Fprintf(os.Stderr, "\nWarning: %d hook(s) skipped (no terminal to confirm on):\n", len(res.SkippedNoTTY))
+		fmt.Fprintf(os.Stderr, "\n%s %d hook(s) skipped (no terminal to confirm on):\n", color.YellowString("Warning:"), len(res.SkippedNoTTY))
 		for _, s := range res.SkippedNoTTY {
 			fmt.Fprintf(os.Stderr, "  - %s\n", s)
 		}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
@@ -92,7 +93,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if tree.HasConflicts() {
-		fmt.Fprintln(os.Stderr, "Warning: conflicting targets detected")
+		fmt.Fprintf(os.Stderr, "%s conflicting targets detected\n", color.YellowString("Warning:"))
 		for _, c := range tree.Conflicts {
 			fmt.Fprintf(os.Stderr, "  %s defined in:\n", util.ShortenPath(c.TargetPath))
 			for _, s := range c.Sources {
@@ -186,7 +187,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	syncResults, err := packages.ComputeSync(cfg, profileName, sourcePaths,
 		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: not checking packages: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%s not checking packages: %v\n", color.YellowString("Warning:"), err)
 	}
 	for _, r := range syncResults {
 		if missing := r.Missing(); len(missing) > 0 {
@@ -249,14 +250,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	if len(filteredChanges) == 0 && len(filteredOrphans) == 0 && len(pendingScripts) == 0 &&
 		len(pendingHooks) == 0 && pendingSecrets == 0 && len(pendingPackages) == 0 {
-		fmt.Println("Everything is up to date")
+		fmt.Println(color.GreenString("Everything is up to date"))
 		return nil
 	}
 
 	printChanges(filteredChanges)
 
 	if len(filteredOrphans) > 0 {
-		fmt.Fprintln(os.Stderr, "\nWarning: orphaned files (no longer in source):")
+		fmt.Fprintf(os.Stderr, "\n%s orphaned files (no longer in source):\n", color.YellowString("Warning:"))
 		for _, o := range filteredOrphans {
 			fmt.Fprintf(os.Stderr, "  - %s\n", util.ShortenPath(o))
 		}
@@ -264,7 +265,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(pendingScripts) > 0 {
-		fmt.Println("\nPending scripts:")
+		fmt.Println("\n" + bold("Pending scripts:"))
 		for _, s := range pendingScripts {
 			timing := "before"
 			if s.Timing == scripts.TimingAfter {
@@ -278,7 +279,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(pendingHooks) > 0 {
-		fmt.Println("\nPending hooks:")
+		fmt.Println("\n" + bold("Pending hooks:"))
 		for _, h := range pendingHooks {
 			fmt.Printf("  %s (%s)\n", h.Name, hooks.FileCount(len(h.Files)))
 			if h.Description != "" {
@@ -288,18 +289,18 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(pendingPackages) > 0 {
-		fmt.Println("\nMissing packages:")
+		fmt.Println("\n" + bold("Missing packages:"))
 		for _, p := range pendingPackages {
 			fmt.Printf("  %s: %s\n", p.manager, strings.Join(p.packages, ", "))
 		}
 	}
 
 	if pendingSecrets > 0 {
-		fmt.Printf("\nSecrets:\n  %d secrets need refresh (run 'mate secrets fetch')\n", pendingSecrets)
+		fmt.Printf("\n%s\n  %d secrets need refresh (run 'mate secrets fetch')\n", bold("Secrets:"), pendingSecrets)
 	}
 
 	if len(result.Skipped) > 0 {
-		fmt.Fprintf(os.Stderr, "\nWarning: %d file(s) skipped (permission denied, use --sudo to check)\n", len(result.Skipped))
+		fmt.Fprintf(os.Stderr, "\n%s %d file(s) skipped (permission denied, use --sudo to check)\n", color.YellowString("Warning:"), len(result.Skipped))
 	}
 
 	return nil
@@ -320,21 +321,9 @@ func printChanges(changes []*target.Change) {
 
 	fmt.Printf("  %-*s  %s\n", maxTargetLen, "TARGET", "SOURCE")
 	for _, c := range changes {
-		var prefix string
-		switch c.Status {
-		case target.StatusNew:
-			prefix = "+"
-		case target.StatusModified:
-			prefix = "~"
-		case target.StatusConflict:
-			prefix = "!"
-		case target.StatusImport:
-			// Points back at the source: this file moves the other way.
-			prefix = "<"
-		}
 		targetDisplay := util.ShortenPath(c.Entry.TargetPath)
 		sourceDir := extractSourceDir(c.Entry)
-		fmt.Printf("%s %-*s  %s\n", prefix, maxTargetLen, targetDisplay, sourceDir)
+		fmt.Printf("%s %-*s  %s\n", c.Status.Marker(), maxTargetLen, targetDisplay, sourceDir)
 	}
 }
 

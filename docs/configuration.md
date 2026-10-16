@@ -484,6 +484,7 @@ content assembled from variables or secrets.
 | `XDG_STATE_HOME` | Where the secrets cache lives. Default `~/.local/state` |
 | `VISUAL`, `EDITOR` | Editor for `mate edit`, if `editor:` is unset |
 | `USER`, `USERNAME` | The user for profile detection and `.Username` |
+| `NO_COLOR` | Set to any value to turn off colored output. Color is also off when stdout is not a terminal |
 
 `STATEMATE_DIR` is handy for working against a second repository without touching
 your config:

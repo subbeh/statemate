@@ -157,7 +157,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("Renamed:\n")
+	fmt.Println(bold("Renamed:"))
 	fmt.Printf("  source: %s -> %s\n", util.ShortenPath(entry.SourcePath), util.ShortenPath(newSourcePath))
 	if targetRenamed {
 		fmt.Printf("  target: %s -> %s\n", util.ShortenPath(entry.TargetPath), util.ShortenPath(newTargetPath))

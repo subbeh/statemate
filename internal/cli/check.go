@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
@@ -75,7 +76,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	if tree.HasConflicts() {
 		if !checkQuiet {
-			fmt.Fprintln(os.Stderr, "Error: conflicting targets detected")
+			fmt.Fprintf(os.Stderr, "%s conflicting targets detected\n", color.RedString("Error:"))
 			for _, c := range tree.Conflicts {
 				fmt.Fprintf(os.Stderr, "  %s defined in:\n", util.ShortenPath(c.TargetPath))
 				for _, s := range c.Sources {
@@ -123,27 +124,18 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 	if len(changes) == 0 {
 		if !checkQuiet {
-			fmt.Println("OK: configuration is in sync")
+			fmt.Println(color.GreenString("OK:"), "configuration is in sync")
 			if len(result.Skipped) > 0 {
-				fmt.Fprintf(os.Stderr, "Warning: %d file(s) skipped (permission denied, use --sudo to check)\n", len(result.Skipped))
+				fmt.Fprintf(os.Stderr, "%s %d file(s) skipped (permission denied, use --sudo to check)\n", color.YellowString("Warning:"), len(result.Skipped))
 			}
 		}
 		return nil
 	}
 
 	if !checkQuiet {
-		fmt.Printf("DRIFT: %d file(s) would change\n", len(changes))
+		fmt.Printf("%s %d file(s) would change\n", color.YellowString("DRIFT:"), len(changes))
 		for _, change := range changes {
-			var prefix string
-			switch change.Status {
-			case target.StatusNew:
-				prefix = "+"
-			case target.StatusModified:
-				prefix = "~"
-			case target.StatusConflict:
-				prefix = "!"
-			}
-			fmt.Printf("  %s %s\n", prefix, util.ShortenPath(change.Entry.TargetPath))
+			fmt.Printf("  %s %s\n", change.Status.Marker(), util.ShortenPath(change.Entry.TargetPath))
 		}
 	}
 

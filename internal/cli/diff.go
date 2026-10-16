@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
@@ -74,7 +75,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	if tree.HasConflicts() {
-		fmt.Fprintln(os.Stderr, "Error: conflicting targets detected")
+		fmt.Fprintf(os.Stderr, "%s conflicting targets detected\n", color.RedString("Error:"))
 		for _, c := range tree.Conflicts {
 			fmt.Fprintf(os.Stderr, "  %s defined in:\n", util.ShortenPath(c.TargetPath))
 			for _, s := range c.Sources {
@@ -148,9 +149,9 @@ func runDiff(cmd *cobra.Command, args []string) error {
 
 	if len(changes) == 0 {
 		if len(result.Skipped) > 0 {
-			fmt.Fprintf(os.Stderr, "Warning: %d file(s) skipped (permission denied, use --sudo to check)\n", len(result.Skipped))
+			fmt.Fprintf(os.Stderr, "%s %d file(s) skipped (permission denied, use --sudo to check)\n", color.YellowString("Warning:"), len(result.Skipped))
 		}
-		fmt.Println("No changes")
+		fmt.Println(color.GreenString("No changes"))
 		return nil
 	}
 
@@ -162,14 +163,14 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	for _, change := range changes {
 		if change.Entry.IsDir {
 			// Directories have no content to compare; status reports them.
-			fmt.Printf("=== %s ===\n(directory)\n", util.ShortenPath(change.Entry.TargetPath))
+			fmt.Printf("%s\n(directory)\n", bold("=== "+util.ShortenPath(change.Entry.TargetPath)+" ==="))
 			continue
 		}
 
 		if change.Entry.Attrs.Symlink {
 			// What changes is the link text; diffing what it points at would fail
 			// for a directory or a destination that does not exist.
-			fmt.Printf("=== %s ===\n", util.ShortenPath(change.Entry.TargetPath))
+			fmt.Println(bold("=== " + util.ShortenPath(change.Entry.TargetPath) + " ==="))
 			fmt.Println(target.ColorizeDiff(symlinkDiff(change.Entry)))
 			continue
 		}
@@ -195,7 +196,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		} else {
 			diff, err = target.GenerateDiffWithTool(change.Entry.SourcePath, change.Entry.TargetPath, diffTool)
 		}
-		fmt.Printf("=== %s ===\n", util.ShortenPath(change.Entry.TargetPath))
+		fmt.Println(bold("=== " + util.ShortenPath(change.Entry.TargetPath) + " ==="))
 		if err != nil {
 			if errors.As(err, new(*secrets.NotCachedError)) {
 				fmt.Fprintf(os.Stderr, "  (secrets not cached, run 'mate secrets fetch')\n")

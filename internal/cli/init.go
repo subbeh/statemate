@@ -214,7 +214,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println("\nNext steps:")
+	fmt.Println("\n" + bold("Next steps:"))
 	fmt.Printf("  1. Create a source directory and list it in %s:\n", configPath)
 	fmt.Println("       mkdir zsh      and set      sources: [zsh]")
 	fmt.Println("  2. Add files: mate add ~/.zshrc")

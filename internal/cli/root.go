@@ -4,11 +4,16 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/secrets"
 )
 
 var version = "dev"
+
+// bold marks section headers. Like every color, it is dropped when stdout is
+// not a terminal or NO_COLOR is set.
+var bold = color.New(color.Bold).SprintFunc()
 
 var rootCmd = &cobra.Command{
 	Use:     "mate",
@@ -54,7 +59,7 @@ func SetVersion(v string) {
 func Execute() error {
 	cmd, err := rootCmd.ExecuteC()
 	if err != nil && cmd.SilenceErrors {
-		cmd.PrintErrln("Error:", errorMessage(err))
+		cmd.PrintErrln(color.RedString("Error:"), errorMessage(err))
 	}
 	return err
 }

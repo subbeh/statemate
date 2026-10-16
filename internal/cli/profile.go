@@ -63,7 +63,7 @@ func runProfile(cmd *cobra.Command, args []string) error {
 		fmt.Println("Source:  no profile matched")
 
 		if len(cfg.Profiles) > 0 {
-			fmt.Println("\nConfigured profiles:")
+			fmt.Println("\n" + bold("Configured profiles:"))
 			for name := range cfg.Profiles {
 				fmt.Printf("  - %s\n", name)
 			}
@@ -73,7 +73,7 @@ func runProfile(cmd *cobra.Command, args []string) error {
 	sources := profile.ResolveSources(cfg, profileName)
 	if len(sources) > 0 {
 		sort.Strings(sources)
-		fmt.Println("\nSources:")
+		fmt.Println("\n" + bold("Sources:"))
 		for _, s := range sources {
 			fmt.Printf("  - %s\n", s)
 		}
@@ -88,7 +88,7 @@ func printDetectionReason(cfg *config.Config, profileName string) {
 		return
 	}
 
-	fmt.Println("\nMatched because:")
+	fmt.Println("\n" + bold("Matched because:"))
 	d := p.Detection
 
 	hostname, _ := os.Hostname()

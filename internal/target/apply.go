@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/fatih/color"
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
@@ -73,6 +74,23 @@ func (s ChangeStatus) String() string {
 	}
 }
 
+// Marker is the colored one-character prefix that lists a change.
+func (s ChangeStatus) Marker() string {
+	switch s {
+	case StatusNew:
+		return color.GreenString("+")
+	case StatusModified:
+		return color.YellowString("~")
+	case StatusConflict:
+		return color.RedString("!")
+	case StatusImport:
+		// Points back at the source: this file moves the other way.
+		return color.CyanString("<")
+	default:
+		return ""
+	}
+}
+
 func NewApplier(db *state.DB, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, dryRun, force bool, verbose int) *Applier {
 	return &Applier{
 		db:       db,
@@ -94,7 +112,7 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			// Only an empty directory is worth reporting: the rest come along with
 			// the files inside them, which are listed separately.
 			if _, err := os.Stat(dir.TargetPath); os.IsNotExist(err) && emptyDirs[dir.TargetPath] {
-				fmt.Printf("+ %s\n", dir.TargetPath)
+				fmt.Printf("%s %s\n", StatusNew.Marker(), dir.TargetPath)
 				result.Applied++
 			}
 			continue
@@ -134,7 +152,7 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			}
 			if created {
 				if a.verbose > 0 {
-					fmt.Printf("+ %s\n", dir.TargetPath)
+					fmt.Printf("%s %s\n", StatusNew.Marker(), dir.TargetPath)
 				}
 				result.Applied++
 			}
@@ -156,7 +174,7 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 		}
 		if created {
 			if a.verbose > 0 {
-				fmt.Printf("+ %s\n", dir.TargetPath)
+				fmt.Printf("%s %s\n", StatusNew.Marker(), dir.TargetPath)
 			}
 			result.Applied++
 		}
@@ -192,7 +210,7 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				if err := a.importFile(entry); err != nil {
 					return nil, fmt.Errorf("importing %s: %w", entry.TargetPath, err)
 				}
-				fmt.Printf("← %s (imported)\n", util.ShortenPath(entry.TargetPath))
+				fmt.Printf("%s %s (imported)\n", color.CyanString("←"), util.ShortenPath(entry.TargetPath))
 			}
 			result.Imported++
 			continue
@@ -394,7 +412,7 @@ func dirAttrsMatch(info os.FileInfo, attrs source.Attrs) bool {
 }
 
 func (a *Applier) promptConflict(change *Change) (string, error) {
-	fmt.Printf("\nConflict: %s\n", change.Entry.TargetPath)
+	fmt.Printf("\n%s %s\n", color.RedString("Conflict:"), change.Entry.TargetPath)
 	fmt.Printf("  Target has been modified since last apply\n")
 
 	// Importing a #link would write the target's content through the source
@@ -604,16 +622,5 @@ func (a *Applier) recordState(entry *source.Entry, sourceHash string) error {
 }
 
 func (a *Applier) printChange(change *Change) {
-	var prefix string
-	switch change.Status {
-	case StatusNew:
-		prefix = "+"
-	case StatusModified:
-		prefix = "~"
-	case StatusConflict:
-		prefix = "!"
-	case StatusImport:
-		prefix = "<"
-	}
-	fmt.Printf("%s %s\n", prefix, change.Entry.TargetPath)
+	fmt.Printf("%s %s\n", change.Status.Marker(), change.Entry.TargetPath)
 }

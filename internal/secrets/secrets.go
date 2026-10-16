@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/subbeh/statemate/internal/encrypt"
 )
 
@@ -110,7 +111,7 @@ func (m *Manager) Fetch(items []FetchItem) (*FetchResult, error) {
 
 	if err := m.loadCache(); err != nil {
 		if errors.Is(err, errUnencryptedCache) {
-			fmt.Fprintf(os.Stderr, "Warning: replacing unencrypted secrets cache %s with an encrypted one\n", m.cachePath)
+			fmt.Fprintf(os.Stderr, "%s replacing unencrypted secrets cache %s with an encrypted one\n", color.YellowString("Warning:"), m.cachePath)
 		}
 		m.cache = &Cache{Items: make(map[string]*CachedValue)}
 	}

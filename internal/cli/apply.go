@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
@@ -162,7 +163,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	if tree.HasConflicts() {
-		fmt.Fprintln(os.Stderr, "Error: conflicting targets detected")
+		fmt.Fprintf(os.Stderr, "%s conflicting targets detected\n", color.RedString("Error:"))
 		for _, c := range tree.Conflicts {
 			fmt.Fprintf(os.Stderr, "  %s defined in:\n", util.ShortenPath(c.TargetPath))
 			for _, s := range c.Sources {
@@ -252,7 +253,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	if len(beforeScripts) > 0 {
 		if dryRun {
-			fmt.Println("Running before scripts...")
+			fmt.Println(bold("Running before scripts..."))
 		}
 		res, err := executor.Execute(beforeScripts)
 		if err != nil {
@@ -328,7 +329,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	if len(afterScripts) > 0 {
 		if dryRun {
-			fmt.Println("Running after scripts...")
+			fmt.Println(bold("Running after scripts..."))
 		}
 		res, err := executor.Execute(afterScripts)
 		if err != nil {
@@ -357,7 +358,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		if len(parts) == 0 {
 			fmt.Println("Nothing to do")
 		} else {
-			fmt.Printf("%s\n", strings.Join(parts, ", "))
+			fmt.Println(color.GreenString(strings.Join(parts, ", ")))
 		}
 	}
 
@@ -428,7 +429,7 @@ func warnSkippedScripts(res *scripts.ExecuteResult) {
 	if res == nil || len(res.SkippedNoTTY) == 0 {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "\nWarning: %d script(s) skipped (no terminal to confirm on):\n", len(res.SkippedNoTTY))
+	fmt.Fprintf(os.Stderr, "\n%s %d script(s) skipped (no terminal to confirm on):\n", color.YellowString("Warning:"), len(res.SkippedNoTTY))
 	for _, s := range res.SkippedNoTTY {
 		fmt.Fprintf(os.Stderr, "  - %s\n", s)
 	}
@@ -446,7 +447,7 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 	results, err := packages.ComputeSync(cfg, profileName, sourcePaths,
 		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\nWarning: skipping packages: %v\n", err)
+		fmt.Fprintf(os.Stderr, "\n%s skipping packages: %v\n", color.YellowString("Warning:"), err)
 		return nil
 	}
 
@@ -512,7 +513,7 @@ func warnSkippedPackages(skipped []string) {
 	if len(skipped) == 0 {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "\nWarning: %d package install(s) skipped (no terminal to confirm on):\n", len(skipped))
+	fmt.Fprintf(os.Stderr, "\n%s %d package install(s) skipped (no terminal to confirm on):\n", color.YellowString("Warning:"), len(skipped))
 	for _, s := range skipped {
 		fmt.Fprintf(os.Stderr, "  - %s\n", s)
 	}

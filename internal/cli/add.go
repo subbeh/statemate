@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
@@ -142,7 +143,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			if err := promptCreateSource(sourceDir, notConfigured); err != nil {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "Warning: source %q is not in the config; add it to 'sources:' so mate deploys it\n", sourceName)
+			fmt.Fprintf(os.Stderr, "%s source %q is not in the config; add it to 'sources:' so mate deploys it\n", color.YellowString("Warning:"), sourceName)
 		}
 	} else {
 		// Must offer the same list that absSources is indexed from: cfg.Sources

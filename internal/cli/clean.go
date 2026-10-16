@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/hooks"
@@ -87,7 +88,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(orphans) == 0 {
-		fmt.Println("No orphaned files")
+		fmt.Println(color.GreenString("No orphaned files"))
 		return nil
 	}
 
@@ -97,7 +98,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 	all, _ := cmd.Flags().GetBool("all")
 
 	if len(args) == 0 && !all {
-		fmt.Println("Orphaned files:")
+		fmt.Println(bold("Orphaned files:"))
 		for _, o := range orphans {
 			fmt.Printf("  %s\n", util.ShortenPath(o))
 		}

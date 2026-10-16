@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/fatih/color"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -77,7 +78,7 @@ func (r *Runner) Run(triggered []*Triggered) (*Result, error) {
 
 		rendered, err := r.render(t)
 		if err != nil {
-			fmt.Printf("<<< failed:  hook %s (%v)\n", t.Name, err)
+			fmt.Printf("%s  hook %s (%v)\n", color.RedString("<<< failed:"), t.Name, err)
 			res.Failed = append(res.Failed, fmt.Errorf("hook %s: %w", t.Name, err))
 			continue
 		}
@@ -186,12 +187,12 @@ func (r *Runner) runSteps(t *Triggered, rendered []string) error {
 		"STATEMATE_HOOK_FILES=" + strings.Join(t.Files, "\n"),
 	}
 
-	fmt.Printf(">>> running: hook %s\n", t.Name)
+	fmt.Printf("%s hook %s\n", color.CyanString(">>> running:"), t.Name)
 	for i, s := range t.steps {
 		var err error
 		if s.script != nil {
 			if s.script.Profile != "" && !matchesChain(s.script.Profile, r.opts.ProfileChain) {
-				fmt.Fprintf(os.Stderr, "Warning: hook %s: skipping script %s (profile %s is not active)\n",
+				fmt.Fprintf(os.Stderr, "%s hook %s: skipping script %s (profile %s is not active)\n", color.YellowString("Warning:"),
 					t.Name, s.script.Name, s.script.Profile)
 				continue
 			}
@@ -204,11 +205,11 @@ func (r *Runner) runSteps(t *Triggered, rendered []string) error {
 			err = r.runCommand(t, rendered[i], env)
 		}
 		if err != nil {
-			fmt.Printf("<<< failed:  hook %s (step %d: %v)\n", t.Name, i+1, err)
+			fmt.Printf("%s  hook %s (step %d: %v)\n", color.RedString("<<< failed:"), t.Name, i+1, err)
 			return fmt.Errorf("step %d: %w", i+1, err)
 		}
 	}
-	fmt.Printf("<<< done:    hook %s\n", t.Name)
+	fmt.Printf("%s    hook %s\n", color.GreenString("<<< done:"), t.Name)
 	return nil
 }
 

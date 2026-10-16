@@ -231,7 +231,7 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 	}
 
 	if !anyChanges {
-		fmt.Println("All packages are in sync")
+		fmt.Println(color.GreenString("All packages are in sync"))
 		return nil
 	}
 
@@ -250,7 +250,7 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		fmt.Printf("\n=== %s ===\n", result.Manager)
+		fmt.Println("\n" + bold("=== "+result.Manager+" ==="))
 
 		if hasMissing {
 			fmt.Printf("Will install: %s\n", strings.Join(missing, ", "))
@@ -290,7 +290,7 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		fmt.Println("Done")
+		fmt.Println(color.GreenString("Done"))
 	}
 
 	return nil
