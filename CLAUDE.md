@@ -105,6 +105,17 @@ Active development happens on the `develop` branch. Commit directly there — no
 6. **Push**: `git push` directly to develop
 
 When ready for a release, merge `develop` into `main` (via PR or direct merge).
+Tag the merge commit on main (`git tag -a vX.Y.Z -m vX.Y.Z`) to run the release
+workflow. Then merge `main` back into `develop` and push it:
+
+```bash
+git checkout develop && git merge --no-ff origin/main && git push
+```
+
+The tag sits on main's merge commit, so without this step develop never contains
+it and `git describe` -- the version `make build-all` stamps into `mate version`
+-- keeps reporting the previous release. The repo deletes the head branch when a
+PR merges, so `develop` may have to be pushed back first anyway.
 
 **No direct pushes to main** — main is the stable release branch.
 
