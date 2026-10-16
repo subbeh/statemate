@@ -60,6 +60,13 @@ age:
 The command must print only the `AGE-SECRET-KEY-1…` line. `cat`-ing the file
 `age-keygen` wrote does not work, because that file also contains comment lines.
 
+To use a different key for one run, or on a machine whose config names none, set
+`STATEMATE_KEY_FILE` to its path. It overrides `identity` and `identity_command`:
+
+```bash
+STATEMATE_KEY_FILE=~/backup/key.txt mate cat ssh/.ssh/config#encrypted
+```
+
 ## 4. Encrypt files
 
 Add a file encrypted from the start:
@@ -85,6 +92,11 @@ mate diff                   # diffs the decrypted content
 
 To make `git diff` readable too, see
 [Tips: readable diffs](tips.md#readable-diffs-for-encrypted-files).
+
+Renaming a file to `#encrypted` by hand does not encrypt it. `mate doctor` reports
+any `#encrypted` file that holds plaintext, in every source and for every
+profile, so it is caught before the secret is committed. To fix it, remove
+`#encrypted` from the name and run `mate encrypt` on the file.
 
 ### More than one key
 

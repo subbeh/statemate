@@ -362,6 +362,7 @@ generate:
 | `group` | Default group for files and directories |
 | `perm` | Default mode for files, octal string. Directories are not affected |
 | `packages` | Packages this source needs |
+| `include` | Files to read `packages` and `variables` from — see below |
 | `generate` | Files created from inline content — see below |
 | `hooks` | Hooks matching only this source's files — see [Hooks](hooks.md) |
 
@@ -388,6 +389,25 @@ generate:
 
 A `.mate.yaml` that fails to parse or render is an error that names the file,
 rather than being skipped.
+
+### Source `include`
+
+Works like the top-level [`include`](#include), with paths relative to the
+source directory:
+
+```yaml
+# infra/.mate.yaml
+include:
+  - home-ops/vars.yaml
+```
+
+Included packages count as this source's packages. Included variables apply to
+every template while the source is active, this `.mate.yaml` included, and win
+over profile variables of the same name. While statemate reads the `include` list,
+variables from the include are still unset and `bitwarden` returns an empty
+string, so a template that loops over an included variable must tolerate it being
+empty. `#encrypted` is not supported here. An included file inside the source is
+deployed like any other file unless it is listed under `ignore`.
 
 ### `targets`
 
@@ -450,6 +470,7 @@ content assembled from variables or secrets.
 |----------|--------|
 | `STATEMATE_DIR` | Where to find `mate.yaml`. Overrides `source_dir` and the current directory, but not `--config` |
 | `STATEMATE_PROFILE` | Selects a profile, below config but above detection |
+| `STATEMATE_KEY_FILE` | Path to the age private key. Overrides `age.identity` and `age.identity_command` in either config |
 | `XDG_CONFIG_HOME` | Where the local config lives. Default `~/.config` |
 | `XDG_DATA_HOME` | Where `state.db` lives. Default `~/.local/share` |
 | `XDG_STATE_HOME` | Where the secrets cache lives. Default `~/.local/state` |

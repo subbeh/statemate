@@ -19,25 +19,25 @@ func NewSudoBatch() *SudoBatch {
 }
 
 func (b *SudoBatch) AddMkdir(path string, mode os.FileMode) {
-	b.script.WriteString(fmt.Sprintf("mkdir -p %q && chmod %o %q\n", path, mode, path))
+	fmt.Fprintf(&b.script, "mkdir -p %q && chmod %o %q\n", path, mode, path)
 }
 
 func (b *SudoBatch) AddWriteFile(path string, content []byte, mode os.FileMode) {
 	tmpName := fmt.Sprintf("/tmp/statemate-%d-%d", os.Getpid(), len(b.files))
 	b.files[tmpName] = content
-	b.script.WriteString(fmt.Sprintf("cp %q %q && chmod %o %q && rm %q\n", tmpName, path, mode, path, tmpName))
+	fmt.Fprintf(&b.script, "cp %q %q && chmod %o %q && rm %q\n", tmpName, path, mode, path, tmpName)
 }
 
 func (b *SudoBatch) AddChown(path, owner, group string) {
 	if group != "" {
-		b.script.WriteString(fmt.Sprintf("chown %s:%s %q\n", owner, group, path))
+		fmt.Fprintf(&b.script, "chown %s:%s %q\n", owner, group, path)
 	} else if owner != "" {
-		b.script.WriteString(fmt.Sprintf("chown %s %q\n", owner, path))
+		fmt.Fprintf(&b.script, "chown %s %q\n", owner, path)
 	}
 }
 
 func (b *SudoBatch) AddChmod(path string, mode os.FileMode) {
-	b.script.WriteString(fmt.Sprintf("chmod %o %q\n", mode, path))
+	fmt.Fprintf(&b.script, "chmod %o %q\n", mode, path)
 }
 
 func (b *SudoBatch) IsEmpty() bool {

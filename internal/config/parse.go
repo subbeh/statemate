@@ -56,6 +56,17 @@ func Load(path string) (*Config, error) {
 	localCfg := loadLocalConfig()
 	cfg.ApplyOverrides(localCfg)
 
+	// STATEMATE_KEY_FILE wins over identity and identity_command in either
+	// config, as STATEMATE_DIR wins over source_dir. Applied before includes,
+	// which may need the key to decrypt.
+	if key := os.Getenv("STATEMATE_KEY_FILE"); key != "" {
+		if cfg.Age == nil {
+			cfg.Age = &AgeConfig{}
+		}
+		cfg.Age.Identity = key
+		cfg.Age.IdentityCommand = ""
+	}
+
 	if err := cfg.setDefaults(); err != nil {
 		return nil, err
 	}
@@ -231,6 +242,19 @@ func LoadDirConfigRaw(dir string, render TemplateRenderer) (*DirConfig, error) {
 		}
 	}
 	setHookOrigin(cfg.Hooks, dir, false)
+
+	// ponytail: no age identity here, so an #encrypted source include fails; pass the encryptor in if that's needed.
+	src := &Config{sourceDir: dir}
+	for _, f := range cfg.Include {
+		inc, err := src.loadInclude(f, nil)
+		if err != nil {
+			return nil, fmt.Errorf("loading include %s: %w", f, err)
+		}
+		if inc != nil {
+			cfg.Packages = mergePackageLists(cfg.Packages, inc.Packages)
+			cfg.Variables = mergeVariables(cfg.Variables, inc.Variables)
+		}
+	}
 
 	return cfg, nil
 }

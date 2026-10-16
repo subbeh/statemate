@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/secrets"
 )
 
 var version = "dev"
@@ -15,7 +17,7 @@ var rootCmd = &cobra.Command{
 	Long: `Statemate manages your dotfiles, system configuration, and packages declaratively.
 
 Features:
-  - Stow-style multi-directory source management
+  - Multi-directory source management, one directory per application
   - Profile-based configuration with auto-detection
   - Template rendering with Go text/template
   - Age encryption for sensitive files
@@ -27,8 +29,12 @@ Use "mate [command] --help" for more information about a command.`,
 	// so any later error is a runtime one -- no config, a conflict, a broken hook
 	// -- and the usage block would only bury it. Flag and argument errors happen
 	// earlier and still print the usage.
+	//
+	// Runtime errors are printed by Execute rather than cobra, so they can be
+	// shortened first.
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
 	},
 }
 
@@ -46,7 +52,27 @@ func SetVersion(v string) {
 }
 
 func Execute() error {
-	return rootCmd.Execute()
+	cmd, err := rootCmd.ExecuteC()
+	if err != nil && cmd.SilenceErrors {
+		cmd.PrintErrln("Error:", errorMessage(err))
+	}
+	return err
+}
+
+// errorMessage shortens errors whose wrapping only buries the fix. A missing
+// secret is reported from deep inside template rendering, behind the file, the
+// template line and the function call, when all that matters is which secret it
+// is and that 'mate secrets fetch' caches it. A missing identity likewise only needs
+// its own message.
+func errorMessage(err error) string {
+	var notCached *secrets.NotCachedError
+	if errors.As(err, &notCached) {
+		return notCached.Error()
+	}
+	if errors.Is(err, secrets.ErrNoIdentity) {
+		return secrets.ErrNoIdentity.Error()
+	}
+	return err.Error()
 }
 
 func RootCmd() *cobra.Command {

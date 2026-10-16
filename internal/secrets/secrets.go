@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +20,9 @@ var ErrNoIdentity = errors.New("the secrets cache is encrypted with your age ide
 // errUnencryptedCache marks a cache written in the clear by an older mate. Its
 // contents are never parsed or echoed; the next fetch replaces it.
 var errUnencryptedCache = errors.New("secrets cache is not encrypted (written by an older mate); run 'mate secrets fetch' to replace it")
+
+// errNoCache means mate secrets fetch has never run on this machine.
+var errNoCache = errors.New("no secrets cache found (run 'mate secrets fetch')")
 
 type CacheKey struct {
 	Provider string `json:"provider"`
@@ -166,14 +168,28 @@ func (m *Manager) Fetch(items []FetchItem) (*FetchResult, error) {
 	return result, nil
 }
 
+// NotCachedError reports a secret missing from the cache. The fix is always
+// 'mate secrets fetch', so the CLI recognises it and prints that instead of the
+// template and scanning context it was wrapped in.
+type NotCachedError struct {
+	Key string
+}
+
+func (e *NotCachedError) Error() string {
+	return fmt.Sprintf("secret not cached: %s (run 'mate secrets fetch')", e.Key)
+}
+
 func (m *Manager) Get(key CacheKey) (string, error) {
 	if err := m.loadCache(); err != nil {
+		if errors.Is(err, errNoCache) {
+			return "", &NotCachedError{Key: key.String()}
+		}
 		return "", fmt.Errorf("secrets cache not available: %w", err)
 	}
 
 	cached, ok := m.cache.Items[key.String()]
 	if !ok {
-		return "", fmt.Errorf("secret not cached: %s (run 'mate secrets fetch')", key.String())
+		return "", &NotCachedError{Key: key.String()}
 	}
 	return cached.Value, nil
 }
@@ -206,7 +222,7 @@ func (m *Manager) loadCache() error {
 	data, err := os.ReadFile(m.cachePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("no secrets cache found (run 'mate secrets fetch')")
+			return errNoCache
 		}
 		return err
 	}
@@ -215,7 +231,7 @@ func (m *Manager) loadCache() error {
 	// set. Handing that to age fails with an error quoting the first line of
 	// the file -- the secrets themselves -- so recognise it up front and never
 	// let its contents reach an error message.
-	if !isAgeFile(data) {
+	if !encrypt.IsAgeFile(data) {
 		return errUnencryptedCache
 	}
 
@@ -230,12 +246,6 @@ func (m *Manager) loadCache() error {
 	}
 	m.cache = cache
 	return nil
-}
-
-// isAgeFile reports whether data is an age file, binary or armored.
-func isAgeFile(data []byte) bool {
-	return bytes.HasPrefix(data, []byte("age-encryption.org/")) ||
-		bytes.HasPrefix(data, []byte("-----BEGIN AGE ENCRYPTED FILE-----"))
 }
 
 func (m *Manager) saveCache() error {

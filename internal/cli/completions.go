@@ -7,10 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/target"
 )
 
 // completeFilePaths hands completion to the shell's own filesystem completion.
@@ -97,6 +99,80 @@ func completeManagedFiles(cmd *cobra.Command, args []string, toComplete string) 
 		if rel := cwdRelativeCompletion(e, cwd, sourcePaths); rel != "" {
 			completions = append(completions, rel)
 		}
+	}
+
+	return completions, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completePendingFiles offers what apply, status and diff would act on: the files
+// with pending changes for the active profile, and the directories holding them,
+// so a whole directory can be applied at once.
+func completePendingFiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	cfgPath, _ := cmd.Flags().GetString("config")
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	profileName, _ := cmd.Flags().GetString("profile")
+	if profileName == "" {
+		profileName = profile.Detect(cfg)
+	}
+	sourcePaths := cfg.ResolveSourcePaths(profile.ResolveSources(cfg, profileName))
+
+	scanner, err := newScanner(cfg, profileName)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	tree, err := scanner.Scan(sourcePaths)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	if profileName != "" {
+		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
+	}
+
+	db, err := openState(cfg)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	defer func() { _ = db.Close() }()
+
+	var enc *encrypt.AgeEncryptor
+	if cfg.Age != nil {
+		enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
+	}
+	tmplCtx, err := newTemplateContext(cfg, profileName)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	result, err := target.ComputeChanges(tree, db, target.ComputeOpts{TmplCtx: tmplCtx, Enc: enc})
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	cwd, _ := os.Getwd()
+	seen := make(map[string]bool)
+	var completions []string
+	add := func(p string) {
+		if !seen[p] {
+			seen[p] = true
+			completions = append(completions, p)
+		}
+	}
+	for _, c := range result.Changes {
+		rel := cwdRelativeCompletion(c.Entry, cwd, sourcePaths)
+		if rel == "" {
+			continue
+		}
+		for dir := filepath.Dir(rel); dir != "." && dir != "/"; dir = filepath.Dir(dir) {
+			add(dir)
+		}
+		add(rel)
 	}
 
 	return completions, cobra.ShellCompDirectiveNoFileComp

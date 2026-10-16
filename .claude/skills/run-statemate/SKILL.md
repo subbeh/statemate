@@ -89,7 +89,7 @@ Run any mate command against it — stdin closed, non-interactive:
 ```bash
 python3 .claude/skills/run-statemate/driver.py run status
 python3 .claude/skills/run-statemate/driver.py run managed
-python3 .claude/skills/run-statemate/driver.py run apply --no-scripts
+python3 .claude/skills/run-statemate/driver.py run apply --no-scripts --noconfirm
 ```
 
 `apply` still prints the package prompt (`Install? [y/N]`) — with stdin closed it

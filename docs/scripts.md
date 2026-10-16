@@ -43,7 +43,7 @@ migrate.sh#once#before#profile:arch
 | Frequency | Runs |
 |-----------|------|
 | `once` | The first time only, on this machine |
-| `onchange` | When the script's own source has pending changes |
+| `onchange` | When the script's own source has pending changes, or its last run failed |
 | `always` | On every apply |
 | `daily` | At most once in 24 hours |
 | `weekly` | At most once in 7 days |
@@ -67,6 +67,10 @@ run one on demand.
 
 Pending changes are computed before any file is written, so an `onchange` script
 sees the same set whether its timing is `before` or `after`.
+
+A run that fails keeps the script due on later applies, even though the changes
+that triggered it have since been written, until it succeeds or you answer `s` to
+mark it done.
 
 To react to specific files rather than a whole source — `*.service`, say — use a
 [hook](hooks.md).
@@ -103,19 +107,19 @@ Matching is case-insensitive and tolerant of whitespace. The description appears
 ```
 Run keyd-restart.sh (after, onchange)?
   Restart keyd after its configuration changes
-[y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit:
+[Y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit:
 ```
 
 | Answer | Effect |
 |--------|--------|
-| `y` | Run it |
+| `y` or Enter | Run it |
 | `n` | Skip this time; offered again next apply |
 | `s` | Mark as done without running, so it is not offered again |
 | `a` | Run this and auto-confirm the rest |
 | `q` | Abort the apply |
 
-Each answer is a single keypress — there is no need to press Enter. Ctrl-C aborts
-like `q`.
+Each answer is a single keypress — there is no need to press Enter. Enter on its
+own answers yes, and Ctrl-C aborts like `q`.
 
 `[s]kip` is not offered for `always` scripts, whose runs are never recorded — there
 is no meaningful "never ask again" for a script that opted into running every time.
@@ -132,6 +136,7 @@ For unattended runs:
 |------|--------|
 | `--force` | Auto-confirm every script, hook, and package install, and overwrite conflicts |
 | `--no-scripts` | Skip all scripts silently |
+| `--noconfirm` | Apply without listing the file changes and asking first (implied by `--force`) |
 
 Without a terminal to prompt on, scripts are **skipped with a warning**. Automated
 runs must pass `--force` or `--no-scripts` explicitly.

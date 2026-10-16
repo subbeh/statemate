@@ -16,7 +16,7 @@ makes it so.
     70-plugins.sh#monthly#after      run after applying, once a month
 ```
 
-- **Stow-style sources.** One directory per tool, deployed relative to your home
+- **Per-tool sources.** One directory per tool, deployed relative to your home
   directory or anywhere else.
 - **Knows which side changed.** Two hashes per file tell your edit in the
   repository apart from an application rewriting its own config, so nothing is

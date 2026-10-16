@@ -6,7 +6,7 @@ import (
 
 func TestUnqualifiedName(t *testing.T) {
 	tests := []struct{ in, want string }{
-		{"jamf/internal-tap/hermes", "hermes"},
+		{"hashicorp/tap/terraform", "terraform"},
 		{"atlassian/acli/acli", "acli"},
 		{"ripgrep", "ripgrep"},
 		{"", ""},

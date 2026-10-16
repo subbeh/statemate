@@ -151,7 +151,7 @@ func TestComputeSync_TapQualifiedPackageIsInstalled(t *testing.T) {
 	// asymmetry is the bug.
 	f := &fakeManager{
 		installed: []Package{
-			{Name: "jamf/internal-tap/hermes"},
+			{Name: "hashicorp/tap/terraform"},
 			{Name: "slack"},
 		},
 		queryReportsBare: true,
@@ -159,7 +159,7 @@ func TestComputeSync_TapQualifiedPackageIsInstalled(t *testing.T) {
 	withFakeManager(t, f)
 
 	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{
-		"jamf/internal-tap/hermes",
+		"hashicorp/tap/terraform",
 		"slack",
 	}}}
 
@@ -182,10 +182,10 @@ func TestComputeSync_TapQualifiedPackageIsInstalled(t *testing.T) {
 
 // The inverse spelling: declared bare, installed from a tap.
 func TestComputeSync_BareNameMatchesTapInstall(t *testing.T) {
-	f := &fakeManager{installed: []Package{{Name: "jamf/internal-tap/hermes"}}}
+	f := &fakeManager{installed: []Package{{Name: "hashicorp/tap/terraform"}}}
 	withFakeManager(t, f)
 
-	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"hermes"}}}
+	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"terraform"}}}
 
 	results, err := ComputeSync(cfg, "", nil, WithExtras(true))
 	if err != nil {
@@ -204,14 +204,14 @@ func TestComputeSync_BareNameMatchesTapInstall(t *testing.T) {
 // reported missing, and a genuinely undeclared one still reported extra.
 func TestComputeSync_UnrelatedPackagesStillClassified(t *testing.T) {
 	f := &fakeManager{installed: []Package{
-		{Name: "jamf/internal-tap/hermes"},
+		{Name: "hashicorp/tap/terraform"},
 		{Name: "some/tap/undeclared"},
 	}}
 	withFakeManager(t, f)
 
 	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{
-		"jamf/internal-tap/hermes",
-		"jamf/internal-tap/absent",
+		"hashicorp/tap/terraform",
+		"hashicorp/tap/absent",
 	}}}
 
 	results, err := ComputeSync(cfg, "", nil, WithExtras(true))
@@ -220,8 +220,8 @@ func TestComputeSync_UnrelatedPackagesStillClassified(t *testing.T) {
 	}
 
 	missing := results[0].Missing()
-	if len(missing) != 1 || missing[0] != "jamf/internal-tap/absent" {
-		t.Errorf("missing: got %v, want [jamf/internal-tap/absent]", missing)
+	if len(missing) != 1 || missing[0] != "hashicorp/tap/absent" {
+		t.Errorf("missing: got %v, want [hashicorp/tap/absent]", missing)
 	}
 	extra := results[0].Extra()
 	if len(extra) != 1 || extra[0] != "some/tap/undeclared" {

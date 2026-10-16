@@ -31,7 +31,7 @@ func TestCanonicalOptName(t *testing.T) {
 	}
 
 	install("kubernetes-cli", "1.37.0", "kubernetes-cli", "kubectl")
-	install("hermes", "2.1.0", "hermes")
+	install("terraform", "2.1.0", "terraform")
 
 	// Not a symlink at all: brew puts nothing like this in opt, but a stray file
 	// must not be mistaken for an install.
@@ -46,7 +46,7 @@ func TestCanonicalOptName(t *testing.T) {
 	}{
 		{"kubectl", "kubernetes-cli", "the alias people actually type"},
 		{"kubernetes-cli", "kubernetes-cli", "canonical name resolves to itself"},
-		{"jamf/internal-tap/hermes", "hermes", "tap-qualified declaration, bare opt link"},
+		{"hashicorp/tap/terraform", "terraform", "tap-qualified declaration, bare opt link"},
 		{"notinstalled", "", "nothing in opt answers to it"},
 		{"stray", "", "not a symlink into the Cellar"},
 		{"", "", "empty name"},
@@ -70,14 +70,14 @@ func TestCanonicalOptNameWithoutPrefix(t *testing.T) {
 }
 
 // A tap formula is reported by `brew list --formula` under its bare name
-// (`hermes`), but users declare it by the fully-qualified name they installed it
-// with (`jamf/internal-tap/hermes`) -- and `brew leaves` prints that qualified form
+// (`terraform`), but users declare it by the fully-qualified name they installed it
+// with (`hashicorp/tap/terraform`) -- and `brew leaves` prints that qualified form
 // too. Matching either spelling against the other is what stops such a package
 // from being reported missing forever and reinstalled on every apply.
 func TestBrewNameIndexMatchesBothSpellings(t *testing.T) {
 	// What `brew list --formula --full-name` and `--cask` actually print.
 	installed := newBrewIndex([]string{
-		"jamf/internal-tap/hermes",
+		"hashicorp/tap/terraform",
 		"atlassian/acli/acli",
 		"ripgrep",
 	})
@@ -87,16 +87,16 @@ func TestBrewNameIndexMatchesBothSpellings(t *testing.T) {
 		want     bool
 		why      string
 	}{
-		{"jamf/internal-tap/hermes", true, "declared exactly as installed"},
-		{"hermes", true, "declared bare, installed from a tap"},
+		{"hashicorp/tap/terraform", true, "declared exactly as installed"},
+		{"terraform", true, "declared bare, installed from a tap"},
 		{"atlassian/acli/acli", true, "qualified name where formula and tap share a name"},
 		{"acli", true, "bare form of that same formula"},
 		{"ripgrep", true, "plain core formula"},
-		{"other/tap/hermes", true, "same formula name from a different tap spelling"},
+		{"other/tap/terraform", true, "same formula name from a different tap spelling"},
 		{"notinstalled", false, "genuinely absent"},
-		{"jamf/internal-tap/absent", false, "absent, qualified"},
+		{"hashicorp/tap/absent", false, "absent, qualified"},
 		{"erme", false, "substring of an installed name must not match"},
-		{"hermes-extra", false, "superstring must not match"},
+		{"terraform-extra", false, "superstring must not match"},
 	}
 
 	for _, tc := range tests {
@@ -151,7 +151,7 @@ func TestBrewNameIndexIgnoresBlanks(t *testing.T) {
 func TestParseBrewDescriptionsKeysBothSpellings(t *testing.T) {
 	descs, err := parseBrewDescriptions([]byte(`{
 		"formulae": [
-			{"name": "hermes", "full_name": "jamf/internal-tap/hermes", "desc": "Hermes CLI"},
+			{"name": "terraform", "full_name": "hashicorp/tap/terraform", "desc": "Terraform CLI"},
 			{"name": "ripgrep", "full_name": "ripgrep", "desc": "Search tool"}
 		],
 		"casks": [
@@ -163,8 +163,8 @@ func TestParseBrewDescriptionsKeysBothSpellings(t *testing.T) {
 	}
 
 	for _, tc := range []struct{ name, want string }{
-		{"jamf/internal-tap/hermes", "Hermes CLI"},
-		{"hermes", "Hermes CLI"},
+		{"hashicorp/tap/terraform", "Terraform CLI"},
+		{"terraform", "Terraform CLI"},
 		{"ripgrep", "Search tool"},
 		{"slack", "Team communication"},
 	} {

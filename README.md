@@ -5,7 +5,7 @@ across machines.
 
 ## Features
 
-- **Stow-style sources** — organize configs by app, deployed relative to home
+- **Sources** — organize configs by app, deployed relative to home
 - **Profiles** — machine-specific configs with auto-detection
 - **Templates** — Go templates with the sprig function library
 - **Encryption** — age encryption for sensitive files
@@ -84,6 +84,10 @@ built from [`docs/`](docs/README.md):
 | [Command Reference](docs/commands/mate.md) | Every command and flag |
 
 `mate <command> --help` gives the same reference in the terminal.
+
+For a complete setup to borrow from, with profiles for macOS and Arch Linux,
+encrypted files, Bitwarden secrets, scripts and hooks, see the author's
+[dotfiles](https://github.com/subbeh/dotfiles).
 
 ## Configuration at a glance
 

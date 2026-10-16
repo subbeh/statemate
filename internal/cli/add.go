@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,12 +18,16 @@ import (
 
 var addCmd = &cobra.Command{
 	Use:   "add <path>",
-	Short: "Add a file to source",
-	Long: `Add an existing file to the source directory.
+	Short: "Add a file or directory to source",
+	Long: `Add an existing file or directory to the source directory.
 
-The file is copied into a source, keeping its path relative to the target base
-(stow-style), and the original stays in place. Directories cannot be added;
-add the files in them one by one.
+Files are copied into a source, keeping their paths relative to the target base,
+and the originals stay in place. Directories are added recursively, including
+hidden files. Files already in the chosen source are skipped; a file
+managed by another source stops the command before any files are copied.
+File symlinks are copied as ordinary files using their contents; directory
+symlinks, configured source directories, and empty directories are not added.
+Unreadable files, broken symlinks, and special files stop the command.
 
 The source is the one named with --source, else 'default_source' from the
 config, else one you pick from a list of the configured sources. The source must
@@ -32,10 +37,12 @@ A file outside your home directory, such as one under /etc, needs a source that
 maps that location (see 'targets:' in a source's .mate.yaml); for a source
 without a .mate.yaml, mate offers to create one.
 
---for-profile marks the file #profile:<name>, so it is only deployed for that
-profile. The global --profile only selects the active profile, which decides the
+--for-profile marks each file #profile:<name>, so it is only deployed for that
+profile. --encrypt and --template also apply to every added file.
+The global --profile only selects the active profile, which decides the
 sources you can add to, as it does for every other command.`,
 	Example: `  mate add ~/.config/nvim/init.lua
+  mate add ~/.config/nvim
   mate add --for-profile work ~/.gitconfig
   mate add --encrypt ~/.ssh/config`,
 	Args: cobra.ExactArgs(1),
@@ -51,10 +58,10 @@ var (
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().StringVar(&addForProfile, "for-profile", "", "deploy the file only for this profile (adds #profile:<name>)")
-	addCmd.Flags().BoolVar(&addEncrypt, "encrypt", false, "encrypt file when adding")
+	addCmd.Flags().StringVar(&addForProfile, "for-profile", "", "deploy added files only for this profile (adds #profile:<name>)")
+	addCmd.Flags().BoolVar(&addEncrypt, "encrypt", false, "encrypt each file when adding")
 	addCmd.Flags().StringVarP(&addSource, "source", "s", "", "target source directory")
-	addCmd.Flags().BoolVar(&addTemplate, "template", false, "mark file as template")
+	addCmd.Flags().BoolVar(&addTemplate, "template", false, "mark each file as template")
 
 	_ = addCmd.RegisterFlagCompletionFunc("source", completeSources)
 	_ = addCmd.RegisterFlagCompletionFunc("for-profile", completeProfiles)
@@ -87,9 +94,6 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("file not found: %s", targetPath)
 	}
-	if info.IsDir() {
-		return fmt.Errorf("cannot add directories directly, add files individually")
-	}
 
 	scanner, err := newScanner(cfg, profileName)
 	if err != nil {
@@ -100,9 +104,11 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("scanning sources: %w", err)
 	}
 
-	for _, entry := range tree.Files() {
-		if entry.TargetPath == targetPath {
-			return fmt.Errorf("file already managed: %s (in %s)", targetPath, filepath.Base(filepath.Dir(entry.SourcePath)))
+	if !info.IsDir() {
+		for _, entry := range tree.Files() {
+			if entry.TargetPath == targetPath {
+				return fmt.Errorf("file already managed: %s (in %s)", targetPath, filepath.Base(filepath.Dir(entry.SourcePath)))
+			}
 		}
 	}
 
@@ -147,6 +153,118 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return template.Render(data, tmplCtx)
 	}
 
+	if !info.IsDir() {
+		return addFileToSource(targetPath, info, sourceDir, cfg, tree, renderer)
+	}
+
+	files, err := collectAddFiles(targetPath, absSources)
+	if err != nil {
+		return err
+	}
+	files, err = unmanagedAddFiles(files, sourceDir, tree)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if err := addFileToSource(file.path, file.info, sourceDir, cfg, tree, renderer); err != nil {
+			return fmt.Errorf("adding %s: %w", file.path, err)
+		}
+	}
+	return nil
+}
+
+type addFile struct {
+	path string
+	info os.FileInfo
+}
+
+// Finish discovery before writing anything into a source. Besides avoiding
+// recursive self-imports, this reports traversal errors before copying files.
+func collectAddFiles(root string, sources []string) ([]addFile, error) {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, fmt.Errorf("resolving directory %s: %w", root, err)
+	}
+	var realSources []string
+	for _, sourceDir := range sources {
+		realSource, err := filepath.EvalSymlinks(sourceDir)
+		if err != nil {
+			return nil, fmt.Errorf("resolving source %s: %w", sourceDir, err)
+		}
+		realSources = append(realSources, realSource)
+	}
+
+	var files []addFile
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			realPath := filepath.Join(realRoot, rel)
+			for _, sourceDir := range realSources {
+				if pathWithin(sourceDir, realPath) {
+					return filepath.SkipDir
+				}
+			}
+			return nil
+		}
+		// Stat follows file symlinks, matching single-file add. WalkDir itself
+		// never descends into directory symlinks, including loops.
+		info, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("cannot add non-regular file: %s", path)
+		}
+		files = append(files, addFile{path: path, info: info})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reading directory %s: %w", root, err)
+	}
+	return files, nil
+}
+
+// Check the entire batch before copying, so a conflict in a later file cannot
+// leave a directory half imported. A target may appear in more than one source.
+func unmanagedAddFiles(files []addFile, sourceDir string, tree *source.Tree) ([]addFile, error) {
+	managed := make(map[string][]*source.Entry)
+	for _, entry := range tree.Files() {
+		managed[entry.TargetPath] = append(managed[entry.TargetPath], entry)
+	}
+	var pending []addFile
+	for _, file := range files {
+		owners := managed[file.path]
+		for _, owner := range owners {
+			ownerDir := owner.SourcePath
+			if !owner.Generated {
+				ownerDir = strings.TrimSuffix(owner.SourcePath, string(filepath.Separator)+owner.RelPath)
+			}
+			if filepath.Clean(ownerDir) != filepath.Clean(sourceDir) {
+				return nil, fmt.Errorf("file already managed by another source: %s (in %s)", file.path, ownerDir)
+			}
+		}
+		if len(owners) == 0 {
+			pending = append(pending, file)
+		}
+	}
+	return pending, nil
+}
+
+func pathWithin(base, path string) bool {
+	rel, err := filepath.Rel(base, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func addFileToSource(targetPath string, info os.FileInfo, sourceDir string, cfg *config.Config, tree *source.Tree, renderer config.TemplateRenderer) error {
 	targetBase, err := resolveTargetBaseForAdd(sourceDir, targetPath, cfg.TargetBase, tree, renderer)
 	if err != nil {
 		return err

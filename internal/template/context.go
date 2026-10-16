@@ -101,6 +101,21 @@ func NewContext(cfg *config.Config, profileName string, opts ...ContextOption) (
 		}
 	}
 
+	// A source's .mate.yaml must be rendered to read its include, and its template
+	// may use what that include provides, so this first render leaves those empty.
+	// Secrets aren't wired up yet and stay empty too. A file that fails here is
+	// reported by the scanner, which renders it again.
+	ctx.SecretLookup = func(_, _, _ string) (string, error) { return "", nil }
+	render := func(data []byte) ([]byte, error) { return Render(data, ctx) }
+	for _, dir := range cfg.ResolveSourcePaths(profile.ResolveSources(cfg, profileName)) {
+		if dirCfg, err := config.LoadDirConfigRaw(dir, render); err == nil && dirCfg != nil {
+			for k, v := range dirCfg.Variables {
+				ctx.Vars[k] = v
+			}
+		}
+	}
+	ctx.SecretLookup = nil
+
 	return ctx, nil
 }
 

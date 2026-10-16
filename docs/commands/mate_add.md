@@ -1,14 +1,18 @@
 # mate add
 
-Add a file to source
+Add a file or directory to source
 
 ## Synopsis
 
-Add an existing file to the source directory.
+Add an existing file or directory to the source directory.
 
-The file is copied into a source, keeping its path relative to the target base
-(stow-style), and the original stays in place. Directories cannot be added;
-add the files in them one by one.
+Files are copied into a source, keeping their paths relative to the target base,
+and the originals stay in place. Directories are added recursively, including
+hidden files. Files already in the chosen source are skipped; a file
+managed by another source stops the command before any files are copied.
+File symlinks are copied as ordinary files using their contents; directory
+symlinks, configured source directories, and empty directories are not added.
+Unreadable files, broken symlinks, and special files stop the command.
 
 The source is the one named with --source, else 'default_source' from the
 config, else one you pick from a list of the configured sources. The source must
@@ -18,8 +22,9 @@ A file outside your home directory, such as one under /etc, needs a source that
 maps that location (see 'targets:' in a source's .mate.yaml); for a source
 without a .mate.yaml, mate offers to create one.
 
---for-profile marks the file #profile:&lt;name>, so it is only deployed for that
-profile. The global --profile only selects the active profile, which decides the
+--for-profile marks each file #profile:&lt;name>, so it is only deployed for that
+profile. --encrypt and --template also apply to every added file.
+The global --profile only selects the active profile, which decides the
 sources you can add to, as it does for every other command.
 
 ```
@@ -30,6 +35,7 @@ mate add <path> [flags]
 
 ```
   mate add ~/.config/nvim/init.lua
+  mate add ~/.config/nvim
   mate add --for-profile work ~/.gitconfig
   mate add --encrypt ~/.ssh/config
 ```
@@ -37,11 +43,11 @@ mate add <path> [flags]
 ## Options
 
 ```
-      --encrypt              encrypt file when adding
-      --for-profile string   deploy the file only for this profile (adds #profile:<name>)
+      --encrypt              encrypt each file when adding
+      --for-profile string   deploy added files only for this profile (adds #profile:<name>)
   -h, --help                 help for add
   -s, --source string        target source directory
-      --template             mark file as template
+      --template             mark each file as template
 ```
 
 ## Options inherited from parent commands

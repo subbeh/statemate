@@ -53,19 +53,31 @@ release:
   prerelease: auto
   name_template: "{{.ProjectName}} v{{.Version}}"
 
-brews:
-  - repository:
+# A cask, not a formula: goreleaser removes `brews` in v3, and the release
+# workflow runs the latest v2, so it would break there. The tap's
+# tap_migrations.json moves existing formula installs over to this cask.
+#
+# mate is not signed or notarized, so macOS would quarantine it; the hook clears
+# that. It uses `install`, not `install_steps`: the latter needs goreleaser v2.19
+# and older versions reject it. Switch once v2.19 is released.
+homebrew_casks:
+  - name: statemate
+    repository:
       owner: subbeh
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-    directory: Formula
+    directory: Casks
     homepage: "https://github.com/subbeh/statemate"
     description: "Declarative system configuration management"
     license: "MIT"
-    install: |
-      bin.install "mate"
-    test: |
-      system "#{bin}/mate", "--version"
+    binaries:
+      - mate
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/mate"]
+          end
 
 aurs:
   - name: statemate-bin

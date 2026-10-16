@@ -10,7 +10,7 @@ repository or its source was dropped from 'sources:'.
 
 With no arguments, the orphans are listed and nothing is removed. Name orphans
 to remove them, or pass --all for every one. Each removal is confirmed unless
---force is given. Files you cannot write to are removed with sudo.
+--force (or --noconfirm) is given. Files you cannot write to are removed with sudo.
 
 Hooks matching the removed files run afterwards (see 'mate hooks'); --force
 also confirms them.
@@ -33,9 +33,10 @@ mate clean [path...] [flags]
 ## Options
 
 ```
-      --all     remove all orphans
-      --force   skip confirmation prompts
-  -h, --help    help for clean
+      --all         remove all orphans
+      --force       skip confirmation prompts
+  -h, --help        help for clean
+      --noconfirm   same as --force
 ```
 
 ## Options inherited from parent commands

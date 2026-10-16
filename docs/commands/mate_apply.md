@@ -15,14 +15,20 @@ mate apply -s <source>   apply that source's files, run its scripts, and
                          prompt for its packages
 ```
 
-The positional argument is always a file or path filter; --source is the only
-way to select a source. Repo-root scripts are not run under --source, since
+The positional argument is always a file or path filter, and a directory
+covers every file under it, relative to the current directory or not; --source
+is the only way to select a source. Repo-root scripts are not run under --source, since
 they apply to the whole repository.
+
+Before anything runs, the files about to change are listed (with the markers
+of 'mate status') and the apply asks to proceed. --noconfirm skips the list and
+the question; --force and --dry-run do too. Without a terminal to ask on, the
+apply stops: pass --noconfirm for automated runs.
 
 Scripts due to run are confirmed individually before executing:
 
 ```
-[y]es    run the script
+[Y]es    run the script (Enter also runs it)
 [n]o     skip this time; ask again on the next apply
 [s]kip   mark as done without running, so it is not offered again
          (not available for 'always' scripts, whose runs are never recorded)
@@ -39,7 +45,9 @@ skipped with a warning.
 
 Hooks run for the files this apply wrote, after packages and before #after
 scripts, and are confirmed the same way (without [s]kip). A failed hook does
-not stop the others, but the apply exits non-zero. See 'mate hooks'.
+not stop the others, but the apply exits non-zero. A hook that did not run, or
+failed, stays pending and is offered again on the next apply; [n]o settles it.
+See 'mate hooks'.
 
 Missing secrets are fetched before anything is written, and missing packages
 are offered for install after the files are written.
@@ -64,6 +72,7 @@ mate apply [path] [flags]
       --force           overwrite conflicting targets and auto-confirm scripts, hooks and package installs
   -h, --help            help for apply
       --no-scripts      skip all scripts
+      --noconfirm       apply without listing the changes and asking first
   -s, --source string   limit to a single source
   -V, --verbose count   list every file written, and with --dry-run the files and steps of each hook
 ```

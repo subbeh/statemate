@@ -179,3 +179,16 @@ func TestGet_WithoutIdentityDoesNotReadPlaintext(t *testing.T) {
 	}
 	assertNoSecret(t, "error", err.Error())
 }
+
+// Before the first fetch there is no cache at all, which for a template is the
+// same as the secret missing from it.
+func TestGetWithoutCacheReportsNotCached(t *testing.T) {
+	m, _ := newTestManager(t, identityCommandEncryptor(t), filepath.Join(t.TempDir(), "secrets.age"))
+	key := CacheKey{Provider: "bitwarden", Item: "vps", Type: "ssh", Field: "private"}
+
+	_, err := m.Get(key)
+	var notCached *NotCachedError
+	if !errors.As(err, &notCached) || notCached.Key != key.String() {
+		t.Fatalf("expected NotCachedError for %s, got %v", key, err)
+	}
+}

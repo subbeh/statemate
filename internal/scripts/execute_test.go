@@ -300,3 +300,42 @@ func TestExecutor_ManualScript(t *testing.T) {
 		t.Errorf("manual script should be skipped in batch execute, got %d skipped", result.Skipped)
 	}
 }
+
+// The changes that trigger an #onchange script are applied before an #after
+// script runs, so a failed run must stay due without them.
+func TestExecutor_OnchangeRetriesAfterFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	scriptPath := filepath.Join(tmpDir, "01-sync#onchange#after.sh")
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\nexit 1\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	script := &Script{Path: scriptPath, Name: "sync", Frequency: FreqOnchange, Timing: TimingAfter, SourceDir: tmpDir}
+
+	changed := NewExecutor(db, nil, false, false).WithConfirmation(true, false).WithChangedSources(NewChangedSources(tmpDir))
+	if _, err := changed.Execute(Scripts{script}); err == nil {
+		t.Fatal("expected the failing script to fail")
+	}
+
+	unchanged := NewExecutor(db, nil, false, false).WithConfirmation(true, false)
+	if due, _, err := ShouldRun(script, db, ChangedSources{}); err != nil || !due {
+		t.Fatalf("failed script should stay due without changes: due=%v err=%v", due, err)
+	}
+
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	result, err := unchanged.Execute(Scripts{script})
+	if err != nil || result.Executed != 1 {
+		t.Fatalf("expected the retry to run: executed=%d err=%v", result.Executed, err)
+	}
+	if due, _, _ := ShouldRun(script, db, ChangedSources{}); due {
+		t.Error("script should not be due again after succeeding")
+	}
+}

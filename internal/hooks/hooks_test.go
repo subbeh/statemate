@@ -8,6 +8,7 @@ import (
 
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/scripts"
+	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 )
 
@@ -39,11 +40,44 @@ func TestMatch(t *testing.T) {
 		{".config/tmux/", "/home/u/.config/tmux/tmux.conf", true},
 		{"tmux.conf/", "/home/u/.config/tmux/tmux.conf", false},
 		{"~", "/home/u/.zshrc", true},
+		// Source attributes in patterns do not appear in the deployed target.
+		{"*.service#template", "/etc/systemd/system/keyd.service", true},
+		{"*.service#template", "/etc/systemd/system/keyd.timer", false},
+		{".config#perm-r:700/tmux/*.conf#encrypted#template", "/home/u/.config/tmux/tmux.conf", true},
+		{"~/.config/tmux#owner-r:root/**/*.conf#profile:work", "/home/u/.config/tmux/a/b/c.conf", true},
+		{"/etc#group-r:root/keyd/*.conf#tmpl#perm:600", "/etc/keyd/default.conf", true},
+		{".config/tmux#perm:700/", "/home/u/.config/tmux/tmux.conf", true},
+		{"tmux.conf#template/", "/home/u/.config/tmux/tmux.conf", false},
+		{".config/tmux#perm:700/*.conf#template", "/home/u/.config/tmux/sub/a.conf", false},
+		// Unknown hashes, escaped hashes, and glob classes remain literal.
+		{"note#draft#template", "/home/u/note#draft", true},
+		{"note#", "/home/u/note#", true},
+		{"note##draft", "/home/u/note##draft", true},
+		{"note#template-copy", "/home/u/note#template-copy", true},
+		{`note\#template`, "/home/u/note#template", true},
+		{"note[#]template", "/home/u/note#template", true},
+		{"note[#template]#template", "/home/u/note#", true},
+		{`note[\]]#template`, "/home/u/note]", true},
+		// A literal attribute-like suffix in a real target is not stripped.
+		{"note", "/home/u/note#template", false},
 	}
 	for _, tc := range tests {
 		if got := match(tc.pattern, tc.target, home); got != tc.want {
 			t.Errorf("match(%q, %q) = %v, want %v", tc.pattern, tc.target, got, tc.want)
 		}
+	}
+}
+
+func TestMatchAllSourceAttributes(t *testing.T) {
+	for _, attr := range source.AttrNames {
+		if strings.HasSuffix(attr, ":") {
+			attr += "value"
+		}
+		t.Run(attr, func(t *testing.T) {
+			if !match(".config#"+attr+"/app.conf#"+attr, "/home/u/.config/app.conf", "/home/u") {
+				t.Errorf("#%s should be ignored in directory and file patterns", attr)
+			}
+		})
 	}
 }
 
@@ -259,5 +293,43 @@ func TestRunNoScriptsAndNoTTY(t *testing.T) {
 	res, err = runner.Run(triggered)
 	if err != nil || res.Ran != 1 || len(res.Failed) != 0 {
 		t.Errorf("dry run should report without running, got %+v, %v", res, err)
+	}
+}
+
+// Hooks left pending by an earlier apply join the triggered ones, with their
+// files merged; pending hooks that are gone, disabled or inactive are dropped.
+func TestWithPending(t *testing.T) {
+	disabled := false
+	cfg := &config.Config{Hooks: map[string]*config.Hook{
+		"a-new":  hook("/etc", config.HookStep{Run: "true"}),
+		"b-both": hook("/etc", config.HookStep{Run: "true"}),
+		"c-old":  hook("/etc", config.HookStep{Run: "true"}),
+		"off":    {Match: config.StringList{"/etc"}, Enabled: &disabled},
+		"arch":   {Match: config.StringList{"/etc"}, Do: []config.HookStep{{Run: "true"}}, Profile: "arch"},
+	}}
+	set, err := Collect(cfg, nil, func(string) *config.DirConfig { return nil }, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	triggered := []*Triggered{
+		{Hook: set.Get("a-new"), Files: []string{"/etc/a"}},
+		{Hook: set.Get("b-both"), Files: []string{"/etc/b2"}},
+	}
+	pending := map[string][]string{
+		"b-both": {"/etc/b1", "/etc/b2"},
+		"c-old":  {"/etc/c"},
+		"off":    {"/etc/x"},
+		"arch":   {"/etc/x"},
+		"gone":   {"/etc/x"},
+	}
+
+	var got []string
+	for _, tr := range set.WithPending(triggered, pending, []string{"base"}) {
+		got = append(got, tr.Name+"="+strings.Join(tr.Files, ","))
+	}
+	want := "a-new=/etc/a b-both=/etc/b1,/etc/b2 c-old=/etc/c"
+	if strings.Join(got, " ") != want {
+		t.Errorf("got %q, want %q", strings.Join(got, " "), want)
 	}
 }

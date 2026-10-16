@@ -53,8 +53,8 @@ use.
 ## Create a source
 
 A **source** is a directory in the repository whose contents are deployed
-relative to your home directory, stow-style. Create one per application and
-list it in `mate.yaml`:
+relative to your home directory. Create one per application and list it in
+`mate.yaml`:
 
 ```bash
 mkdir zsh
@@ -91,6 +91,27 @@ Skip the question with `--source zsh`, or set
 [`default_source`](configuration.md#keys) in `mate.yaml`. The source must
 already exist as a directory and be listed under `sources:`. `mate add` will
 not create one.
+
+To add all files in a directory, including hidden files and nested directories:
+
+```bash
+mate add ~/.config/nvim --source nvim
+```
+
+The directory structure stays relative to the target base: this puts the files
+under `nvim/.config/nvim/` in your repository. `--for-profile`, `--encrypt`, and
+`--template` apply to every added file. File permissions are copied and the
+original files stay in place.
+
+Files already managed by the selected source are left unchanged. If any file
+belongs to a different active source, the command reports an error before
+copying any files. Adding an individual managed file still reports an error.
+File symlinks are copied as ordinary files containing the linked file's contents;
+directory symlinks are skipped. Empty directories and configured source
+directories are also skipped, so adding a parent of your source cannot copy it
+into itself. Broken symlinks, unreadable files, and special files cause an error.
+If reading or writing a file fails during copying, files already added remain
+in the source; correct the error and run the command again.
 
 ```
 ~/dotfiles/

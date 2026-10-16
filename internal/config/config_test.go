@@ -450,3 +450,27 @@ func TestSaveLocalSourceDirRefusesUnparseableConfig(t *testing.T) {
 		t.Errorf("unparseable local config was rewritten:\n%s", data)
 	}
 }
+
+// STATEMATE_KEY_FILE replaces the configured identity and identity_command, and
+// works when the config has no age section at all.
+func TestLoadKeyFileEnvOverridesIdentity(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("STATEMATE_KEY_FILE", "~/key.txt")
+
+	for _, body := range []string{
+		"sources: [nvim]\n",
+		"sources: [nvim]\nage:\n  identity: /other.txt\n  identity_command: rbw get key\n",
+	} {
+		path := filepath.Join(t.TempDir(), "mate.yaml")
+		if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Age.Identity != "~/key.txt" || cfg.Age.IdentityCommand != "" {
+			t.Errorf("config %q: got identity %q, command %q", body, cfg.Age.Identity, cfg.Age.IdentityCommand)
+		}
+	}
+}

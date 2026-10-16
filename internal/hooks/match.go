@@ -5,6 +5,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/subbeh/statemate/internal/source"
 )
 
 // Match reports whether a hook pattern matches an absolute target path.
@@ -20,13 +22,14 @@ import (
 //
 // A pattern that matches a directory matches everything under it, so
 // `.config/tmux` covers `.config/tmux/tmux.conf`.
+// Source attributes in pattern components are ignored; target paths are literal.
 func Match(pattern, target string) bool {
 	home, _ := os.UserHomeDir()
 	return match(pattern, target, home)
 }
 
 func match(pattern, target, home string) bool {
-	p := filepath.ToSlash(pattern)
+	p := stripPatternAttrs(filepath.ToSlash(pattern))
 	target = filepath.ToSlash(target)
 
 	dirOnly := strings.HasSuffix(p, "/")
@@ -68,6 +71,53 @@ func match(pattern, target, home string) bool {
 		}
 	}
 	return false
+}
+
+// stripPatternAttrs accepts source filenames in patterns without interpreting
+// literal hashes (escaped or inside glob character classes) as attributes.
+func stripPatternAttrs(pattern string) string {
+	parts := strings.Split(pattern, "/")
+	for i, part := range parts {
+		var clean strings.Builder
+		inClass := false
+		for j := 0; j < len(part); j++ {
+			switch part[j] {
+			case '\\':
+				clean.WriteByte(part[j])
+				if j+1 < len(part) {
+					j++
+					clean.WriteByte(part[j])
+				}
+				continue
+			case '[':
+				inClass = true
+			case ']':
+				inClass = false
+			case '#':
+				if !inClass {
+					end := j + 1
+					for end < len(part) && part[end] != '#' {
+						end++
+					}
+					attr := part[j+1 : end]
+					stripped := false
+					for _, name := range source.AttrNames {
+						if attr == name || (strings.HasSuffix(name, ":") && strings.HasPrefix(attr, name)) {
+							j = end - 1
+							stripped = true
+							break
+						}
+					}
+					if stripped {
+						continue
+					}
+				}
+			}
+			clean.WriteByte(part[j])
+		}
+		parts[i] = clean.String()
+	}
+	return strings.Join(parts, "/")
 }
 
 // matchSegments matches path segments against pattern segments, where `**`

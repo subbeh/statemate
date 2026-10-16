@@ -285,7 +285,7 @@ def smoke() -> None:
     # Deliberately NOT --force: that also auto-confirms package installs, and the
     # fixture declares a package that cannot be installed. With stdin closed the
     # package prompt reads EOF and declines, which is what we want.
-    _, out = run(["apply", "--no-scripts"], root, check=True)
+    _, out = run(["apply", "--no-scripts", "--noconfirm"], root, check=True)
     deployed = root / "target" / ".config" / "app" / "settings.conf"
     if not deployed.exists():
         die(f"apply did not deploy {deployed}")

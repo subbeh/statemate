@@ -9,14 +9,18 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/packages"
+	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check configuration and dependencies",
 	Long: `Check that the configuration loads and validates, that every source directory
-exists, that every active hook matches some managed file, that the age identity
-and recipients work, and which package managers are available.
+exists, that every active hook matches some managed file, that every #encrypted
+file in any source really is age-encrypted, that the age identity and
+recipients work, and which package managers are available.
 
 Exits 1 if any check reports an error. Run it first when something behaves
 unexpectedly.`,
@@ -64,6 +68,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 	if cfg != nil {
 		issues += checkHooks(cmd)
+		issues += checkEncrypted(cfg)
 	}
 
 	fmt.Println()
@@ -162,4 +167,44 @@ func ageStatus(cfg *config.Config) (level, msg string) {
 		return "WARN", "age: identity but no recipients (files cannot be encrypted)"
 	}
 	return "OK", "age: identity and recipients"
+}
+
+// checkEncrypted reports #encrypted files whose content is not age-encrypted,
+// meaning the plaintext is committed. It covers every source of every profile,
+// since a plaintext secret is committed no matter which machine it is for, and it
+// needs no identity: the age header is enough.
+func checkEncrypted(cfg *config.Config) int {
+	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
+	tree, err := scanner.Scan(cfg.ResolveSourcePaths(profile.AllSources(cfg)))
+	if err != nil {
+		fmt.Println()
+		fmt.Println("Encrypted files:")
+		fmt.Printf("[ERROR] scanning sources: %v\n", err)
+		return 1
+	}
+
+	checked := 0
+	var plain []string
+	for _, e := range tree.Files() {
+		if !e.Attrs.Encrypted || e.Generated {
+			continue
+		}
+		checked++
+		if data, err := os.ReadFile(e.SourcePath); err != nil || !encrypt.IsAgeFile(data) {
+			plain = append(plain, e.SourcePath)
+		}
+	}
+	if checked == 0 {
+		return 0
+	}
+
+	fmt.Println()
+	fmt.Println("Encrypted files:")
+	for _, p := range plain {
+		fmt.Printf("[ERROR] %s is marked #encrypted but is not encrypted\n", util.ShortenPath(p))
+	}
+	if len(plain) == 0 {
+		fmt.Printf("[OK] %d #encrypted file(s) encrypted\n", checked)
+	}
+	return len(plain)
 }

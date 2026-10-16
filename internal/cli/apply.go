@@ -31,13 +31,19 @@ With no argument, applies everything. Otherwise the run is narrowed:
   mate apply -s <source>   apply that source's files, run its scripts, and
                            prompt for its packages
 
-The positional argument is always a file or path filter; --source is the only
-way to select a source. Repo-root scripts are not run under --source, since
+The positional argument is always a file or path filter, and a directory
+covers every file under it, relative to the current directory or not; --source
+is the only way to select a source. Repo-root scripts are not run under --source, since
 they apply to the whole repository.
+
+Before anything runs, the files about to change are listed (with the markers
+of 'mate status') and the apply asks to proceed. --noconfirm skips the list and
+the question; --force and --dry-run do too. Without a terminal to ask on, the
+apply stops: pass --noconfirm for automated runs.
 
 Scripts due to run are confirmed individually before executing:
 
-  [y]es    run the script
+  [Y]es    run the script (Enter also runs it)
   [n]o     skip this time; ask again on the next apply
   [s]kip   mark as done without running, so it is not offered again
            (not available for 'always' scripts, whose runs are never recorded)
@@ -53,7 +59,9 @@ skipped with a warning.
 
 Hooks run for the files this apply wrote, after packages and before #after
 scripts, and are confirmed the same way (without [s]kip). A failed hook does
-not stop the others, but the apply exits non-zero. See 'mate hooks'.
+not stop the others, but the apply exits non-zero. A hook that did not run, or
+failed, stays pending and is offered again on the next apply; [n]o settles it.
+See 'mate hooks'.
 
 Missing secrets are fetched before anything is written, and missing packages
 are offered for install after the files are written.
@@ -68,13 +76,14 @@ files an application rewrites, such as ~/.claude/settings.json. If the source
 changed too, the conflict prompt still appears.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runApply,
-	ValidArgsFunction: completeManagedFiles,
+	ValidArgsFunction: completePendingFiles,
 }
 
 var (
 	dryRun    bool
 	force     bool
 	noScripts bool
+	noConfirm bool
 	verbose   int
 )
 
@@ -83,6 +92,7 @@ func init() {
 	applyCmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would be done without making changes")
 	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite conflicting targets and auto-confirm scripts, hooks and package installs")
 	applyCmd.Flags().BoolVar(&noScripts, "no-scripts", false, "skip all scripts")
+	applyCmd.Flags().BoolVar(&noConfirm, "noconfirm", false, "apply without listing the changes and asking first")
 	applyCmd.Flags().CountVarP(&verbose, "verbose", "V", "list every file written, and with --dry-run the files and steps of each hook")
 	addScopeFlag(applyCmd)
 }
@@ -219,6 +229,20 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("computing changes: %w", err)
 	}
 
+	if !dryRun && !noConfirm && !force && len(pending.Changes) > 0 {
+		printChanges(pending.Changes)
+		ok, err := util.Confirm("\nApply these changes? [Y/n] ", true)
+		if errors.Is(err, util.ErrInterrupted) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("no terminal to confirm on; use --noconfirm to apply without asking")
+		}
+		if !ok {
+			return nil
+		}
+	}
+
 	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0).
 		WithConfirmation(force, noScripts).
 		WithChangedSources(changedSources(pending.Changes))
@@ -262,6 +286,23 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// The files are written now, so the hooks they trigger will not trigger
+	// again. Record them as pending before anything else can stop the apply --
+	// a package prompt, a hook prompt, Ctrl-C -- and offer the hooks an earlier
+	// apply left pending alongside them.
+	pendingHooks, err := db.PendingHooks()
+	if err != nil {
+		return fmt.Errorf("reading pending hooks: %w", err)
+	}
+	triggered := hookSet.WithPending(hookSet.Trigger(hookChanges(result.Written, allSourcePaths), profileChain), pendingHooks, profileChain)
+	if !dryRun {
+		for _, t := range triggered {
+			if err := db.SetPendingHook(t.Name, t.Files); err != nil {
+				return fmt.Errorf("recording pending hook %s: %w", t.Name, err)
+			}
+		}
+	}
+
 	if err := promptMissingPackages(cfg, profileName, sourcePaths, tmplCtx, dryRun, force, scope); err != nil {
 		return err
 	}
@@ -273,7 +314,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 		NoScripts:    noScripts,
 		ProfileChain: profileChain,
 	})
-	hookRes, err := runTriggeredHooks(hookRunner, hookSet, hookChanges(result.Written, allSourcePaths), profileChain, verbose > 0 || dryRun)
+	hookDB := db
+	if dryRun {
+		hookDB = nil // a dry run neither records nor clears pending hooks
+	}
+	hookRes, err := runTriggeredHooks(hookRunner, triggered, hookDB, verbose > 0 || dryRun)
 	if err != nil {
 		return err
 	}

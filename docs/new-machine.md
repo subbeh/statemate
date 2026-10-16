@@ -126,6 +126,8 @@ installs every missing package. That suits a machine with nothing on it worth
 keeping. On a machine you have used, run a plain `mate apply` and answer the
 prompts.
 
-Without a terminal, for example in CI or under `ssh host 'mate apply'`, scripts,
-hooks and package installs are skipped with a warning, and conflicts stop the
-apply. Pass `--force` or `--no-scripts` to decide explicitly.
+Without a terminal, for example in CI or under `ssh host 'mate apply'`, the
+apply stops at its confirmation of the pending file changes. Pass `--noconfirm`
+to skip it; scripts, hooks and package installs are then skipped with a warning,
+and conflicts stop the apply. Pass `--force` or `--no-scripts` to decide
+explicitly.

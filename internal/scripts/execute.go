@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -190,9 +191,9 @@ func (e *Executor) ask(title string, details []string, markable bool) (scriptAct
 		fmt.Printf("  %s\n", d)
 	}
 
-	prompt := "[y]es / [n]o / [a]ll / [q]uit: "
+	prompt := "[Y]es / [n]o / [a]ll / [q]uit: "
 	if markable {
-		prompt = "[y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit: "
+		prompt = "[Y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit: "
 	}
 
 	for {
@@ -209,7 +210,7 @@ func (e *Executor) ask(title string, details []string, markable bool) (scriptAct
 		fmt.Println(strings.TrimSpace(input))
 
 		switch input {
-		case "y":
+		case "y", "\n": // Enter picks the default, yes
 			return actionRun, nil
 		case "n":
 			return actionSkip, nil
@@ -368,6 +369,15 @@ func ShouldRun(script *Script, db *state.DB, changed ChangedSources) (bool, stri
 		return true, "", nil
 
 	case FreqOnchange:
+		// A failed run is retried: the changes that triggered it were applied
+		// anyway, so they are no longer pending to trigger it again.
+		failed, err := db.HasScriptFailed(script.Path)
+		if err != nil {
+			return false, "", err
+		}
+		if failed {
+			return true, "", nil
+		}
 		// Triggered by changes to the script's own source, not to the script
 		// itself. A repo-root script has no owning source, so any change counts.
 		if script.SourceDir == "" {
@@ -430,7 +440,13 @@ func PendingScripts(scripts Scripts, db *state.DB, changed ChangedSources) (Scri
 	return pending, nil
 }
 
-func (e *Executor) run(script *Script, extraEnv ...string) error {
+func (e *Executor) run(script *Script, extraEnv ...string) (err error) {
+	defer func() {
+		if err != nil {
+			err = errors.Join(err, e.db.RecordScriptFailure(script.Path))
+		}
+	}()
+
 	scriptPath := script.Path
 
 	if script.Template {
@@ -487,7 +503,7 @@ func (e *Executor) run(script *Script, extraEnv ...string) error {
 	cmd.Env = append(cmd.Env, extraEnv...)
 
 	fmt.Printf(">>> running: %s (%s/%s)\n", script.Name, script.Frequency, script.Timing)
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		fmt.Printf("<<< failed:  %s (%v)\n", script.Name, err)
 	} else {

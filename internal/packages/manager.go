@@ -45,7 +45,7 @@ func (d Descriptions) Lookup(name string) (desc string, resolved bool) {
 }
 
 // unqualifiedName strips a source prefix from a package name, turning
-// jamf/internal-tap/hermes into hermes. Names without a prefix are returned
+// hashicorp/tap/terraform into terraform. Names without a prefix are returned
 // unchanged, so this is a no-op for managers that have no equivalent of a tap.
 //
 // Homebrew is inconsistent about which form it prints -- `brew list --formula`

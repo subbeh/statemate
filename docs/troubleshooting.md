@@ -8,8 +8,8 @@ mate doctor
 
 It loads and validates the configuration, checks that every source directory
 exists, that your age identity and recipients work, which package managers are
-available, and that every active hook matches at least one file. It exits 1 if
-anything is an error.
+available, that every active hook matches at least one file, and that every
+`#encrypted` file really is encrypted. It exits 1 if anything is an error.
 
 Other read-only commands that narrow a problem down:
 
@@ -109,8 +109,8 @@ that does not parse.
 
 ### `secrets not configured (run 'mate secrets fetch')` / `secret not cached`
 
-A template uses `bitwarden`, and the cache does not have the value yet. Run
-`mate secrets fetch`. `mate apply` fetches missing secrets itself, but `mate
+A template uses `bitwarden`, and the cache does not have the value yet. The error
+names the secret as `bitwarden:<item>:<type>:<field>`. Run `mate secrets fetch`. `mate apply` fetches missing secrets itself, but `mate
 eval`, `status` and `diff` only read the cache.
 
 ### `not logged in to Bitwarden. Run: bw login`

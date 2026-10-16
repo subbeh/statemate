@@ -2,6 +2,7 @@ package template
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -64,6 +65,56 @@ func TestContextWithProfile(t *testing.T) {
 
 	if ctx.Vars["proxy"] != "http://proxy:8080" {
 		t.Errorf("expected proxy from profile, got %v", ctx.Vars["proxy"])
+	}
+}
+
+// A source's include supplies variables to every template, including the
+// .mate.yaml that declares it.
+func TestContextSourceInclude(t *testing.T) {
+	src := t.TempDir()
+	mateYAML := `include:
+  - sub/vars.yaml
+{{- $v := dict }}
+{{- range $k, $ref := .Vars.bws.secrets }}
+{{- $_ := set $v $k (bitwarden (index $ref 0) "field" "x") }}
+{{- end }}
+generate:
+  - target: out
+    content: '{{ .Vars.bws.projectId }} {{ $v | toJson }}'
+`
+	vars := "variables:\n  bws:\n    projectId: p1\n    secrets:\n      KEY: [item]\npackages:\n  brew: [jq]\n"
+	if err := os.MkdirAll(filepath.Join(src, "sub"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, ".mate.yaml"), []byte(mateYAML), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "sub", "vars.yaml"), []byte(vars), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, err := NewContext(&config.Config{Sources: []string{src}}, "")
+	if err != nil {
+		t.Fatalf("NewContext failed: %v", err)
+	}
+	if ctx.SecretLookup != nil {
+		t.Error("NewContext left its stub SecretLookup in place")
+	}
+	bws, _ := ctx.Vars["bws"].(map[string]any)
+	if bws["projectId"] != "p1" {
+		t.Fatalf("expected bws.projectId=p1 from the source include, got %v", ctx.Vars["bws"])
+	}
+
+	ctx.SecretLookup = func(item, _, _ string) (string, error) { return "s-" + item, nil }
+	dirCfg, err := config.LoadDirConfigRaw(src, func(b []byte) ([]byte, error) { return Render(b, ctx) })
+	if err != nil {
+		t.Fatalf("LoadDirConfigRaw failed: %v", err)
+	}
+	if got := dirCfg.Generate[0].Content; got != `p1 {"KEY":"s-item"}` {
+		t.Errorf("generate content = %q", got)
+	}
+	if dirCfg.Packages == nil || len(dirCfg.Packages.Brew) != 1 || dirCfg.Packages.Brew[0] != "jq" {
+		t.Errorf("expected packages.brew=[jq] from the include, got %+v", dirCfg.Packages)
 	}
 }
 

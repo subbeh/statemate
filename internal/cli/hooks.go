@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -38,7 +40,8 @@ packages and before #after scripts. Hooks are confirmed like scripts; --force
 auto-confirms them and --no-scripts skips them.
 
 Hooks declared in a source's .mate.yaml are named <source>/<name> and match
-only that source's files.`,
+only that source's files. Patterns match target paths; source attributes such
+as #template and #perm:600 are ignored when included in a pattern.`,
 }
 
 var hooksListCmd = &cobra.Command{
@@ -59,7 +62,8 @@ var hooksRunCmd = &cobra.Command{
 	Long: `Run a hook manually, ignoring its patterns.
 
 There is no confirmation prompt, and no files triggered the run, so
-STATEMATE_HOOK_FILES and .Files are empty.`,
+STATEMATE_HOOK_FILES and .Files are empty. A successful run settles a hook that
+mate apply left pending.`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runHooksRun,
 	ValidArgsFunction: completeHooks,
@@ -233,7 +237,11 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 	if err := runner.RunOne(h); err != nil {
 		return fmt.Errorf("hook %s failed: %w", h.Name, err)
 	}
-	return nil
+	// Running it by hand settles a hook an apply left pending.
+	if dryRun {
+		return nil
+	}
+	return db.ClearPendingHook(h.Name)
 }
 
 // collectHooks discovers every script of the given sources and collects the
@@ -266,11 +274,14 @@ func hookChanges(entries []*source.Entry, sourcePaths []string) []hooks.Change {
 	return changes
 }
 
-// runTriggeredHooks runs the hooks a set of changes triggers and reports hooks
-// that were skipped. The returned error is set only when the user quits; failed
-// hooks are in the result, so the caller can finish its work before failing.
-func runTriggeredHooks(runner *hooks.Runner, set hooks.Set, changes []hooks.Change, chain []string, announce bool) (*hooks.Result, error) {
-	triggered := set.Trigger(changes, chain)
+// runTriggeredHooks runs triggered hooks and reports hooks that were skipped.
+// The returned error is set only when the user quits; failed hooks are in the
+// result, so the caller can finish its work before failing.
+//
+// With a db, as in mate apply, the hooks were recorded as pending beforehand, and
+// a hook that ran or was declined is cleared here. The rest stay pending and are
+// offered again on the next apply.
+func runTriggeredHooks(runner *hooks.Runner, triggered []*hooks.Triggered, db *state.DB, announce bool) (*hooks.Result, error) {
 	if len(triggered) == 0 {
 		return nil, nil
 	}
@@ -278,9 +289,15 @@ func runTriggeredHooks(runner *hooks.Runner, set hooks.Set, changes []hooks.Chan
 		fmt.Println("Running hooks...")
 	}
 
-	// Report what was skipped even when the user quit part-way, since those
-	// hooks will not trigger again on their own.
+	// Report what was skipped even when the user quit part-way.
 	res, err := runner.Run(triggered)
+	if db != nil {
+		for _, name := range slices.Concat(res.Done, res.Declined) {
+			if clearErr := db.ClearPendingHook(name); clearErr != nil {
+				return res, errors.Join(err, clearErr)
+			}
+		}
+	}
 	for _, name := range res.Declined {
 		fmt.Printf("  skipped hook %s; run it later with 'mate hooks run %s'\n", name, name)
 	}
@@ -289,7 +306,11 @@ func runTriggeredHooks(runner *hooks.Runner, set hooks.Set, changes []hooks.Chan
 		for _, s := range res.SkippedNoTTY {
 			fmt.Fprintf(os.Stderr, "  - %s\n", s)
 		}
-		fmt.Fprintln(os.Stderr, "The files are already in place, so these will not trigger again.")
+		if db != nil {
+			fmt.Fprintln(os.Stderr, "They stay pending and are offered again on the next apply.")
+		} else {
+			fmt.Fprintln(os.Stderr, "The files are already in place, so these will not trigger again.")
+		}
 		fmt.Fprintln(os.Stderr, "Run them with 'mate hooks run <name>', or pass --force next time.")
 	}
 	return res, err
@@ -321,7 +342,7 @@ func runRemovalHooks(cfg *config.Config, profileName string, sourcePaths []strin
 	executor := scripts.NewExecutor(db, tmplCtx, false, false).WithConfirmation(force, false)
 	runner := hooks.NewRunner(executor, tmplCtx, hooks.Options{Force: force, ProfileChain: chain})
 
-	res, err := runTriggeredHooks(runner, set, changes, chain, false)
+	res, err := runTriggeredHooks(runner, set.Trigger(changes, chain), nil, false)
 	if err != nil {
 		return err
 	}

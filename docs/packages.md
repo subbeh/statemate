@@ -46,8 +46,8 @@ name or bare, and both are recognised as installed:
 ```yaml
 packages:
   brew:
-    - jamf/internal-tap/hermes    # fully qualified
-    - hermes                      # equivalent for an installed formula
+    - hashicorp/tap/terraform   # fully qualified
+    - terraform                 # equivalent for an installed formula
 ```
 
 Prefer the qualified form: `brew install` needs it to find a formula that is not
@@ -128,7 +128,7 @@ mate packages status --all     # also list installed packages not in config
 mate packages status -v        # include package descriptions
 mate packages apply            # install what is missing
 mate packages apply --prune    # also remove packages not in config
-mate packages apply -y         # without the confirmation prompt
+mate packages apply -y         # without the confirmation prompt (or --noconfirm)
 ```
 
 `mate packages apply` asks once per manager before installing.

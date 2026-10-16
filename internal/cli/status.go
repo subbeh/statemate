@@ -29,8 +29,8 @@ var statusCmd = &cobra.Command{
 	Long: `Show pending changes that would be made on apply.
 
 Reports files to be created, modified, or in conflict, plus orphaned files,
-missing packages, pending scripts, the hooks the changes would trigger, and
-secrets that need fetching.
+missing packages, pending scripts, the hooks the changes would trigger or that
+an earlier apply left pending, and secrets that need fetching.
 
 An empty directory in a source -- one with no files under it -- is reported until
 it exists on the target. Directories that hold files are not listed separately;
@@ -48,7 +48,7 @@ nothing to do. It covers files, orphans, scripts and secrets, not packages or
 hooks.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runStatus,
-	ValidArgsFunction: completeManagedFiles,
+	ValidArgsFunction: completePendingFiles,
 }
 
 func init() {
@@ -235,7 +235,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			written = append(written, c.Entry)
 		}
 	}
-	pendingHooks := hookSet.Trigger(hookChanges(written, sourcePaths), profileChain)
+	// Plus the hooks an earlier apply triggered but did not run.
+	leftPending, err := db.PendingHooks()
+	if err != nil {
+		return fmt.Errorf("reading pending hooks: %w", err)
+	}
+	pendingHooks := hookSet.WithPending(hookSet.Trigger(hookChanges(written, sourcePaths), profileChain), leftPending, profileChain)
 
 	short, _ := cmd.Flags().GetBool("short")
 	if short {
@@ -248,34 +253,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if len(filteredChanges) > 0 {
-		maxTargetLen := 0
-		for _, c := range filteredChanges {
-			targetDisplay := util.ShortenPath(c.Entry.TargetPath)
-			if len(targetDisplay) > maxTargetLen {
-				maxTargetLen = len(targetDisplay)
-			}
-		}
-
-		fmt.Printf("  %-*s  %s\n", maxTargetLen, "TARGET", "SOURCE")
-		for _, c := range filteredChanges {
-			var prefix string
-			switch c.Status {
-			case target.StatusNew:
-				prefix = "+"
-			case target.StatusModified:
-				prefix = "~"
-			case target.StatusConflict:
-				prefix = "!"
-			case target.StatusImport:
-				// Points back at the source: this file moves the other way.
-				prefix = "<"
-			}
-			targetDisplay := util.ShortenPath(c.Entry.TargetPath)
-			sourceDir := extractSourceDir(c.Entry)
-			fmt.Printf("%s %-*s  %s\n", prefix, maxTargetLen, targetDisplay, sourceDir)
-		}
-	}
+	printChanges(filteredChanges)
 
 	if len(filteredOrphans) > 0 {
 		fmt.Fprintln(os.Stderr, "\nWarning: orphaned files (no longer in source):")
@@ -325,6 +303,39 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// printChanges lists file changes with their markers, as status and apply show them.
+func printChanges(changes []*target.Change) {
+	if len(changes) == 0 {
+		return
+	}
+	maxTargetLen := 0
+	for _, c := range changes {
+		targetDisplay := util.ShortenPath(c.Entry.TargetPath)
+		if len(targetDisplay) > maxTargetLen {
+			maxTargetLen = len(targetDisplay)
+		}
+	}
+
+	fmt.Printf("  %-*s  %s\n", maxTargetLen, "TARGET", "SOURCE")
+	for _, c := range changes {
+		var prefix string
+		switch c.Status {
+		case target.StatusNew:
+			prefix = "+"
+		case target.StatusModified:
+			prefix = "~"
+		case target.StatusConflict:
+			prefix = "!"
+		case target.StatusImport:
+			// Points back at the source: this file moves the other way.
+			prefix = "<"
+		}
+		targetDisplay := util.ShortenPath(c.Entry.TargetPath)
+		sourceDir := extractSourceDir(c.Entry)
+		fmt.Printf("%s %-*s  %s\n", prefix, maxTargetLen, targetDisplay, sourceDir)
+	}
 }
 
 func printShortStatus(changes []*target.Change, orphans []string, pending scripts.Scripts, pendingSecrets int) error {
@@ -405,6 +416,17 @@ func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {
 	if strings.HasPrefix(relPath, pattern+"/") ||
 		strings.HasPrefix(entry.TargetPath, pattern+"/") {
 		return true
+	}
+	// A relative directory is also taken from the current directory, so
+	// `mate apply .config/nvim` run in ~ covers everything under ~/.config/nvim,
+	// and `.config` run inside a source covers that source's .config.
+	if !filepath.IsAbs(pattern) {
+		if cwd, err := os.Getwd(); err == nil {
+			abs := filepath.Join(cwd, pattern)
+			if strings.HasPrefix(entry.TargetPath, abs+"/") || strings.HasPrefix(entry.SourcePath, abs+"/") {
+				return true
+			}
+		}
 	}
 	return false
 }

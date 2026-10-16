@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-17
+
+### Added
+- `mate doctor` reports `#encrypted` files that are not actually encrypted, in every source and for every profile, so a plaintext secret is caught before it is committed
+- `STATEMATE_KEY_FILE` sets the path to the age private key, overriding `age.identity` and `age.identity_command` in `mate.yaml` and the local config
+- `mate add <directory>` recursively adds its files, including hidden files, preserving their paths and applying `--for-profile`, `--encrypt`, and `--template` to each file. Files already in the selected source are left unchanged; files managed by another active source stop the command before copying. File symlinks are copied by content, while directory symlinks, empty directories, and configured source directories are skipped
+- A source's `.mate.yaml` accepts `include`, like `mate.yaml`. Included packages count as that source's packages, and included variables are available to every template while the source is active, including the `.mate.yaml` itself. Paths are relative to the source directory. Previously the key was silently ignored
+
+### Changed
+- The Homebrew package is now a cask instead of a formula. `brew install subbeh/tap/statemate` works as before, and existing formula installs are moved to the cask on `brew upgrade`
+- `mate apply` now lists the files it is about to change and asks for confirmation before doing anything. Pass `--noconfirm` to skip the prompt (`--force` and `--dry-run` skip it too). Without a terminal the apply stops, so unattended runs must pass `--noconfirm` or `--force`
+- `mate clean`, `mate delete` and `mate packages apply` accept `--noconfirm` as well, as an alias for their `--force` / `--yes` flag, so the same flag skips prompts on every command that asks
+- Pressing Enter at a script or hook prompt (`[Y]es / [n]o / [a]ll / [q]uit`) now runs it, as `y` does. Before, Enter was ignored and the prompt waited for a letter
+
+### Fixed
+- A hook whose files `mate apply` wrote is no longer lost when the apply stops before the hook runs (Ctrl-C, `[q]uit`, a quit package prompt), the hook is skipped for lack of a terminal or by `--no-scripts`, or it fails. The hook stays pending: `mate status` lists it and the next `mate apply` offers it again, even when no file changed. Answering `[n]o` or running it with `mate hooks run` settles it
+- `mate apply`, `mate status` and `mate diff` now tab-complete only files with pending changes, and the directories that hold them. Before, they offered every managed file, including files belonging to other profiles
+- A directory given relative to the current directory now scopes `mate apply`, `status` and `diff`: `mate apply .config/nvim` run in `~` covers everything under `~/.config/nvim`. Before, it matched no files
+- A secret missing from the cache, or a cache that was never fetched, now fails with just `secret not cached: bitwarden:<item>:<type>:<field> (run 'mate secrets fetch')` instead of an error buried under the source path, template position and function call. A missing age identity is reported the same way
+- An `#onchange` script that fails is offered again on the next `mate apply` and shown as pending by `mate status`, until it succeeds or is marked done. Before, an `#after` script that failed was never retried, because the changes that triggered it had already been applied
+- Hook match patterns now ignore source attributes such as `#template`, `#encrypted`, and `#perm:600` on files and directories, so patterns copied from source filenames match their deployed target paths
+- `mate profile`'s `Sources:` list is now sorted alphabetically. It used to list the global `sources:` first and then each profile's own `sources:` appended in inheritance order, so e.g. profile-only sources appeared out of order at the end, making it easy to miss that one was actually included
+
 ## [0.5.0] - 2026-10-05
 
 ### Added
@@ -87,8 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tab completion for `mate encrypt`, `mate decrypt`, `mate eval`, `mate rename` and `mate cat` now completes any file path, like `mate edit` already did. These commands accept a path relative to the current directory, but completion offered a precomputed list of managed files and suppressed the shell's own file completion — so a valid argument such as `../../../.mate/theme.yaml` could not be completed, and in a directory whose files were all already encrypted `mate encrypt` offered nothing at all. `mate cat` additionally completed with absolute paths from the source directory while ignoring the current directory
 - `mate packages status -v` now shows `<unknown>` for a package the manager does not recognise, instead of an empty description that was indistinguishable from a package that simply publishes none (many font casks). This surfaces names that can never be installed — a typo such as `github-cli` for `gh`, or a package that only exists on another platform. Homebrew aliases are reported this way too, since only canonical names are matched: declare `node`, not `npm`
 - `mate packages status -v` no longer leaves the whole DESCRIPTION column empty when a declared package does not exist. `brew info` fails outright if any single argument is not a known formula or cask, so one bad name — a Linux-only entry such as `man` or `sudo` in a shared `common:` list, or a typo like `github-cli` for `gh` — blanked the descriptions of every other package. Unresolvable names are now filtered out first, so only their own row is blank. The equivalent `pacman -Qi` failure (which exits non-zero whenever a queried package is not installed) had the same effect and is fixed too
-- `mate packages status -v` now shows descriptions for Homebrew packages declared by their tap-qualified name (e.g. `jamf/internal-tap/hermes`). `brew` reports these under the bare formula name, which never matched the declared spelling, so every tap package showed a blank description
-- Homebrew packages from a tap (e.g. `jamf/internal-tap/hermes`) are no longer reported as missing when they are installed. `brew list --formula` prints such a formula under its bare name (`hermes`) while `brew leaves` prints it fully qualified, so a package declared by its tap-qualified name never matched and `mate apply` offered to install it on every run — with `brew install` reporting it was already there, so it never converged. Either spelling is now accepted, in both the installed check and the `--all` extras listing (where the same mismatch also listed a declared package as an extra)
+- `mate packages status -v` now shows descriptions for Homebrew packages declared by their tap-qualified name (e.g. `hashicorp/tap/terraform`). `brew` reports these under the bare formula name, which never matched the declared spelling, so every tap package showed a blank description
+- Homebrew packages from a tap (e.g. `hashicorp/tap/terraform`) are no longer reported as missing when they are installed. `brew list --formula` prints such a formula under its bare name (`terraform`) while `brew leaves` prints it fully qualified, so a package declared by its tap-qualified name never matched and `mate apply` offered to install it on every run — with `brew install` reporting it was already there, so it never converged. Either spelling is now accepted, in both the installed check and the `--all` extras listing (where the same mismatch also listed a declared package as an extra)
 
 ## [0.3.0] - 2026-08-18
 

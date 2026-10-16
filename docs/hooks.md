@@ -20,6 +20,7 @@ hooks:
 
   session-env:
     match: .config/environment.d/*.conf
+    profile: linux
     do:
       - run: dbus-update-activation-environment --systemd --all
 
@@ -30,6 +31,15 @@ hooks:
       - script: keyd-restart.sh
       - run: notify-send "keyd reloaded ({{ len .Files }} files)"
 ```
+
+- `systemd-reload` reloads systemd when a unit or timer changes. `profile: arch`
+  keeps it to machines using the `arch` profile.
+- `tmux` makes the running tmux server re-read its config.
+- `session-env` passes the environment to systemd user services and D-Bus
+  activated applications after an `environment.d` file changes. Both are Linux
+  only, hence `profile: linux`.
+- `keyd` combines step types: a command, a [script](#script), and a command
+  rendered as a template, where `.Files` holds the files that changed.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -75,14 +85,24 @@ Patterns match the **target** path, meaning where the file is deployed:
 | `~/.config/environment.d/*.conf` | Relative to `~`, spelled out |
 | `/etc/keyd/*.conf` | Absolute |
 
-`*` matches within one path segment, `**` matches any number of directories, and
-a pattern naming a directory matches everything under it. A trailing `/`
-restricts a pattern to files inside the directory. Unlike
-[`ignore`](configuration.md#ignore), there is no `!` negation: a hook that should
-skip some files needs narrower patterns. Attributes such as `#template` are not part of the target
-path, so they never need to appear in a pattern. `target_base` and `targets:`
-mappings do not matter either: a unit deployed to `/etc/systemd/system` matches
-`*.service` and `/etc/systemd/system/*.service` alike.
+- `*` matches within one path segment, and `**` matches any number of
+  directories.
+- A pattern naming a directory matches everything under it. A trailing `/`
+  limits it to files inside the directory.
+- There is no `!` negation, unlike [`ignore`](configuration.md#ignore). A hook
+  that should skip some files needs narrower patterns.
+- Attributes such as `#template` are not part of the target path, so a pattern
+  never needs them. Recognized source attributes in a pattern are ignored, on
+  file and directory components alike:
+  `.config#perm-r:700/tmux/*.conf#template` matches the same files as
+  `.config/tmux/*.conf`. Attributes do not filter matches by profile or file
+  type.
+- Unknown `#` suffixes stay literal. To match a literal `#template` in a target
+  path, write `[#]template` or `\#template`. In YAML, a pattern containing a
+  backslash must be in single quotes.
+- `target_base` and `targets:` mappings make no difference: a unit deployed to
+  `/etc/systemd/system` matches both `*.service` and
+  `/etc/systemd/system/*.service`.
 
 ## When hooks run
 
@@ -179,25 +199,42 @@ Run hook keyd (2 files)?
   - sudo systemctl daemon-reload
   - script keyd-restart.sh
   - notify-send "keyd reloaded (2 files)"
-[y]es / [n]o / [a]ll / [q]uit:
+[Y]es / [n]o / [a]ll / [q]uit:
 ```
 
+- Enter answers `[Y]es`.
 - `[a]ll` confirms the remaining hooks and the `#after` scripts that follow.
 - `[q]uit` stops the remaining hooks and `#after` scripts. The files are already
   written.
 - `--force` confirms without asking. `--no-scripts` skips hooks too.
 - Without a terminal, hooks are skipped with a warning.
 
-Declining is not remembered. Once the files are written they are unchanged, so
-the hook will not trigger on the next apply; run it with `mate hooks run <name>`.
-`mate delete` and `mate clean` confirm hooks unless `--force` is given, and
-`mate rename` always asks.
+## Pending hooks
+
+Once the files are written they are unchanged, so a hook would not trigger again
+on its own. `mate apply` therefore records a triggered hook as pending as soon as
+its files are written, and keeps it pending until it runs. A pending hook:
+
+- is offered again on the next `mate apply`, even when no file changed, with the
+  files from both runs in `.Files`
+- is listed under "Pending hooks" by `mate status`
+- is settled by running it with `mate hooks run <name>`
+
+A hook stays pending when the apply was stopped before it ran (`[q]uit`, Ctrl-C,
+a package prompt quit), when it was skipped for want of a terminal or by
+`--no-scripts`, and when it failed. Answering `[n]o` settles it: declining is not
+remembered, so run it later with `mate hooks run <name>`.
+
+Only `mate apply` records pending hooks. `mate delete` and `mate clean` confirm
+hooks unless `--force` (or `--noconfirm`) is given, and `mate rename` always
+asks.
 
 ## Failure
 
 A failing step stops its hook; the remaining steps are skipped. Other hooks and
-the `#after` scripts still run, and the command exits non-zero. A failed hook is
-not retried on the next apply.
+the `#after` scripts still run, and the command exits non-zero. Under
+`mate apply`, a failed hook stays [pending](#pending-hooks) and is offered again
+on the next apply.
 
 ## Checking
 
