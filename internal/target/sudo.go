@@ -5,12 +5,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/subbeh/statemate/internal/util"
 )
 
 func needsSudo(path string) bool {
@@ -119,7 +120,7 @@ func sudoChown(path, owner, group string) error {
 	}
 	args = append(args, path)
 
-	cmd := exec.Command("sudo", args...)
+	cmd := util.Command("sudo", args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -140,7 +141,7 @@ func sudoWriteFile(path string, content []byte, mode os.FileMode) error {
 	}
 	_ = tmpFile.Close()
 
-	cmd := exec.Command("sudo", "cp", tmpPath, path)
+	cmd := util.Command("sudo", "cp", tmpPath, path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -148,7 +149,7 @@ func sudoWriteFile(path string, content []byte, mode os.FileMode) error {
 		return err
 	}
 
-	cmd = exec.Command("sudo", "chmod", fmt.Sprintf("%o", mode), path)
+	cmd = util.Command("sudo", "chmod", fmt.Sprintf("%o", mode), path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -156,7 +157,7 @@ func sudoWriteFile(path string, content []byte, mode os.FileMode) error {
 }
 
 func sudoMkdir(path string, mode os.FileMode) error {
-	cmd := exec.Command("sudo", "mkdir", "-p", path)
+	cmd := util.Command("sudo", "mkdir", "-p", path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -164,7 +165,7 @@ func sudoMkdir(path string, mode os.FileMode) error {
 		return err
 	}
 
-	cmd = exec.Command("sudo", "chmod", fmt.Sprintf("%o", mode), path)
+	cmd = util.Command("sudo", "chmod", fmt.Sprintf("%o", mode), path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -172,7 +173,7 @@ func sudoMkdir(path string, mode os.FileMode) error {
 }
 
 func SudoRemove(path string) error {
-	cmd := exec.Command("sudo", "rm", path)
+	cmd := util.Command("sudo", "rm", path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -180,7 +181,7 @@ func SudoRemove(path string) error {
 }
 
 func SudoPrompt() bool {
-	cmd := exec.Command("sudo", "true")
+	cmd := util.Command("sudo", "true")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -188,7 +189,7 @@ func SudoPrompt() bool {
 }
 
 func sudoLstat(path string) (os.FileInfo, error) {
-	cmd := exec.Command("sudo", "-n", "stat", "-c", "%f %s %Y", path)
+	cmd := util.Command("sudo", "-n", "stat", "-c", "%f %s %Y", path)
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -232,5 +233,5 @@ func sudoHashFile(path string) (string, error) {
 }
 
 func sudoReadFile(path string) ([]byte, error) {
-	return exec.Command("sudo", "-n", "cat", path).Output()
+	return util.Command("sudo", "-n", "cat", path).Output()
 }

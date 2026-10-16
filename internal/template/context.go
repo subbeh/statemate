@@ -222,7 +222,7 @@ func renderValue(v any, ctx *Context) (any, error) {
 }
 
 func (c *Context) Cmd(cmd string) (string, error) {
-	out, err := exec.Command("sh", "-c", cmd).Output()
+	out, err := util.Command("sh", "-c", cmd).Output()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {

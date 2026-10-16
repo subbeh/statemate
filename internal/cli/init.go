@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -280,12 +279,12 @@ func registerSourceDir(cwd string) error {
 }
 
 func initGitRepo() error {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	cmd := util.Command("git", "rev-parse", "--is-inside-work-tree")
 	if err := cmd.Run(); err == nil {
 		return nil
 	}
 
-	cmd = exec.Command("git", "init")
+	cmd = util.Command("git", "init")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("initializing git repository: %w", err)
 	}

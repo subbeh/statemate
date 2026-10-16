@@ -20,6 +20,8 @@ type Config struct {
 	SecretsCache string       `yaml:"secrets_cache" toml:"secrets_cache"`
 	DiffTool     string       `yaml:"diff_tool" toml:"diff_tool"`
 	Hooks        map[string]*Hook `yaml:"hooks" toml:"hooks"`
+	LogFile      string       `yaml:"log_file" toml:"log_file"`
+	LogLevel     string       `yaml:"log_level" toml:"log_level"`
 
 	sourceDir string
 }
@@ -60,6 +62,12 @@ func (c *Config) ApplyOverrides(override *Config) {
 	}
 	if override.DiffTool != "" {
 		c.DiffTool = override.DiffTool
+	}
+	if override.LogFile != "" {
+		c.LogFile = override.LogFile
+	}
+	if override.LogLevel != "" {
+		c.LogLevel = override.LogLevel
 	}
 	c.Hooks = mergeHooks(c.Hooks, override.Hooks)
 }

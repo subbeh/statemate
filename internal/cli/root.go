@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
@@ -37,12 +38,13 @@ Use "mate [command] --help" for more information about a command.`,
 	//
 	// Runtime errors are printed by Execute rather than cobra, so they can be
 	// shortened first.
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
 		cmd.SilenceErrors = true
 		if noColor, _ := cmd.Flags().GetBool("no-color"); noColor {
 			color.NoColor = true
 		}
+		return openLog(cmd)
 	},
 }
 
@@ -62,6 +64,7 @@ func SetVersion(v string) {
 func Execute() error {
 	cmd, err := rootCmd.ExecuteC()
 	if err != nil && cmd.SilenceErrors {
+		slog.Error("failed", "err", err)
 		cmd.PrintErrln(color.RedString("Error:"), errorMessage(err))
 	}
 	return err
@@ -91,6 +94,8 @@ func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
 	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output (also off when stdout is not a terminal or NO_COLOR is set)")
+	rootCmd.PersistentFlags().String("log-file", "", "append a log of what mate decides and runs to this file (also STATEMATE_LOG_FILE, or log_file in the config)")
+	rootCmd.PersistentFlags().String("log-level", "", "log level: debug, info, warn or error (default info; also STATEMATE_LOG_LEVEL, or log_level in the config)")
 	rootCmd.AddCommand(versionCmd)
 	// --version (which the Homebrew formula test runs) prints exactly what
 	// `mate version` does.

@@ -92,6 +92,8 @@ secrets_cache: "~/.local/state/statemate/secrets.age"
 | `ignore` | list | gitignore-style patterns excluded from scanning |
 | `aur_helper` | string | AUR helper binary, `yay` or `paru`. If unset, `yay` is used if installed, else `paru` |
 | `secrets_cache` | string | Path to the encrypted secrets cache |
+| `log_file` | string | Append a log of each run to this file — see [Logging](troubleshooting.md#logging) |
+| `log_level` | string | `debug`, `info`, `warn` or `error`. Defaults to `info` |
 
 ### `age`
 
@@ -321,7 +323,7 @@ looks for `mate.yaml` in the current directory.
 
 Only a subset of keys is honoured here: `sources`, `default_source`,
 `target_base`, `profile`, `editor`, `age`, `variables`, `var_files`,
-`packages`, `profiles`, `diff_tool`, and `hooks`. Others,
+`packages`, `profiles`, `diff_tool`, `hooks`, `log_file` and `log_level`. Others,
 including `include`, `ignore`, `aur_helper` and `secrets_cache`, are ignored.
 
 Each key **replaces** the repository's value; nothing is merged. A local
@@ -479,6 +481,8 @@ content assembled from variables or secrets.
 | `STATEMATE_DIR` | Where to find `mate.yaml`. Overrides `source_dir` and the current directory, but not `--config` |
 | `STATEMATE_PROFILE` | Selects a profile, below config but above detection |
 | `STATEMATE_KEY_FILE` | Path to the age private key. Overrides `age.identity` and `age.identity_command` in either config |
+| `STATEMATE_LOG_FILE` | Log file. Overrides `log_file` in either config, but not `--log-file` |
+| `STATEMATE_LOG_LEVEL` | Log level. Overrides `log_level` in either config, but not `--log-level` |
 | `XDG_CONFIG_HOME` | Where the local config lives. Default `~/.config` |
 | `XDG_DATA_HOME` | Where `state.db` lives. Default `~/.local/share` |
 | `XDG_STATE_HOME` | Where the secrets cache lives. Default `~/.local/state` |

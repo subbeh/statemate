@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/subbeh/statemate/internal/util"
 )
 
 type BrewManager struct{}
@@ -73,7 +75,7 @@ func (i *brewIndex) has(name string) bool {
 
 // brewPrefix returns Homebrew's install prefix, or "" when brew cannot say.
 func brewPrefix() string {
-	out, err := exec.Command("brew", "--prefix").Output()
+	out, err := util.Command("brew", "--prefix").Output()
 	if err != nil {
 		return ""
 	}
@@ -115,7 +117,7 @@ func canonicalOptName(prefix, name string) string {
 
 // listNames runs a `brew list`-style command and returns the names it printed.
 func listNames(args ...string) []string {
-	cmd := exec.Command("brew", args...)
+	cmd := util.Command("brew", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -135,7 +137,7 @@ func listNames(args ...string) []string {
 func (b *BrewManager) ListInstalled() ([]Package, error) {
 	// brew leaves lists only explicitly installed formulae, not dependencies. It
 	// reports tap formulae fully qualified.
-	cmd := exec.Command("brew", "leaves", "--installed-on-request")
+	cmd := util.Command("brew", "leaves", "--installed-on-request")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -249,7 +251,7 @@ func (b *BrewManager) Describe(pkgs []string) (Descriptions, error) {
 	}
 
 	args := append([]string{"info", "--json=v2"}, query...)
-	cmd := exec.Command("brew", args...)
+	cmd := util.Command("brew", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -317,7 +319,7 @@ func (b *BrewManager) Install(pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"install"}, pkgs...)
-	cmd := exec.Command("brew", args...)
+	cmd := util.Command("brew", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -328,7 +330,7 @@ func (b *BrewManager) Uninstall(pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"uninstall"}, pkgs...)
-	cmd := exec.Command("brew", args...)
+	cmd := util.Command("brew", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

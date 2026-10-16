@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -247,6 +247,7 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 		if shouldRun && e.ranAsHook[script.Path] {
 			shouldRun = false // already ran as a hook step
 		}
+		slog.Debug("script", "name", script.Name, "due", shouldRun)
 
 		if !shouldRun {
 			result.Skipped++
@@ -479,12 +480,12 @@ func (e *Executor) run(script *Script, extraEnv ...string) (err error) {
 		scriptPath = tmpFile.Name()
 	}
 
-	var cmd *exec.Cmd
+	var cmd *util.Cmd
 	if script.IsExecutable() || scriptPath != script.Path {
-		cmd = exec.Command(scriptPath)
+		cmd = util.Command(scriptPath)
 	} else {
 		interpreter := readShebang(scriptPath)
-		cmd = exec.Command(interpreter, scriptPath)
+		cmd = util.Command(interpreter, scriptPath)
 	}
 	cmd.Dir = filepath.Dir(script.Path)
 	cmd.Stdout = os.Stdout

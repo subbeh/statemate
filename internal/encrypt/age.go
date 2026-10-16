@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"filippo.io/age"
 	"filippo.io/age/armor"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 type AgeEncryptor struct {
@@ -66,7 +66,7 @@ func loadIdentity(source string) ([]age.Identity, error) {
 }
 
 func loadIdentityFromCommand(cmd string) (age.Identity, error) {
-	out, err := exec.Command("sh", "-c", cmd).Output()
+	out, err := util.Command("sh", "-c", cmd).Output()
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -221,6 +222,7 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				if err != nil {
 					return nil, err
 				}
+				slog.Debug("conflict", "target", entry.TargetPath, "action", action)
 				switch action {
 				case "skip":
 					result.Skipped++

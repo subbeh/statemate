@@ -165,8 +165,42 @@ The local config honours only some keys, and a file that fails to parse is
 ignored silently. See [Local config](configuration.md#local-config) for the list,
 and check the YAML.
 
+## Logging
+
+When the output does not explain what mate did, write a log:
+
+```bash
+mate apply --log-file /tmp/mate.log --log-level debug
+```
+
+The file is appended to, so it keeps earlier runs; each starts with a `msg=run`
+line giving the version and arguments. The levels are:
+
+- `info` (the default): every external command mate runs (brew, pacman, sudo,
+  bw, scripts, hooks, `cmd` templates) with its exit code and duration, and the
+  error a run ended with
+- `debug`: also the config and profile mate resolved, the status of every file
+  (`new`, `modified`, `unchanged`, `conflict`, ...), the answer to each
+  conflict, whether each script was due, and each hook that was triggered
+
+To keep a log on one machine, set it in the local config:
+
+```yaml
+# ~/.config/statemate/config.yaml
+log_file: "~/.local/state/statemate/mate.log"
+log_level: debug
+```
+
+`--log-file` and `--log-level` win over `STATEMATE_LOG_FILE` and
+`STATEMATE_LOG_LEVEL`, which win over `log_file` and `log_level` in either
+config. A relative path is relative to the current directory. The log records
+commands' arguments, never their output or environment, and is created readable
+only by you; a hook command that a template filled with a secret still shows
+it.
+
 ## Reporting a bug
 
-Include the output of `mate version` and `mate doctor`, and the smallest
+Include the output of `mate version` and `mate doctor`, a `--log-level debug`
+log of the failing command, and the smallest
 `mate.yaml` and source layout that reproduces it, at
 <https://github.com/subbeh/statemate/issues>.

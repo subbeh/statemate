@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func Load(path string) (*Config, error) {
+// parseFile finds and reads mate.yaml, without the local config, includes or
+// defaults.
+func parseFile(path string) (*Config, error) {
 	if path == "" {
 		var err error
 		path, err = FindConfig()
@@ -51,10 +54,19 @@ func Load(path string) (*Config, error) {
 	default:
 		return nil, fmt.Errorf("unsupported config format: %s", filepath.Ext(path))
 	}
+	return cfg, nil
+}
+
+func Load(path string) (*Config, error) {
+	cfg, err := parseFile(path)
+	if err != nil {
+		return nil, err
+	}
 	setHookOrigin(cfg.Hooks, cfg.sourceDir, false)
 
 	localCfg := loadLocalConfig()
 	cfg.ApplyOverrides(localCfg)
+	slog.Debug("config loaded", "dir", cfg.sourceDir, "local_config", localCfg != nil)
 
 	// STATEMATE_KEY_FILE wins over identity and identity_command in either
 	// config, as STATEMATE_DIR wins over source_dir. Applied before includes,
@@ -76,6 +88,19 @@ func Load(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// LogSettings returns log_file and log_level from mate.yaml, as overridden by
+// the local config. Logging starts before any command loads its config, so it
+// reads just these; a config that fails to load leaves them empty, and the
+// command reports the error itself.
+func LogSettings(path string) (file, level string) {
+	cfg, err := parseFile(path)
+	if err != nil {
+		cfg = &Config{}
+	}
+	cfg.ApplyOverrides(loadLocalConfig())
+	return expandHome(cfg.LogFile), cfg.LogLevel
 }
 
 func FindConfig() (string, error) {

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/subbeh/statemate/internal/util"
 	"golang.org/x/term"
 )
 
@@ -73,7 +74,7 @@ func (b *BitwardenProvider) ensureUnlocked() error {
 }
 
 func (b *BitwardenProvider) getStatus() (string, error) {
-	out, err := exec.Command("bw", "status").Output()
+	out, err := util.Command("bw", "status").Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr := strings.TrimSpace(string(exitErr.Stderr))
@@ -95,7 +96,7 @@ func (b *BitwardenProvider) getStatus() (string, error) {
 
 func (b *BitwardenProvider) unlock() error {
 	// Try unlock without password first (biometric/PIN)
-	cmd := exec.Command("bw", "unlock", "--raw")
+	cmd := util.Command("bw", "unlock", "--raw")
 	out, err := cmd.Output()
 	if err == nil {
 		session := strings.TrimSpace(string(out))
@@ -122,7 +123,7 @@ func (b *BitwardenProvider) unlockWithPassword(password []byte) error {
 	// command line of a running process is visible to every user on the machine
 	// (ps, /proc/<pid>/cmdline), its environment is not. The variable is set on
 	// this child only, never in mate's own environment.
-	cmd := exec.Command("bw", "unlock", "--raw", "--passwordenv", bwPasswordEnv)
+	cmd := util.Command("bw", "unlock", "--raw", "--passwordenv", bwPasswordEnv)
 	cmd.Env = append(os.Environ(), bwPasswordEnv+"="+string(password))
 	out, err := cmd.Output()
 	if err != nil {
@@ -135,7 +136,7 @@ func (b *BitwardenProvider) unlockWithPassword(password []byte) error {
 }
 
 func (b *BitwardenProvider) sync() error {
-	out, err := exec.Command("bw", "sync").CombinedOutput()
+	out, err := util.Command("bw", "sync").CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
 		if msg != "" {
@@ -175,7 +176,7 @@ type bwSSHKey struct {
 }
 
 func (b *BitwardenProvider) listItems() ([]bwItem, error) {
-	out, err := exec.Command("bw", "list", "items").Output()
+	out, err := util.Command("bw", "list", "items").Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr := strings.TrimSpace(string(exitErr.Stderr))
@@ -261,7 +262,7 @@ func (b *BitwardenProvider) extractAttachment(item *bwItem, filename string) (st
 	_ = tmpFile.Close()
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	cmd := exec.Command("bw", "get", "attachment", filename, "--itemid", item.ID, "--output", tmpPath)
+	cmd := util.Command("bw", "get", "attachment", filename, "--itemid", item.ID, "--output", tmpPath)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("downloading attachment %q: %w", filename, err)
@@ -295,7 +296,7 @@ func (b *BitwardenProvider) extractLogin(item *bwItem, field string) (string, er
 }
 
 func (b *BitwardenProvider) extractTOTP(item *bwItem) (string, error) {
-	out, err := exec.Command("bw", "get", "totp", item.ID).Output()
+	out, err := util.Command("bw", "get", "totp", item.ID).Output()
 	if err != nil {
 		return "", fmt.Errorf("generating TOTP: %w", err)
 	}

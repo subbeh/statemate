@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
+
+	"github.com/subbeh/statemate/internal/util"
 )
 
 type SudoBatch struct {
@@ -56,7 +57,7 @@ func (b *SudoBatch) Execute() error {
 		defer func(p string) { _ = os.Remove(p) }(tmpPath)
 	}
 
-	cmd := exec.Command("sudo", "sh", "-c", b.script.String())
+	cmd := util.Command("sudo", "sh", "-c", b.script.String())
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

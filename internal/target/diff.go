@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/fatih/color"
@@ -114,7 +114,17 @@ func ComputeChanges(tree *source.Tree, db *state.DB, opts ...ComputeOpts) (*Comp
 	return result, nil
 }
 
+// computeChange is classify, logged: apply, status, diff and check all go
+// through it.
 func computeChange(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Change, error) {
+	change, err := classify(entry, db, opts)
+	if err == nil {
+		slog.Debug("file", "target", entry.TargetPath, "source", entry.SourcePath, "status", change.Status)
+	}
+	return change, err
+}
+
+func classify(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Change, error) {
 	change := &Change{Entry: entry}
 
 	// Importing a template would overwrite the template with its own rendered
@@ -373,7 +383,7 @@ func ShowDiffWithTool(sourcePath, targetPath, diffTool string) error {
 		return nil
 	}
 
-	cmd := exec.Command("diff", "-u", targetPath, sourcePath)
+	cmd := util.Command("diff", "-u", targetPath, sourcePath)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -440,7 +450,7 @@ func GenerateDiffWithTool(sourcePath, targetPath, diffTool string) (string, erro
 // the usual one, since for those files the target is what will be written into
 // the source.
 func GenerateDiffBetween(oldPath, newPath, diffTool string) (string, error) {
-	cmd := exec.Command("diff", "-u", oldPath, newPath)
+	cmd := util.Command("diff", "-u", oldPath, newPath)
 	if diffTool != "" {
 		cmd = util.UserCommand(diffTool, oldPath, newPath)
 	}

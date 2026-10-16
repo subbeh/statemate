@@ -2,8 +2,8 @@ package hooks
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
-	"os/exec"
 	"strings"
 
 	"golang.org/x/term"
@@ -74,6 +74,7 @@ func (r *Runner) Run(triggered []*Triggered) (*Result, error) {
 	}
 
 	for _, t := range triggered {
+		slog.Debug("hook", "name", t.Name, "files", t.Files)
 		title := fmt.Sprintf("hook %s (%s)", t.Name, FileCount(len(t.Files)))
 
 		rendered, err := r.render(t)
@@ -214,7 +215,7 @@ func (r *Runner) runSteps(t *Triggered, rendered []string) error {
 }
 
 func (r *Runner) runCommand(t *Triggered, command string, env []string) error {
-	cmd := exec.Command("sh", "-c", command)
+	cmd := util.Command("sh", "-c", command)
 	cmd.Dir = t.Dir()
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
