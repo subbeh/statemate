@@ -185,9 +185,10 @@ Run hook keyd (2 files)?
   - sudo systemctl daemon-reload
   - script keyd-restart.sh
   - notify-send "keyd reloaded (2 files)"
-[y]es / [n]o / [a]ll / [q]uit:
+[Y]es / [n]o / [a]ll / [q]uit:
 ```
 
+- Enter answers `[Y]es`.
 - `[a]ll` confirms the remaining hooks and the `#after` scripts that follow.
 - `[q]uit` stops the remaining hooks and `#after` scripts. The files are already
   written.

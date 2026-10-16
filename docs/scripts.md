@@ -107,19 +107,19 @@ Matching is case-insensitive and tolerant of whitespace. The description appears
 ```
 Run keyd-restart.sh (after, onchange)?
   Restart keyd after its configuration changes
-[y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit:
+[Y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit:
 ```
 
 | Answer | Effect |
 |--------|--------|
-| `y` | Run it |
+| `y` or Enter | Run it |
 | `n` | Skip this time; offered again next apply |
 | `s` | Mark as done without running, so it is not offered again |
 | `a` | Run this and auto-confirm the rest |
 | `q` | Abort the apply |
 
-Each answer is a single keypress — there is no need to press Enter. Ctrl-C aborts
-like `q`.
+Each answer is a single keypress — there is no need to press Enter. Enter on its
+own answers yes, and Ctrl-C aborts like `q`.
 
 `[s]kip` is not offered for `always` scripts, whose runs are never recorded — there
 is no meaningful "never ask again" for a script that opted into running every time.

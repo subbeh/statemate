@@ -328,3 +328,21 @@ func TestExecute_VerboseDoesNotListSkippedScripts(t *testing.T) {
 		t.Errorf("Skipped: got %d, want 1", res.Skipped)
 	}
 }
+
+// Enter on its own answers yes at a script or hook prompt.
+func TestConfirm_EnterRuns(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.WriteString("\n")
+	_ = w.Close()
+	old := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = old; _ = r.Close() })
+
+	ok, err := newTestExecutor(t, false).Confirm("hook x", nil)
+	if err != nil || !ok {
+		t.Fatalf("Enter should confirm, got ok=%v err=%v", ok, err)
+	}
+}

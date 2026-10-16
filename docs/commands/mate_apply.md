@@ -27,7 +27,7 @@ apply stops: pass --noconfirm for automated runs.
 Scripts due to run are confirmed individually before executing:
 
 ```
-[y]es    run the script
+[Y]es    run the script (Enter also runs it)
 [n]o     skip this time; ask again on the next apply
 [s]kip   mark as done without running, so it is not offered again
          (not available for 'always' scripts, whose runs are never recorded)

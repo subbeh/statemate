@@ -191,9 +191,9 @@ func (e *Executor) ask(title string, details []string, markable bool) (scriptAct
 		fmt.Printf("  %s\n", d)
 	}
 
-	prompt := "[y]es / [n]o / [a]ll / [q]uit: "
+	prompt := "[Y]es / [n]o / [a]ll / [q]uit: "
 	if markable {
-		prompt = "[y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit: "
+		prompt = "[Y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit: "
 	}
 
 	for {
@@ -210,7 +210,7 @@ func (e *Executor) ask(title string, details []string, markable bool) (scriptAct
 		fmt.Println(strings.TrimSpace(input))
 
 		switch input {
-		case "y":
+		case "y", "\n": // Enter picks the default, yes
 			return actionRun, nil
 		case "n":
 			return actionSkip, nil
