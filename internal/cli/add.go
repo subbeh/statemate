@@ -21,9 +21,9 @@ var addCmd = &cobra.Command{
 	Short: "Add a file or directory to source",
 	Long: `Add an existing file or directory to the source directory.
 
-Files are copied into a source, keeping their paths relative to the target base
-(stow-style), and the originals stay in place. Directories are added recursively,
-including hidden files. Files already in the chosen source are skipped; a file
+Files are copied into a source, keeping their paths relative to the target base,
+and the originals stay in place. Directories are added recursively, including
+hidden files. Files already in the chosen source are skipped; a file
 managed by another source stops the command before any files are copied.
 File symlinks are copied as ordinary files using their contents; directory
 symlinks, configured source directories, and empty directories are not added.

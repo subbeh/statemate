@@ -8,7 +8,7 @@ Statemate manages your dotfiles, system configuration, and packages declarativel
 
 Features:
 
-- Stow-style multi-directory source management
+- Multi-directory source management, one directory per application
 - Profile-based configuration with auto-detection
 - Template rendering with Go text/template
 - Age encryption for sensitive files

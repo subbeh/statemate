@@ -53,8 +53,8 @@ use.
 ## Create a source
 
 A **source** is a directory in the repository whose contents are deployed
-relative to your home directory, stow-style. Create one per application and
-list it in `mate.yaml`:
+relative to your home directory. Create one per application and list it in
+`mate.yaml`:
 
 ```bash
 mkdir zsh

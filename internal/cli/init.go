@@ -41,7 +41,7 @@ func init() {
 const defaultConfigYAML = `# Statemate configuration
 # See: https://github.com/subbeh/statemate
 
-# Source directories to manage (stow-style)
+# Source directories to manage
 # Each directory's contents are deployed relative to target_base
 # Example: sources: [nvim, zsh, git] will look for nvim/, zsh/, git/ in this directory
 sources: []
@@ -85,7 +85,7 @@ target_base: "~"
 const defaultConfigTOML = `# Statemate configuration
 # See: https://github.com/subbeh/statemate
 
-# Source directories to manage (stow-style)
+# Source directories to manage
 # Each directory's contents are deployed relative to target_base
 # Example: sources = ["nvim", "zsh", "git"] will look for nvim/, zsh/, git/ in this directory
 sources = []

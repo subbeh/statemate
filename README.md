@@ -5,7 +5,7 @@ across machines.
 
 ## Features
 
-- **Stow-style sources** — organize configs by app, deployed relative to home
+- **Sources** — organize configs by app, deployed relative to home
 - **Profiles** — machine-specific configs with auto-detection
 - **Templates** — Go templates with the sprig function library
 - **Encryption** — age encryption for sensitive files
