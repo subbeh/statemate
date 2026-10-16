@@ -18,6 +18,7 @@ Other read-only commands that narrow a problem down:
 | `mate profile` | Which profile is active, why, and which sources it uses |
 | `mate config source-dir` | Which repository `mate` is using |
 | `mate managed <path>` | Which source a deployed file comes from, and whether it is active |
+| `mate unmanaged [dir]` | Which files in a directory no source deploys |
 | `mate eval <file>` | What a template renders to |
 | `mate apply --dry-run -V` | Everything an apply would do, without doing it |
 | `mate scripts list`, `mate hooks list` | Scripts and hooks, and why they would or would not run |

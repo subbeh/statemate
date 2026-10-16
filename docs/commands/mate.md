@@ -50,5 +50,6 @@ Use "mate [command] --help" for more information about a command.
 * [mate scripts](mate_scripts.md)	 - Manage scripts
 * [mate secrets](mate_secrets.md)	 - Manage secrets
 * [mate status](mate_status.md)	 - Show what apply would change
+* [mate unmanaged](mate_unmanaged.md)	 - List files that are not managed
 * [mate version](mate_version.md)	 - Print version information
 
