@@ -8,8 +8,8 @@ mate doctor
 
 It loads and validates the configuration, checks that every source directory
 exists, that your age identity and recipients work, which package managers are
-available, and that every active hook matches at least one file. It exits 1 if
-anything is an error.
+available, that every active hook matches at least one file, and that every
+`#encrypted` file really is encrypted. It exits 1 if anything is an error.
 
 Other read-only commands that narrow a problem down:
 

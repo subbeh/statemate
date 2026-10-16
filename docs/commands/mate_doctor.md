@@ -5,8 +5,9 @@ Check configuration and dependencies
 ## Synopsis
 
 Check that the configuration loads and validates, that every source directory
-exists, that every active hook matches some managed file, that the age identity
-and recipients work, and which package managers are available.
+exists, that every active hook matches some managed file, that every #encrypted
+file in any source really is age-encrypted, that the age identity and
+recipients work, and which package managers are available.
 
 Exits 1 if any check reports an error. Run it first when something behaves
 unexpectedly.

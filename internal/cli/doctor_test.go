@@ -90,3 +90,57 @@ func TestAgeStatus(t *testing.T) {
 		})
 	}
 }
+
+// mate doctor flags #encrypted files holding plaintext in any source, including
+// one only a profile uses, and accepts armored and binary age files alike.
+func TestCheckEncrypted_FlagsPlaintext(t *testing.T) {
+	root := isolateHome(t)
+	repo := filepath.Join(root, "repo")
+	files := map[string]string{
+		"mate.yaml":                     "sources: [app]\nprofiles:\n  work:\n    sources: [work]\n",
+		"app/armored#encrypted":         "-----BEGIN AGE ENCRYPTED FILE-----\n",
+		"app/binary#encrypted":          "age-encryption.org/v1\n",
+		"app/leaked#encrypted":          "password=hunter2\n",
+		"app/plain.conf":                "not marked, not checked\n",
+		"work/leaked-at-work#encrypted": "token=abc\n",
+	}
+	for name, content := range files {
+		path := filepath.Join(repo, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg, err := config.Load(filepath.Join(repo, "mate.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	origStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	issues := checkEncrypted(cfg)
+	_ = w.Close()
+	os.Stdout = origStdout
+	out, _ := io.ReadAll(r)
+	_ = r.Close()
+
+	if issues != 2 {
+		t.Errorf("expected 2 issues, got %d:\n%s", issues, out)
+	}
+	for _, want := range []string{"leaked#encrypted is marked", "leaked-at-work#encrypted is marked"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("expected %q in output:\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{"armored", "binary", "plain.conf"} {
+		if strings.Contains(string(out), unwanted) {
+			t.Errorf("did not expect %q in output:\n%s", unwanted, out)
+		}
+	}
+}

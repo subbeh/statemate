@@ -1,7 +1,6 @@
 package secrets
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -215,7 +214,7 @@ func (m *Manager) loadCache() error {
 	// set. Handing that to age fails with an error quoting the first line of
 	// the file -- the secrets themselves -- so recognise it up front and never
 	// let its contents reach an error message.
-	if !isAgeFile(data) {
+	if !encrypt.IsAgeFile(data) {
 		return errUnencryptedCache
 	}
 
@@ -230,12 +229,6 @@ func (m *Manager) loadCache() error {
 	}
 	m.cache = cache
 	return nil
-}
-
-// isAgeFile reports whether data is an age file, binary or armored.
-func isAgeFile(data []byte) bool {
-	return bytes.HasPrefix(data, []byte("age-encryption.org/")) ||
-		bytes.HasPrefix(data, []byte("-----BEGIN AGE ENCRYPTED FILE-----"))
 }
 
 func (m *Manager) saveCache() error {

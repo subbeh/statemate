@@ -93,6 +93,11 @@ mate diff                   # diffs the decrypted content
 To make `git diff` readable too, see
 [Tips: readable diffs](tips.md#readable-diffs-for-encrypted-files).
 
+Renaming a file to `#encrypted` by hand does not encrypt it. `mate doctor` reports
+any `#encrypted` file that holds plaintext, in every source and for every
+profile, so it is caught before the secret is committed. To fix it, remove
+`#encrypted` from the name and run `mate encrypt` on the file.
+
 ### More than one key
 
 Each machine can have its own key; list every public key under `recipients`.

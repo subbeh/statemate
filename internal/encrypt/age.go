@@ -174,3 +174,9 @@ func (e *AgeEncryptor) CanDecrypt() bool {
 func (e *AgeEncryptor) CanEncrypt() bool {
 	return len(e.recipients) > 0
 }
+
+// IsAgeFile reports whether data is an age file, binary or armored.
+func IsAgeFile(data []byte) bool {
+	return bytes.HasPrefix(data, []byte("age-encryption.org/")) ||
+		bytes.HasPrefix(data, []byte("-----BEGIN AGE ENCRYPTED FILE-----"))
+}
