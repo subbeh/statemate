@@ -18,7 +18,7 @@ a source:
 ## Naming
 
 ```
-<order>-<name>.<ext>#<frequency>#<timing>[#tmpl][#profile:<name>]
+<order>-<name>.<ext>#<frequency>#<timing>[#tmpl][#noconfirm][#profile:<name>]
 ```
 
 The order prefix is optional and controls execution order. Scripts are sorted by
@@ -32,7 +32,7 @@ README, so keep documentation elsewhere.
 ```
 01-setup.sh#once#before
 02-secrets.sh#onchange#before#tmpl
-50-fonts.sh#weekly#after
+50-fonts.sh#weekly#after#noconfirm
 99-cleanup.sh#always#after
 bootstrap.sh                          ← manual only
 migrate.sh#once#before#profile:arch
@@ -127,6 +127,10 @@ is no meaningful "never ask again" for a script that opted into running every ti
 Answering with EOF (no terminal input available) aborts rather than assuming
 consent.
 
+A script marked `#noconfirm` runs without asking, even when there is no
+terminal. Use it for scripts that are safe to run unattended, such as rebuilding
+a font cache. `--no-scripts` still skips it.
+
 A script marked as done still appears in `mate scripts list` and can be run
 manually.
 
@@ -207,7 +211,8 @@ repository-root `.matescripts/`.
 
 An empty `SOURCE` means the script lives in the repository-root `.matescripts/`.
 A profile-scoped script's name is followed by its profile, such as
-`migrate.sh [arch]`, and a templated one by `[T]`.
+`migrate.sh [arch]`, a templated one by `[T]`, and a `#noconfirm` one by
+`[noconfirm]`.
 
 `STATUS` depends on frequency:
 

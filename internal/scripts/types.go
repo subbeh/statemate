@@ -68,6 +68,7 @@ type Script struct {
 	Frequency   Frequency
 	Timing      Timing
 	Template    bool
+	NoConfirm   bool
 	Profile     string
 	Order       int
 	SourceDir   string
@@ -83,7 +84,7 @@ func (s *Script) IsExecutable() bool {
 	return info.Mode()&0111 != 0
 }
 
-// Script naming format: <order>-<name>.<ext>#<freq>#<timing>[#tmpl][#profile:<name>]
+// Script naming format: <order>-<name>.<ext>#<freq>#<timing>[#tmpl][#noconfirm][#profile:<name>]
 // Examples:
 //   01-setup.sh#once#before
 //   02-cleanup.sh#always#after
@@ -93,7 +94,7 @@ func (s *Script) IsExecutable() bool {
 var orderPattern = regexp.MustCompile(`^(\d+)-(.+)$`)
 
 // scriptAttrs are the attributes a script name may carry; profile: takes a value.
-var scriptAttrs = []string{"once", "onchange", "always", "daily", "weekly", "monthly", "before", "after", "tmpl"}
+var scriptAttrs = []string{"once", "onchange", "always", "daily", "weekly", "monthly", "before", "after", "tmpl", "noconfirm"}
 
 // CheckScriptName reports the first attribute in a script name that is not
 // recognised. Like a file's, an unknown attribute was dropped silently, so a typo
@@ -110,6 +111,17 @@ func CheckScriptName(filename string) error {
 		}
 	}
 	return nil
+}
+
+// HasNoConfirm reports whether a script name carries #noconfirm, which runs the
+// script during an apply without asking.
+func HasNoConfirm(filename string) bool {
+	for _, attr := range strings.Split(filename, "#")[1:] {
+		if strings.EqualFold(attr, "noconfirm") {
+			return true
+		}
+	}
+	return false
 }
 
 func ParseScriptName(filename string) (name string, freq Frequency, timing Timing, template bool, profile string, order int) {

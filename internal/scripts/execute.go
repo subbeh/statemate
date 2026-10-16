@@ -153,6 +153,9 @@ func describe(script *Script) string {
 
 // confirm asks whether a single script should run, honouring force/confirmAll.
 func (e *Executor) confirm(script *Script) (scriptAction, error) {
+	if script.NoConfirm {
+		return actionRun, nil
+	}
 	var details []string
 	if script.Description != "" {
 		details = append(details, script.Description)
@@ -266,8 +269,9 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 		}
 
 		// Without a terminal we cannot ask, so skip rather than run unreviewed
-		// code unattended. Callers warn about this.
-		if !e.force && !isInteractive() {
+		// code unattended. Callers warn about this. A #noconfirm script needs no
+		// answer, so it runs anyway.
+		if !e.force && !script.NoConfirm && !isInteractive() {
 			result.SkippedNoTTY = append(result.SkippedNoTTY, describe(script))
 			result.Skipped++
 			continue

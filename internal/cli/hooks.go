@@ -157,6 +157,8 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 			status = "disabled"
 		case !h.ActiveFor(env.profileChain):
 			status = "n/a"
+		case !h.Confirms():
+			status = "noconfirm"
 		}
 		data = append(data, []string{
 			h.Name,

@@ -48,6 +48,7 @@ hooks:
 | `profile` | string | Only active under this profile, or one inheriting from it |
 | `description` | string | Shown in the prompt, `mate hooks list`, and `mate status` |
 | `enabled` | bool | Default `true`. `false` switches the hook off |
+| `confirm` | bool | Default `true`. `false` runs the hook without asking — see [Confirmation](#confirmation) |
 
 In TOML the same structure is `[hooks.keyd]` with `[[hooks.keyd.do]]` steps.
 
@@ -208,6 +209,8 @@ Run hook keyd (2 files)?
   written.
 - `--force` confirms without asking. `--no-scripts` skips hooks too.
 - Without a terminal, hooks are skipped with a warning.
+- A hook with `confirm: false` runs without asking, even without a terminal.
+  `mate hooks list` shows it as `noconfirm`. `--no-scripts` still skips it.
 
 ## Pending hooks
 

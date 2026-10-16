@@ -101,23 +101,27 @@ func (r *Runner) Run(triggered []*Triggered) (*Result, error) {
 			continue
 		}
 
-		if !r.opts.Force && !isInteractive() {
-			res.SkippedNoTTY = append(res.SkippedNoTTY, title)
-			continue
-		}
+		// A hook with `confirm: false` needs no answer, so it runs without a
+		// terminal too.
+		if t.Confirms() {
+			if !r.opts.Force && !isInteractive() {
+				res.SkippedNoTTY = append(res.SkippedNoTTY, title)
+				continue
+			}
 
-		var details []string
-		if t.Description != "" {
-			details = append(details, t.Description)
-		}
-		details = append(details, stepLines(t, rendered)...)
-		ok, err := r.exec.Confirm(title, details)
-		if err != nil {
-			return res, err
-		}
-		if !ok {
-			res.Declined = append(res.Declined, t.Name)
-			continue
+			var details []string
+			if t.Description != "" {
+				details = append(details, t.Description)
+			}
+			details = append(details, stepLines(t, rendered)...)
+			ok, err := r.exec.Confirm(title, details)
+			if err != nil {
+				return res, err
+			}
+			if !ok {
+				res.Declined = append(res.Declined, t.Name)
+				continue
+			}
 		}
 
 		if err := r.runSteps(t, rendered); err != nil {

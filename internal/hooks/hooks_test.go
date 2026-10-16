@@ -289,6 +289,16 @@ func TestRunNoScriptsAndNoTTY(t *testing.T) {
 		t.Errorf("without a terminal hooks should be skipped, got %+v, %v", res, err)
 	}
 
+	// confirm: false needs no answer, so the hook runs without a terminal.
+	noConfirm := false
+	cfg.Hooks["h"].Confirm = &noConfirm
+	runner, _ = newRunner(t, Options{})
+	res, err = runner.Run(triggered)
+	if err != nil || len(res.SkippedNoTTY) != 0 || len(res.Failed) != 1 {
+		t.Errorf("confirm: false should run the hook without a terminal, got %+v, %v", res, err)
+	}
+	cfg.Hooks["h"].Confirm = nil
+
 	runner, _ = newRunner(t, Options{DryRun: true})
 	res, err = runner.Run(triggered)
 	if err != nil || res.Ran != 1 || len(res.Failed) != 0 {

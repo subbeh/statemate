@@ -271,7 +271,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			if s.Timing == scripts.TimingAfter {
 				timing = "after"
 			}
-			fmt.Printf("  %s (%s, %s)\n", s.Name, s.Frequency, timing)
+			noconfirm := ""
+			if s.NoConfirm {
+				noconfirm = ", noconfirm"
+			}
+			fmt.Printf("  %s (%s, %s%s)\n", s.Name, s.Frequency, timing, noconfirm)
 			if s.Description != "" {
 				fmt.Printf("      %s\n", s.Description)
 			}
@@ -281,7 +285,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	if len(pendingHooks) > 0 {
 		fmt.Println("\n" + bold("Pending hooks:"))
 		for _, h := range pendingHooks {
-			fmt.Printf("  %s (%s)\n", h.Name, hooks.FileCount(len(h.Files)))
+			noconfirm := ""
+			if !h.Confirms() {
+				noconfirm = ", noconfirm"
+			}
+			fmt.Printf("  %s (%s%s)\n", h.Name, hooks.FileCount(len(h.Files)), noconfirm)
 			if h.Description != "" {
 				fmt.Printf("      %s\n", h.Description)
 			}

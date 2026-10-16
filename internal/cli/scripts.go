@@ -167,6 +167,9 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		if script.Template {
 			name += " [T]"
 		}
+		if script.NoConfirm {
+			name += " [noconfirm]"
+		}
 
 		source := ""
 		if script.SourceDir != "" {

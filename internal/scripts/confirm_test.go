@@ -346,3 +346,30 @@ func TestConfirm_EnterRuns(t *testing.T) {
 		t.Fatalf("Enter should confirm, got ok=%v err=%v", ok, err)
 	}
 }
+
+// A #noconfirm script needs no answer, so it runs even without a terminal.
+func TestExecute_NoConfirmRunsWithoutTTY(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker")
+	name := "01-x.sh#always#before#noconfirm"
+	path := writeScript(t, dir, name, "#!/bin/bash\ntouch "+marker+"\n")
+
+	if err := CheckScriptName(name); err != nil {
+		t.Fatalf("#noconfirm should be a known attribute: %v", err)
+	}
+	if !HasNoConfirm(name) || HasNoConfirm("01-x.sh#always#before") {
+		t.Fatal("HasNoConfirm should report only names carrying #noconfirm")
+	}
+
+	script := &Script{Path: path, Name: "x", Frequency: FreqAlways, Timing: TimingBefore, NoConfirm: true}
+	result, err := newTestExecutor(t, false).WithConfirmation(false, false).Execute(Scripts{script})
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if result.Executed != 1 || len(result.SkippedNoTTY) != 0 {
+		t.Errorf("expected the script to run without prompting, got %+v", result)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Error("#noconfirm script should have run")
+	}
+}

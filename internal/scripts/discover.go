@@ -83,6 +83,7 @@ func (d *Discoverer) discoverDir(dir, sourceDir string) (Scripts, error) {
 			Frequency:   freq,
 			Timing:      timing,
 			Template:    template,
+			NoConfirm:   HasNoConfirm(entry.Name()),
 			Profile:     profile,
 			Order:       order,
 			SourceDir:   sourceDir,
