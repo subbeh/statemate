@@ -12,7 +12,7 @@ import (
 var version = "dev"
 
 // bold marks section headers. Like every color, it is dropped when stdout is
-// not a terminal or NO_COLOR is set.
+// not a terminal, NO_COLOR is set, or --no-color is passed.
 var bold = color.New(color.Bold).SprintFunc()
 
 var rootCmd = &cobra.Command{
@@ -40,6 +40,9 @@ Use "mate [command] --help" for more information about a command.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		cmd.SilenceUsage = true
 		cmd.SilenceErrors = true
+		if noColor, _ := cmd.Flags().GetBool("no-color"); noColor {
+			color.NoColor = true
+		}
 	},
 }
 
@@ -87,6 +90,7 @@ func RootCmd() *cobra.Command {
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
+	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output (also off when stdout is not a terminal or NO_COLOR is set)")
 	rootCmd.AddCommand(versionCmd)
 	// --version (which the Homebrew formula test runs) prints exactly what
 	// `mate version` does.
