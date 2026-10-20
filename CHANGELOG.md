@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Colored output: change markers (`+` `~` `!` `<`), `mate doctor`'s `[OK]`/`[WARN]`/`[ERROR]`, warnings, errors, script and hook progress, and section headers. Color is off when stdout is not a terminal, `NO_COLOR` is set, or `--no-color` is passed
 - `--log-file <path>` appends a log of the run to a file, for debugging: every external command mate runs with its exit code, and the error the run ended with. `--log-level debug` adds the config and profile resolved, each file's status, conflict answers, and which scripts and hooks were due. Both can also be set with `STATEMATE_LOG_FILE`/`STATEMATE_LOG_LEVEL` or `log_file`/`log_level` in `mate.yaml` or the local config. Command output and environment are never logged
 - `#noconfirm` script attribute and `confirm: false` hook field: the script or hook runs during `mate apply` without asking, even when there is no terminal. `mate scripts list`, `mate hooks list` and `mate status` mark them `noconfirm`. Adding `#noconfirm` to an existing script renames it, so a `#once` script runs again
+- A `targets` mapping in a source's `.mate.yaml` can list several paths, deploying the subdirectory to each of them: `targets: {.claude.shared: [.claude.personal, .claude.work]}`
 
 ### Changed
 - **Breaking:** `variable_commands` is removed. A variable's value may now be a template instead, so `variable_commands: {key: "gpg ..."}` becomes `variables: {key: '{{ cmd "gpg ..." }}'}`. Template values are rendered in `variables`, `include`, `var_files` and profile variables, including list items and nested keys, so a list such as `gpg_keys` can come from commands too. A leftover `variable_commands` key is ignored, leaving those variables undefined
@@ -22,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An unrecognised attribute in a file, directory or script name is now an error that names the file, and so is a `#perm:` mode that is not octal. Before, it was dropped silently, so a typo such as `config#templte` deployed an unrendered `config`
 
 ### Fixed
+- A relative `targets` path such as `.config` now deploys under the global target base (normally `~`). Before, it produced a relative target path
 - `mate check` marks an `#import` change with `<`, as `mate status` does, instead of leaving the marker blank
 
 ## [0.6.0] - 2026-10-17

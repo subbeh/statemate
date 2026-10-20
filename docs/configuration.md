@@ -366,7 +366,7 @@ generate:
 |-----|-------------|
 | `profile` | Default [`#profile:`](attributes.md#profilename) for every file in the source that has none of its own |
 | `target_base` | Deploy this source relative to a different root. Disables `targets` |
-| `targets` | Map a top-level subdirectory to a path |
+| `targets` | Map a top-level subdirectory to a path, or a list of paths |
 | `ignore` | Patterns as for [`ignore`](#ignore), matched against the path inside this source |
 | `owner` | Default owner for files and directories in the source |
 | `group` | Default group for files and directories |
@@ -424,7 +424,8 @@ deployed like any other file unless it is listed under `ignore`.
 Maps a subdirectory of the source onto another path, which is how system files
 are managed. Only the first component of a file's path is looked up, so `etc`
 maps the whole `etc/` subtree; a key such as `etc/keyd` never matches. Values may
-start with `~` and may use template variables. See
+start with `~` and may use template variables. A relative value is taken relative
+to the global `target_base`, normally your home directory. See
 [Managing System Files](system-files.md).
 
 ```yaml
@@ -438,6 +439,16 @@ arch_root/
   etc/
     issue                    →  /etc/issue
     keyd/default.conf        →  /etc/keyd/default.conf
+```
+
+A value can also be a list, which deploys the subdirectory to every path in it.
+Each copy is tracked separately, so `mate status` reports drift in each one:
+
+```yaml
+targets:
+  .claude.shared:
+    - .claude.personal       # ~/.claude.personal
+    - .claude.work           # ~/.claude.work
 ```
 
 Files outside the mapped directories still deploy to the source's normal target

@@ -125,7 +125,7 @@ packages:
 		t.Fatalf("LoadDirConfig failed: %v", err)
 	}
 
-	if cfg.Targets["etc"] != "/etc" {
+	if got := cfg.Targets["etc"]; len(got) != 1 || got[0] != "/etc" {
 		t.Errorf("expected targets[etc]=/etc, got %v", cfg.Targets["etc"])
 	}
 

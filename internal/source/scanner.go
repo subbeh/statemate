@@ -128,14 +128,17 @@ func (s *Scanner) scanSource(sourceDir string, tree *Tree) error {
 			return err
 		}
 
-		entry := s.buildEntry(sourceDir, path, relToSource, info, dirCfg)
-		tree.AddEntry(entry)
+		for _, entry := range s.buildEntries(sourceDir, path, relToSource, info, dirCfg) {
+			tree.AddEntry(entry)
+		}
 
 		return nil
 	})
 }
 
-func (s *Scanner) buildEntry(sourceDir, fullPath, relPath string, info os.FileInfo, dirCfg *config.DirConfig) *Entry {
+// buildEntries returns one entry per target path: a file under a `targets`
+// mapping with several paths is deployed to each of them.
+func (s *Scanner) buildEntries(sourceDir, fullPath, relPath string, info os.FileInfo, dirCfg *config.DirConfig) []*Entry {
 	name, attrs := ParseAttrs(filepath.Base(fullPath))
 
 	_, sourceDirAttrs := ParseAttrs(filepath.Base(sourceDir))
@@ -163,20 +166,22 @@ func (s *Scanner) buildEntry(sourceDir, fullPath, relPath string, info os.FileIn
 		}
 	}
 
-	targetPath := s.resolveTarget(relPath, name, dirCfg)
-
-	return &Entry{
-		SourcePath: fullPath,
-		TargetPath: targetPath,
-		RelPath:    relPath,
-		Name:       name,
-		Attrs:      attrs,
-		IsDir:      info.IsDir(),
-		Mode:       info.Mode(),
+	var entries []*Entry
+	for _, targetPath := range s.resolveTargets(relPath, name, dirCfg) {
+		entries = append(entries, &Entry{
+			SourcePath: fullPath,
+			TargetPath: targetPath,
+			RelPath:    relPath,
+			Name:       name,
+			Attrs:      attrs,
+			IsDir:      info.IsDir(),
+			Mode:       info.Mode(),
+		})
 	}
+	return entries
 }
 
-func (s *Scanner) resolveTarget(relPath, name string, dirCfg *config.DirConfig) string {
+func (s *Scanner) resolveTargets(relPath, name string, dirCfg *config.DirConfig) []string {
 	parts := strings.Split(relPath, string(filepath.Separator))
 	cleanParts := make([]string, 0, len(parts))
 
@@ -194,15 +199,28 @@ func (s *Scanner) resolveTarget(relPath, name string, dirCfg *config.DirConfig) 
 		if dirCfg.TargetBase != "" {
 			targetBase = expandHome(dirCfg.TargetBase)
 		} else if len(cleanParts) > 0 {
-			firstDir := cleanParts[0]
-			if override, ok := dirCfg.Targets[firstDir]; ok {
-				targetBase = expandHome(override)
-				cleanParts = cleanParts[1:]
+			if overrides, ok := dirCfg.Targets[cleanParts[0]]; ok && len(overrides) > 0 {
+				rest := filepath.Join(cleanParts[1:]...)
+				targets := make([]string, 0, len(overrides))
+				for _, override := range overrides {
+					targets = append(targets, filepath.Join(s.mappedBase(override), rest))
+				}
+				return targets
 			}
 		}
 	}
 
-	return filepath.Join(targetBase, filepath.Join(cleanParts...))
+	return []string{filepath.Join(targetBase, filepath.Join(cleanParts...))}
+}
+
+// mappedBase resolves a `targets` path. A relative path is taken relative to the
+// global target base, so `.config` means ~/.config.
+func (s *Scanner) mappedBase(path string) string {
+	path = expandHome(path)
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(s.targetBase, path)
+	}
+	return path
 }
 
 func expandHome(path string) string {

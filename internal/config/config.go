@@ -124,17 +124,17 @@ type PackageList struct {
 }
 
 type DirConfig struct {
-	TargetBase string            `yaml:"target_base" toml:"target_base"`
-	Profile    string            `yaml:"profile" toml:"profile"`
-	Targets    map[string]string `yaml:"targets" toml:"targets"`
-	Ignore     []string          `yaml:"ignore" toml:"ignore"`
-	Owner      string            `yaml:"owner" toml:"owner"`
-	Group      string            `yaml:"group" toml:"group"`
-	Perm       string            `yaml:"perm" toml:"perm"`
-	Packages   *PackageList      `yaml:"packages" toml:"packages"`
-	Generate   []GenerateConfig  `yaml:"generate" toml:"generate"`
-	Hooks      map[string]*Hook  `yaml:"hooks" toml:"hooks"`
-	Include    []string          `yaml:"include" toml:"include"`
+	TargetBase string                `yaml:"target_base" toml:"target_base"`
+	Profile    string                `yaml:"profile" toml:"profile"`
+	Targets    map[string]StringList `yaml:"targets" toml:"targets"`
+	Ignore     []string              `yaml:"ignore" toml:"ignore"`
+	Owner      string                `yaml:"owner" toml:"owner"`
+	Group      string                `yaml:"group" toml:"group"`
+	Perm       string                `yaml:"perm" toml:"perm"`
+	Packages   *PackageList          `yaml:"packages" toml:"packages"`
+	Generate   []GenerateConfig      `yaml:"generate" toml:"generate"`
+	Hooks      map[string]*Hook      `yaml:"hooks" toml:"hooks"`
+	Include    []string              `yaml:"include" toml:"include"`
 
 	// Variables holds what Include loaded; .mate.yaml cannot set them itself.
 	Variables map[string]any `yaml:"-" toml:"-"`

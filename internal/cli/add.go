@@ -421,10 +421,12 @@ func resolveTargetBaseForAdd(sourceDir, targetPath, globalTargetBase string, tre
 			return globalBase, nil
 		}
 		// Check if file falls under a targets mapping
-		for _, mappedBase := range dirCfg.Targets {
-			mappedBase = expandPath(mappedBase)
-			if strings.HasPrefix(targetPath, mappedBase+string(filepath.Separator)) || targetPath == mappedBase {
-				return filepath.Dir(mappedBase), nil
+		for _, mappedBases := range dirCfg.Targets {
+			for _, mappedBase := range mappedBases {
+				mappedBase = expandPath(mappedBase)
+				if strings.HasPrefix(targetPath, mappedBase+string(filepath.Separator)) || targetPath == mappedBase {
+					return filepath.Dir(mappedBase), nil
+				}
 			}
 		}
 		// Check if source already has files

@@ -3,6 +3,7 @@ package source
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -377,6 +378,48 @@ targets:
 
 	if files[0].TargetPath != "/etc/app/config.yaml" {
 		t.Errorf("expected target=/etc/app/config.yaml, got %q", files[0].TargetPath)
+	}
+}
+
+func TestScannerDirConfigTargetsMultiple(t *testing.T) {
+	tests := []struct {
+		name, file, content string
+	}{
+		{"yaml", ".mate.yaml", "targets:\n  .claude.shared:\n    - .claude.personal\n    - /opt/claude\n"},
+		{"toml", ".mate.toml", "[targets]\n\".claude.shared\" = [\".claude.personal\", \"/opt/claude\"]\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			sharedDir := filepath.Join(dir, "claude", ".claude.shared")
+			if err := os.MkdirAll(sharedDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(sharedDir, "CLAUDE.md"), []byte("# shared"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "claude", tt.file), []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			tree, err := NewScanner("/home/testuser", "").Scan([]string{filepath.Join(dir, "claude")})
+			if err != nil {
+				t.Fatalf("Scan failed: %v", err)
+			}
+
+			var got []string
+			for _, f := range tree.Files() {
+				got = append(got, f.TargetPath)
+			}
+			want := []string{"/home/testuser/.claude.personal/CLAUDE.md", "/opt/claude/CLAUDE.md"}
+			if !slices.Equal(got, want) {
+				t.Errorf("targets = %v, want %v", got, want)
+			}
+			tree.CheckConflicts()
+			if tree.HasConflicts() {
+				t.Errorf("unexpected conflicts: %v", tree.Conflicts)
+			}
+		})
 	}
 }
 
