@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `-v` now means log output on every command, so the per-command verbose flags are renamed or removed: `mate apply -V`/`--verbose` is now `-l`/`--list`, `mate packages status -v`/`--verbose` is now `-d`/`--descriptions`, and `mate scripts run -v` and `mate hooks run -v` are removed; with `-v` they log each script and hook they run, and `-vv` shows each hook command
 - An unrecognised attribute in a file, directory or script name is now an error that names the file, and so is a `#perm:` mode that is not octal. Before, it was dropped silently, so a typo such as `config#templte` deployed an unrendered `config`
 - When the age identity fails to load (a missing key file, or an `identity_command` that fails), `mate status`, `diff`, `check` and `eval` now report why, naming the `#enc` file that needed it: `<file> is #enc, but the age identity failed to load: <reason>`. Before, status and check said no identity was configured, and diff and eval failed even when nothing had to be decrypted
-- `mate status`, `diff`, `check`, `scripts list` and shell completion run `age.identity_command` fewer times, so an identity that prompts (a password manager, a hardware key) asks less often
+- `mate apply`, `status`, `diff`, `check`, `scripts list` and shell completion run `age.identity_command` fewer times, so an identity that prompts (a password manager, a hardware key) asks less often
 
 ### Fixed
 - A relative `targets` path such as `.config` now deploys under the global target base (normally `~`). Before, it produced a relative target path

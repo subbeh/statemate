@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/packages"
+	"github.com/subbeh/statemate/internal/plan"
 )
 
 // hookRepo is a throwaway repository for running mate apply end to end. Every
@@ -280,7 +281,7 @@ func TestInstallMissingPackages_WarnsWithoutTerminal(t *testing.T) {
 		{Manager: "pacman", Statuses: missing("neovim")},
 	}
 
-	runErr := installMissingPackages(results, &config.Config{}, false, false, Scope{})
+	runErr := installMissingPackages(results, &config.Config{}, false, false, plan.Scope{})
 
 	_ = stdoutW.Close()
 	_ = stderrW.Close()

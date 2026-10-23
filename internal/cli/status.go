@@ -147,7 +147,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
+	if err := scope.Validate(env, tree.Files()); err != nil {
 		return err
 	}
 
@@ -344,34 +344,4 @@ func changedSources(changes []*target.Change) scripts.ChangedSources {
 		names = append(names, extractSourceDir(c.Entry))
 	}
 	return scripts.NewChangedSources(names...)
-}
-
-func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {
-	srcDir := strings.TrimSuffix(entry.SourcePath, "/"+entry.RelPath)
-	relPath := filepath.Join(filepath.Base(srcDir), entry.RelPath)
-
-	if relPath == pattern || entry.SourcePath == pattern || entry.TargetPath == pattern {
-		return true
-	}
-	if strings.HasSuffix(relPath, "/"+pattern) ||
-		strings.HasSuffix(entry.SourcePath, "/"+pattern) ||
-		strings.HasSuffix(entry.TargetPath, "/"+pattern) {
-		return true
-	}
-	if strings.HasPrefix(relPath, pattern+"/") ||
-		strings.HasPrefix(entry.TargetPath, pattern+"/") {
-		return true
-	}
-	// A relative directory is also taken from the current directory, so
-	// `mate apply .config/nvim` run in ~ covers everything under ~/.config/nvim,
-	// and `.config` run inside a source covers that source's .config.
-	if !filepath.IsAbs(pattern) {
-		if cwd, err := os.Getwd(); err == nil {
-			abs := filepath.Join(cwd, pattern)
-			if strings.HasPrefix(entry.TargetPath, abs+"/") || strings.HasPrefix(entry.SourcePath, abs+"/") {
-				return true
-			}
-		}
-	}
-	return false
 }

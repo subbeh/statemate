@@ -36,6 +36,8 @@ type Env struct {
 	// when something has to decrypt, so a repository without #enc files still
 	// works without its key.
 	encErr error
+	// cfgPath is what NewEnv loaded, for Reload.
+	cfgPath string
 }
 
 // NewEnv loads and validates the config at cfgPath, and detects the profile
@@ -51,7 +53,12 @@ func NewEnv(cfgPath, profileName string) (*Env, error) {
 	if profileName == "" {
 		profileName = profile.Detect(cfg)
 	}
-	return FromConfig(cfg, profileName)
+	e, err := FromConfig(cfg, profileName)
+	if err != nil {
+		return nil, err
+	}
+	e.cfgPath = cfgPath
+	return e, nil
 }
 
 // FromConfig builds the Env for a config the caller has already loaded.
@@ -69,24 +76,42 @@ func FromConfig(cfg *config.Config, profileName string) (*Env, error) {
 		e.Secrets = mgr
 	}
 
+	if err := e.newTemplateContext(); err != nil {
+		return nil, err
+	}
+	e.Scanner = source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), DirConfigRenderer(e.TmplCtx), cfg.Ignore)
+	return e, nil
+}
+
+// Reload re-reads the config of an Env from NewEnv and rebuilds its template
+// context, since #before scripts may write var_files. The identity is kept:
+// loading it again could prompt a second time.
+func (e *Env) Reload() error {
+	cfg, err := config.Load(e.cfgPath)
+	if err != nil {
+		return fmt.Errorf("reloading config: %w", err)
+	}
+	e.Config = cfg
+	return e.newTemplateContext()
+}
+
+func (e *Env) newTemplateContext() error {
 	var ctxOpts []template.ContextOption
 	if e.Enc != nil && e.Enc.CanDecrypt() {
 		ctxOpts = append(ctxOpts, template.WithDecrypt(e.Enc.Decrypt))
 	}
-	tmplCtx, err := template.NewContext(cfg, profileName, ctxOpts...)
+	tmplCtx, err := template.NewContext(e.Config, e.Profile, ctxOpts...)
 	if err != nil {
 		if e.encErr != nil {
-			return nil, fmt.Errorf("creating template context: %w (the age identity failed to load: %v)", err, e.encErr)
+			return fmt.Errorf("creating template context: %w (the age identity failed to load: %v)", err, e.encErr)
 		}
-		return nil, fmt.Errorf("creating template context: %w", err)
+		return fmt.Errorf("creating template context: %w", err)
 	}
 	if e.Secrets != nil {
 		tmplCtx.SecretLookup = e.lookupSecret
 	}
 	e.TmplCtx = tmplCtx
-
-	e.Scanner = source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), DirConfigRenderer(tmplCtx), cfg.Ignore)
-	return e, nil
+	return nil
 }
 
 func (e *Env) lookupSecret(item, typ, field string) (string, error) {

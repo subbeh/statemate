@@ -44,7 +44,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, profileName, enc, tmplCtx := env.Config, env.Profile, env.Enc, env.TmplCtx
+	cfg, enc, tmplCtx := env.Config, env.Enc, env.TmplCtx
 
 	p, err := env.Plan()
 	if err != nil {
@@ -69,7 +69,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := scope.validate(cfg, profileName, tree.Files()); err != nil {
+	if err := scope.Validate(env, tree.Files()); err != nil {
 		return err
 	}
 
