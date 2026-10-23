@@ -258,7 +258,7 @@ which usually means a typo.
 |---------|---------|
 | `mate hooks list` | Every hook: NAME, SCOPE, MATCH, PROFILE, STEPS, STATUS, DESCRIPTION |
 | `mate hooks run <name>` | Run a hook now, without a prompt. `--dry-run` shows the steps instead |
-| `mate apply --dry-run` | Lists the hooks that would run; `-V` adds the files and steps |
+| `mate apply --dry-run` | Lists the hooks that would run; `-l` adds the files and steps |
 | `mate status` | Lists the hooks that pending changes would trigger |
 
 In `mate hooks list`, SCOPE is `repo`, `local`, or the source name. STATUS is

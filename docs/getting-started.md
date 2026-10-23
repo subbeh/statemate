@@ -152,7 +152,7 @@ applied 1
 ```
 
 `mate apply --dry-run` walks the whole run, including scripts and packages,
-without writing anything, and `-V` lists every file written.
+without writing anything, and `-l` lists every file written.
 
 If a deployed file was changed behind statemate's back, apply stops and asks what
 to do:

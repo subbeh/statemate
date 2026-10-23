@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,6 +110,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 	if err := os.Rename(entry.SourcePath, newSourcePath); err != nil {
 		return fmt.Errorf("renaming file: %w", err)
 	}
+	slog.Info("source", "action", "rename", "path", entry.SourcePath, "to", newSourcePath)
 
 	db, err := openState(cfg)
 	if err != nil {
@@ -121,6 +123,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 		if err := os.Rename(entry.TargetPath, newTargetPath); err != nil {
 			return fmt.Errorf("renaming target: %w", err)
 		}
+		slog.Info("moved", "target", entry.TargetPath, "to", newTargetPath)
 		targetMoved = true
 	}
 

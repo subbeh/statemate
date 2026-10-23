@@ -35,7 +35,7 @@ func TestExecutor_RunOnce(t *testing.T) {
 		ContentHash: contentHash,
 	}
 
-	executor := NewExecutor(db, nil, false, false).WithConfirmation(true, false)
+	executor := NewExecutor(db, nil, false).WithConfirmation(true, false)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -97,7 +97,7 @@ func TestExecutor_RunOnchange(t *testing.T) {
 	script.SourceDir = filepath.Join(tmpDir, "mysrc")
 
 	// No pending changes -> does not run.
-	executor := NewExecutor(db, nil, false, false).WithConfirmation(true, false)
+	executor := NewExecutor(db, nil, false).WithConfirmation(true, false)
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
 		t.Fatalf("execute with no changes failed: %v", err)
@@ -110,7 +110,7 @@ func TestExecutor_RunOnchange(t *testing.T) {
 	}
 
 	// Its own source changed -> runs.
-	executor = NewExecutor(db, nil, false, false).
+	executor = NewExecutor(db, nil, false).
 		WithConfirmation(true, false).
 		WithChangedSources(NewChangedSources("mysrc"))
 	result, err = executor.Execute(Scripts{script})
@@ -126,7 +126,7 @@ func TestExecutor_RunOnchange(t *testing.T) {
 
 	// A different source changing must not trigger it.
 	_ = os.Remove(markerFile)
-	executor = NewExecutor(db, nil, false, false).
+	executor = NewExecutor(db, nil, false).
 		WithConfirmation(true, false).
 		WithChangedSources(NewChangedSources("othersrc"))
 	result, err = executor.Execute(Scripts{script})
@@ -157,7 +157,7 @@ func TestExecutor_OnchangeRootScriptWatchesAllSources(t *testing.T) {
 	// SourceDir is empty for a root script.
 	script := &Script{Path: scriptPath, Name: "root", Frequency: FreqOnchange, Timing: TimingBefore}
 
-	executor := NewExecutor(db, nil, false, false).
+	executor := NewExecutor(db, nil, false).
 		WithConfirmation(true, false).
 		WithChangedSources(NewChangedSources("anything"))
 	result, err := executor.Execute(Scripts{script})
@@ -170,7 +170,7 @@ func TestExecutor_OnchangeRootScriptWatchesAllSources(t *testing.T) {
 
 	// With nothing changed it must not run.
 	_ = os.Remove(marker)
-	executor = NewExecutor(db, nil, false, false).WithConfirmation(true, false)
+	executor = NewExecutor(db, nil, false).WithConfirmation(true, false)
 	result, err = executor.Execute(Scripts{script})
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
@@ -215,7 +215,7 @@ func TestExecutor_OnchangeIgnoresScriptContentChange(t *testing.T) {
 	}
 	script.ContentHash = newHash
 
-	executor := NewExecutor(db, nil, false, false).WithConfirmation(true, false)
+	executor := NewExecutor(db, nil, false).WithConfirmation(true, false)
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
@@ -252,7 +252,7 @@ func TestExecutor_DryRun(t *testing.T) {
 		ContentHash: contentHash,
 	}
 
-	executor := NewExecutor(db, nil, true, false)
+	executor := NewExecutor(db, nil, true)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -289,7 +289,7 @@ func TestExecutor_ManualScript(t *testing.T) {
 		Frequency: FreqManual,
 	}
 
-	executor := NewExecutor(db, nil, false, false)
+	executor := NewExecutor(db, nil, false)
 
 	result, err := executor.Execute(Scripts{script})
 	if err != nil {
@@ -318,12 +318,12 @@ func TestExecutor_OnchangeRetriesAfterFailure(t *testing.T) {
 
 	script := &Script{Path: scriptPath, Name: "sync", Frequency: FreqOnchange, Timing: TimingAfter, SourceDir: tmpDir}
 
-	changed := NewExecutor(db, nil, false, false).WithConfirmation(true, false).WithChangedSources(NewChangedSources(tmpDir))
+	changed := NewExecutor(db, nil, false).WithConfirmation(true, false).WithChangedSources(NewChangedSources(tmpDir))
 	if _, err := changed.Execute(Scripts{script}); err == nil {
 		t.Fatal("expected the failing script to fail")
 	}
 
-	unchanged := NewExecutor(db, nil, false, false).WithConfirmation(true, false)
+	unchanged := NewExecutor(db, nil, false).WithConfirmation(true, false)
 	if due, _, err := ShouldRun(script, db, ChangedSources{}); err != nil || !due {
 		t.Fatalf("failed script should stay due without changes: due=%v err=%v", due, err)
 	}

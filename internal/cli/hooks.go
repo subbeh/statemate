@@ -76,7 +76,6 @@ func init() {
 	hooksCmd.AddCommand(hooksRunCmd)
 
 	hooksRunCmd.Flags().Bool("dry-run", false, "show what would be done without running")
-	hooksRunCmd.Flags().BoolP("verbose", "v", false, "verbose output")
 }
 
 // hookEnv is what the hooks subcommands share: the config, the active profile,
@@ -202,7 +201,6 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 
 func runHooksRun(cmd *cobra.Command, args []string) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
-	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	env, err := loadHookEnv(cmd)
 	if err != nil {
@@ -230,10 +228,9 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("creating template context: %w", err)
 	}
 
-	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose).WithConfirmation(true, false)
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun).WithConfirmation(true, false)
 	runner := hooks.NewRunner(executor, tmplCtx, hooks.Options{
 		DryRun:       dryRun,
-		Verbose:      verbose,
 		Force:        true,
 		ProfileChain: env.profileChain,
 	})
@@ -342,7 +339,7 @@ func runRemovalHooks(cfg *config.Config, profileName string, sourcePaths []strin
 	}
 
 	chain := profile.InheritanceChain(cfg, profileName)
-	executor := scripts.NewExecutor(db, tmplCtx, false, false).WithConfirmation(force, false)
+	executor := scripts.NewExecutor(db, tmplCtx, false).WithConfirmation(force, false)
 	runner := hooks.NewRunner(executor, tmplCtx, hooks.Options{Force: force, ProfileChain: chain})
 
 	res, err := runTriggeredHooks(runner, set.Trigger(changes, chain), nil, false)

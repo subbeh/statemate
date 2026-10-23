@@ -125,7 +125,7 @@ packages:
 ```bash
 mate packages status           # every declared package: ✓ installed, + missing
 mate packages status --all     # also list installed packages not in config
-mate packages status -v        # include package descriptions
+mate packages status -d        # include package descriptions
 mate packages apply            # install what is missing
 mate packages apply --prune    # also remove packages not in config
 mate packages apply -y         # without the confirmation prompt (or --noconfirm)

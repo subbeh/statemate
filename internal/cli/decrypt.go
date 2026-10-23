@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,6 +138,7 @@ func decryptFileAt(path string, perm os.FileMode, enc *encrypt.AgeEncryptor) err
 		return fmt.Errorf("removing encrypted file: %w", err)
 	}
 
+	slog.Info("source", "action", "decrypt", "path", path, "to", newPath)
 	fmt.Printf("Decrypted: %s -> %s\n", util.ShortenPath(path), util.ShortenPath(newPath))
 	return nil
 }

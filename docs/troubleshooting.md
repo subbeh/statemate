@@ -20,7 +20,7 @@ Other read-only commands that narrow a problem down:
 | `mate managed <path>` | Which source a deployed file comes from, and whether it is active |
 | `mate unmanaged [dir]` | Which files in a directory no source deploys |
 | `mate eval <file>` | What a template renders to |
-| `mate apply --dry-run -V` | Everything an apply would do, without doing it |
+| `mate apply --dry-run -l` | Everything an apply would do, without doing it |
 | `mate scripts list`, `mate hooks list` | Scripts and hooks, and why they would or would not run |
 
 ## Common errors
@@ -167,21 +167,37 @@ and check the YAML.
 
 ## Logging
 
-When the output does not explain what mate did, write a log:
+To watch what mate does as it runs, add `-v`: it prints a log record to stderr
+for each change (`-v`) or for each decision too (`-vv`):
+
+```bash
+mate apply -vv
+```
+
+To keep a record, write a log file:
 
 ```bash
 mate apply --log-file /tmp/mate.log --log-level debug
 ```
 
-The file is appended to, so it keeps earlier runs; each starts with a `msg=run`
-line giving the version and arguments. The levels are:
+The file is appended to, so it keeps earlier runs. The levels are:
 
-- `info` (the default): every external command mate runs (brew, pacman, sudo,
-  bw, scripts, hooks, `cmd` templates) with its exit code and duration, and the
-  error a run ended with
-- `debug`: also the config and profile mate resolved, the status of every file
+- `info` (the default): an audit log of what changed -- each target file
+  written (`wrote`), moved or removed, each change to the source tree (`source`,
+  with `action=add`, `edit`, `rename`, `encrypt`, `decrypt`, `import` or
+  `delete`), each `forget`, each secrets fetch, each script and hook that ran,
+  each package installed or uninstalled, and the error a run ended with. A
+  `--dry-run` changes nothing, so it records nothing. Each run's records follow
+  a `msg=run` line giving the version and arguments; a run that changed nothing
+  leaves no line at all.
+- `debug`: every run's `msg=run` line, and also every external command mate runs
+  (brew, pacman, sudo, bw, scripts, hooks, `cmd` templates) with its exit code
+  and duration, the config and profile mate resolved, the status of every file
   (`new`, `modified`, `unchanged`, `conflict`, ...), the answer to each
   conflict, whether each script was due, and each hook that was triggered
+
+`-v` and the log file are independent: `-vv` does not raise the file's level,
+and `--log-level debug` prints nothing to the terminal.
 
 To keep a log on one machine, set it in the local config:
 

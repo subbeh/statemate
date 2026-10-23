@@ -113,7 +113,7 @@ func newTestExecutor(t *testing.T, dryRun bool) *Executor {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	return NewExecutor(db, nil, dryRun, false)
+	return NewExecutor(db, nil, dryRun)
 }
 
 func TestCanMarkSkipped(t *testing.T) {
@@ -301,11 +301,10 @@ func TestExecute_DryRunDoesNotPrompt(t *testing.T) {
 	}
 }
 
-// Scripts that are not due are skipped silently, even under --verbose: listing
-// every one on each apply buried the files that actually changed.
-func TestExecute_VerboseDoesNotListSkippedScripts(t *testing.T) {
+// Scripts that are not due are skipped silently: listing every one on each
+// apply buried the files that actually changed.
+func TestExecute_DoesNotListSkippedScripts(t *testing.T) {
 	e := newTestExecutor(t, false)
-	e.verbose = true
 
 	r, w, err := os.Pipe()
 	if err != nil {

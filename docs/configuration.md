@@ -92,7 +92,7 @@ secrets_cache: "~/.local/state/statemate/secrets.age"
 | `ignore` | list | gitignore-style patterns excluded from scanning |
 | `aur_helper` | string | AUR helper binary, `yay` or `paru`. If unset, `yay` is used if installed, else `paru` |
 | `secrets_cache` | string | Path to the encrypted secrets cache |
-| `log_file` | string | Append a log of each run to this file — see [Logging](troubleshooting.md#logging) |
+| `log_file` | string | Append an audit log of what each run changed to this file — see [Logging](troubleshooting.md#logging) |
 | `log_level` | string | `debug`, `info`, `warn` or `error`. Defaults to `info` |
 
 ### `age`

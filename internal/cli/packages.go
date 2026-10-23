@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/fatih/color"
@@ -41,7 +42,7 @@ or the source directory.
 Use --all to show extra packages not in config. Detecting extras means listing
 every installed package, which is noticeably slower, so it is only done when
 --all is given.
-Use --verbose to show package descriptions. A description of <unknown> means the
+Use --descriptions to show package descriptions. A description of <unknown> means the
 package manager does not recognise the name at all, usually a typo or a package
 that only exists on another platform; an empty description means the package
 exists but publishes none.`,
@@ -62,10 +63,10 @@ are confirmed the same way, and -y/--yes confirms them too.`,
 }
 
 var (
-	packagesAutoConfirm bool
-	packagesShowAll     bool
-	packagesVerbose     bool
-	packagesPrune       bool
+	packagesAutoConfirm  bool
+	packagesShowAll      bool
+	packagesDescriptions bool
+	packagesPrune        bool
 )
 
 func init() {
@@ -74,7 +75,7 @@ func init() {
 	packagesCmd.AddCommand(packagesApplyCmd)
 
 	packagesStatusCmd.Flags().BoolVar(&packagesShowAll, "all", false, "also show extra packages not in config")
-	packagesStatusCmd.Flags().BoolVarP(&packagesVerbose, "verbose", "v", false, "show package descriptions")
+	packagesStatusCmd.Flags().BoolVarP(&packagesDescriptions, "descriptions", "d", false, "show package descriptions")
 	packagesApplyCmd.Flags().BoolVarP(&packagesAutoConfirm, "yes", "y", false, "auto-confirm all changes")
 	packagesApplyCmd.Flags().BoolVar(&packagesAutoConfirm, "noconfirm", false, "same as --yes")
 	packagesApplyCmd.Flags().BoolVar(&packagesPrune, "prune", false, "remove packages not in config (dangerous)")
@@ -100,7 +101,7 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 
 	sources := profile.ResolveSources(cfg, profileName)
 	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),
-		packages.WithVerbose(packagesVerbose), packages.WithExtras(packagesShowAll),
+		packages.WithVerbose(packagesDescriptions), packages.WithExtras(packagesShowAll),
 		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
 	if err != nil {
 		return fmt.Errorf("computing sync: %w", err)
@@ -135,7 +136,7 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 
 			source := strings.Join(s.Sources, ", ")
 			row := []string{indicator, s.Name, result.Manager, source}
-			if packagesVerbose {
+			if packagesDescriptions {
 				// A package the manager does not recognise is called out, since a
 				// blank description would look like the package merely has none --
 				// hiding a name that can never be installed, such as a typo or a
@@ -152,7 +153,7 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 
 	header := []string{"", "PACKAGE", "MANAGER", "SOURCE"}
 	alignment := tw.Alignment{tw.AlignCenter, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft}
-	if packagesVerbose {
+	if packagesDescriptions {
 		header = append(header, "DESCRIPTION")
 		alignment = append(alignment, tw.AlignLeft)
 	}
@@ -281,6 +282,7 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 			if err := manager.Install(missing); err != nil {
 				return fmt.Errorf("installing packages: %w", err)
 			}
+			slog.Info("installed", "manager", manager.Name(), "packages", missing)
 		}
 
 		if hasExtra {
@@ -288,6 +290,7 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 			if err := manager.Uninstall(extra); err != nil {
 				return fmt.Errorf("removing packages: %w", err)
 			}
+			slog.Info("uninstalled", "manager", manager.Name(), "packages", extra)
 		}
 
 		fmt.Println(color.GreenString("Done"))

@@ -71,20 +71,21 @@ mate apply [path] [flags]
       --dry-run         show what would be done without making changes
       --force           overwrite conflicting targets and auto-confirm scripts, hooks and package installs
   -h, --help            help for apply
+  -l, --list            list every file written, and with --dry-run the files and steps of each hook
       --no-scripts      skip all scripts
       --noconfirm       apply without listing the changes and asking first
   -s, --source string   limit to a single source
-  -V, --verbose count   list every file written, and with --dry-run the files and steps of each hook
 ```
 
 ## Options inherited from parent commands
 
 ```
   -c, --config string      config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
-      --log-file string    append a log of what mate decides and runs to this file (also STATEMATE_LOG_FILE, or log_file in the config)
+      --log-file string    append a log of what mate changes to this file, and at debug what it decides and runs (also STATEMATE_LOG_FILE, or log_file in the config)
       --log-level string   log level: debug, info, warn or error (default info; also STATEMATE_LOG_LEVEL, or log_level in the config)
       --no-color           disable colored output (also off when stdout is not a terminal or NO_COLOR is set)
   -p, --profile string     override auto-detected profile
+  -v, --verbose count      print log records to stderr: -v for info (what changed), -vv for debug
 ```
 
 ## SEE ALSO

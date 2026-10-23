@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -328,6 +329,7 @@ func addFileToSource(targetPath string, info os.FileInfo, sourceDir string, cfg 
 		return fmt.Errorf("writing file: %w", err)
 	}
 
+	slog.Info("source", "action", "add", "path", destPath, "from", targetPath)
 	fmt.Printf("Added %s -> %s\n", targetPath, destPath)
 	return nil
 }
@@ -515,6 +517,7 @@ func promptCreateDirConfig(sourceDir, targetPath string) (string, error) {
 		return "", fmt.Errorf("creating .mate.yaml: %w", err)
 	}
 
+	slog.Info("source", "action", "create", "path", filepath.Join(sourceDir, ".mate.yaml"))
 	fmt.Printf("Created %s/.mate.yaml\n", sourceDir)
 	return targetBase, nil
 }
@@ -533,6 +536,7 @@ func promptCreateSource(sourceDir string, declined error) error {
 		return fmt.Errorf("creating source directory: %w", err)
 	}
 
+	slog.Info("source", "action", "create", "path", sourceDir)
 	fmt.Printf("Created %s\n", sourceDir)
 	return nil
 }
@@ -557,6 +561,7 @@ func promptAddTargetBase(sourceDir, targetPath string) (string, error) {
 		return "", fmt.Errorf("updating .mate.yaml: %w", err)
 	}
 
+	slog.Info("source", "action", "edit", "path", filepath.Join(sourceDir, ".mate.yaml"))
 	fmt.Printf("Updated %s/.mate.yaml\n", sourceDir)
 	return targetBase, nil
 }

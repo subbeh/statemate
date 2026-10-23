@@ -72,7 +72,6 @@ type Executor struct {
 	db      *state.DB
 	tmplCtx *template.Context
 	dryRun  bool
-	verbose bool
 
 	// force auto-confirms every script; noScripts skips them all silently.
 	force     bool
@@ -93,12 +92,11 @@ func (e *Executor) WithChangedSources(changed ChangedSources) *Executor {
 	return e
 }
 
-func NewExecutor(db *state.DB, tmplCtx *template.Context, dryRun, verbose bool) *Executor {
+func NewExecutor(db *state.DB, tmplCtx *template.Context, dryRun bool) *Executor {
 	return &Executor{
 		db:      db,
 		tmplCtx: tmplCtx,
 		dryRun:  dryRun,
-		verbose: verbose,
 	}
 }
 
@@ -300,10 +298,6 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 			return result, fmt.Errorf("aborted by user")
 		}
 
-		if e.verbose {
-			fmt.Printf("  run: %s\n", script.Path)
-		}
-
 		if err := e.run(script); err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("%s: %w", script.Name, err))
 			result.Failed++
@@ -323,10 +317,6 @@ func (e *Executor) ExecuteOne(script *Script) error {
 	if e.dryRun {
 		fmt.Printf("would run: %s\n", script.Path)
 		return nil
-	}
-
-	if e.verbose {
-		fmt.Printf("run: %s\n", script.Path)
 	}
 
 	if err := e.run(script); err != nil {
@@ -510,11 +500,14 @@ func (e *Executor) run(script *Script, extraEnv ...string) (err error) {
 
 	fmt.Printf("%s %s (%s/%s)\n", color.CyanString(">>> running:"), script.Name, script.Frequency, script.Timing)
 	err = cmd.Run()
+	attrs := []any{"name", script.Name, "path", script.Path}
 	if err != nil {
 		fmt.Printf("%s  %s (%v)\n", color.RedString("<<< failed:"), script.Name, err)
+		attrs = append(attrs, "err", err)
 	} else {
 		fmt.Printf("%s    %s\n", color.GreenString("<<< done:"), script.Name)
 	}
+	slog.Info("ran script", attrs...)
 	return err
 }
 

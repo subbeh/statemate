@@ -93,8 +93,9 @@ func RootCmd() *cobra.Command {
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
+	rootCmd.PersistentFlags().CountP("verbose", "v", "print log records to stderr: -v for info (what changed), -vv for debug")
 	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output (also off when stdout is not a terminal or NO_COLOR is set)")
-	rootCmd.PersistentFlags().String("log-file", "", "append a log of what mate decides and runs to this file (also STATEMATE_LOG_FILE, or log_file in the config)")
+	rootCmd.PersistentFlags().String("log-file", "", "append a log of what mate changes to this file, and at debug what it decides and runs (also STATEMATE_LOG_FILE, or log_file in the config)")
 	rootCmd.PersistentFlags().String("log-level", "", "log level: debug, info, warn or error (default info; also STATEMATE_LOG_LEVEL, or log_level in the config)")
 	rootCmd.AddCommand(versionCmd)
 	// --version (which the Homebrew formula test runs) prints exactly what

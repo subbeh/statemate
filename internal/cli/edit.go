@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,8 +81,12 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	editor := getEditor(cfg)
 
 	if !hasEncryptedAttr(editPath) {
+		before, _ := os.ReadFile(editPath)
 		if err := runEditor(editor, editPath); err != nil {
 			return err
+		}
+		if after, _ := os.ReadFile(editPath); !bytes.Equal(before, after) {
+			slog.Info("source", "action", "edit", "path", editPath)
 		}
 		if isManagedSource {
 			fmt.Printf("Edited %s -- run 'mate apply' to deploy changes\n", util.ShortenPath(editPath))
@@ -176,6 +182,7 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("restoring permissions: %w", err)
 	}
 
+	slog.Info("source", "action", "edit", "path", editPath)
 	fmt.Printf("Saved and encrypted: %s\n", util.ShortenPath(editPath))
 	if isManagedSource {
 		fmt.Println("Run 'mate apply' to deploy changes")

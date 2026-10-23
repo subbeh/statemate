@@ -66,7 +66,6 @@ func init() {
 	scriptsCmd.AddCommand(scriptsRunCmd)
 
 	scriptsRunCmd.Flags().Bool("dry-run", false, "show what would be done without running")
-	scriptsRunCmd.Flags().BoolP("verbose", "v", false, "verbose output")
 }
 
 func runScriptsList(cmd *cobra.Command, args []string) error {
@@ -295,7 +294,6 @@ func matchesChain(target string, chain []string) bool {
 func runScript(cmd *cobra.Command, args []string) error {
 	cfgPath, _ := cmd.Flags().GetString("config")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
-	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
@@ -366,7 +364,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose)
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun)
 	if err := executor.ExecuteOne(script); err != nil {
 		return fmt.Errorf("running script: %w", err)
 	}

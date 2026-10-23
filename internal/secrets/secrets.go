@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,8 +43,8 @@ type CachedValue struct {
 }
 
 type Cache struct {
-	FetchedAt time.Time                `json:"fetched_at"`
-	Items     map[string]*CachedValue  `json:"items"`
+	FetchedAt time.Time               `json:"fetched_at"`
+	Items     map[string]*CachedValue `json:"items"`
 }
 
 type Provider interface {
@@ -166,6 +167,7 @@ func (m *Manager) Fetch(items []FetchItem) (*FetchResult, error) {
 	}
 
 	result.Unchanged = result.Total - result.Changed
+	slog.Info("secrets fetched", "total", result.Total, "changed", result.Changed)
 	return result, nil
 }
 

@@ -217,7 +217,7 @@ And a key binding that runs `mate apply` in a popup, after confirming:
 
 ```tmux
 bind . confirm-before -p "Run mate apply?" \
-  "display-popup -E 'mate apply --verbose; read -n 1 -s -r -p \"Press any key\"'"
+  "display-popup -E 'mate apply --list; read -n 1 -s -r -p \"Press any key\"'"
 ```
 
 The full versions are

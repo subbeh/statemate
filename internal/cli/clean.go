@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/fatih/color"
@@ -157,6 +158,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("removing %s from database: %w", path, err)
 		}
 
+		slog.Info("removed", "target", path)
 		fmt.Printf("Removed %s\n", util.ShortenPath(path))
 		removed = append(removed, change)
 	}

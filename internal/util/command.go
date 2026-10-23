@@ -45,7 +45,7 @@ func (c *Cmd) log(start time.Time, err error) error {
 	if err != nil {
 		attrs = append(attrs, "err", err)
 	}
-	slog.Info("exec", attrs...)
+	slog.Debug("exec", attrs...)
 	return err
 }
 

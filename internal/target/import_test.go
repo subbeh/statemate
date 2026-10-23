@@ -71,7 +71,7 @@ func newImportFixture(t *testing.T, sourceName, content string) *importFixture {
 // apply runs a real apply, establishing (or updating) the recorded state.
 func (f *importFixture) apply() *ApplyResult {
 	f.t.Helper()
-	res, err := NewApplier(f.db, nil, nil, false, false, 0).Apply(f.tree)
+	res, err := NewApplier(f.db, nil, nil, false, false, false).Apply(f.tree)
 	if err != nil {
 		f.t.Fatalf("apply failed: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestImport_EncryptedSourceStaysEncrypted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	applier := NewApplier(db, nil, enc, false, false, 0)
+	applier := NewApplier(db, nil, enc, false, false, false)
 	if _, err := applier.Apply(tree); err != nil {
 		t.Fatalf("initial apply: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestImport_EncryptedWithoutRecipientsErrors(t *testing.T) {
 	f := newImportFixture(t, "settings.json#enc#import", "ciphertext")
 	f.write(f.targetPath, `{"secret":1}`)
 
-	err := NewApplier(f.db, nil, nil, false, false, 0).importFile(f.tree.Files()[0])
+	err := NewApplier(f.db, nil, nil, false, false, false).importFile(f.tree.Files()[0])
 	if err == nil || !strings.Contains(err.Error(), "no age recipients") {
 		t.Fatalf("expected a missing-recipients error, got %v", err)
 	}
@@ -337,7 +337,7 @@ func TestImport_DryRunChangesNothing(t *testing.T) {
 
 	f.write(f.targetPath, `{"a":2}`)
 
-	res, err := NewApplier(f.db, nil, nil, true, false, 0).Apply(f.tree)
+	res, err := NewApplier(f.db, nil, nil, true, false, false).Apply(f.tree)
 	if err != nil {
 		t.Fatalf("dry run failed: %v", err)
 	}

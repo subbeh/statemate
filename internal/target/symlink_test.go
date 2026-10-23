@@ -66,7 +66,7 @@ func (f *symlinkFixture) status() ChangeStatus {
 
 func (f *symlinkFixture) apply() {
 	f.t.Helper()
-	if _, err := NewApplier(f.db, nil, nil, false, true, 0).Apply(f.tree); err != nil {
+	if _, err := NewApplier(f.db, nil, nil, false, true, false).Apply(f.tree); err != nil {
 		f.t.Fatalf("apply: %v", err)
 	}
 }

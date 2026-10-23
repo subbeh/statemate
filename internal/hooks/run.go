@@ -211,10 +211,13 @@ func (r *Runner) runSteps(t *Triggered, rendered []string) error {
 		}
 		if err != nil {
 			fmt.Printf("%s  hook %s (step %d: %v)\n", color.RedString("<<< failed:"), t.Name, i+1, err)
-			return fmt.Errorf("step %d: %w", i+1, err)
+			err = fmt.Errorf("step %d: %w", i+1, err)
+			slog.Info("ran hook", "name", t.Name, "err", err)
+			return err
 		}
 	}
 	fmt.Printf("%s    hook %s\n", color.GreenString("<<< done:"), t.Name)
+	slog.Info("ran hook", "name", t.Name)
 	return nil
 }
 

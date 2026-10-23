@@ -21,12 +21,12 @@ import (
 )
 
 type Applier struct {
-	db       *state.DB
-	tmplCtx  *template.Context
-	enc      *encrypt.AgeEncryptor
-	dryRun   bool
-	force    bool
-	verbose  int
+	db      *state.DB
+	tmplCtx *template.Context
+	enc     *encrypt.AgeEncryptor
+	dryRun  bool
+	force   bool
+	list    bool
 }
 
 type ApplyResult struct {
@@ -40,7 +40,6 @@ type ApplyResult struct {
 	// hook would need to react to.
 	Written []*source.Entry
 }
-
 
 type ChangeStatus int
 
@@ -92,14 +91,14 @@ func (s ChangeStatus) Marker() string {
 	}
 }
 
-func NewApplier(db *state.DB, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, dryRun, force bool, verbose int) *Applier {
+func NewApplier(db *state.DB, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, dryRun, force, list bool) *Applier {
 	return &Applier{
-		db:       db,
-		tmplCtx:  tmplCtx,
-		enc:      enc,
-		dryRun:   dryRun,
-		force:    force,
-		verbose:  verbose,
+		db:      db,
+		tmplCtx: tmplCtx,
+		enc:     enc,
+		dryRun:  dryRun,
+		force:   force,
+		list:    list,
 	}
 }
 
@@ -152,7 +151,8 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				}
 			}
 			if created {
-				if a.verbose > 0 {
+				slog.Info("wrote", "target", dir.TargetPath, "status", StatusNew)
+				if a.list {
 					fmt.Printf("%s %s\n", StatusNew.Marker(), dir.TargetPath)
 				}
 				result.Applied++
@@ -174,7 +174,8 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			}
 		}
 		if created {
-			if a.verbose > 0 {
+			slog.Info("wrote", "target", dir.TargetPath, "status", StatusNew)
+			if a.list {
 				fmt.Printf("%s %s\n", StatusNew.Marker(), dir.TargetPath)
 			}
 			result.Applied++
@@ -256,7 +257,8 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 		if err := a.applyFile(entry, change.NewHash); err != nil {
 			return nil, fmt.Errorf("applying %s: %w", entry.SourcePath, err)
 		}
-		if a.verbose > 0 {
+		slog.Info("wrote", "target", entry.TargetPath, "status", change.Status)
+		if a.list {
 			a.printChange(change)
 		}
 		result.Applied++
@@ -267,7 +269,6 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 
 	return result, nil
 }
-
 
 func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 	if entry.Attrs.Symlink {
@@ -529,6 +530,7 @@ func (a *Applier) importFile(entry *source.Entry) error {
 	if err := os.WriteFile(entry.SourcePath, content, entry.Mode.Perm()); err != nil {
 		return fmt.Errorf("writing source: %w", err)
 	}
+	slog.Info("source", "action", "import", "path", entry.SourcePath, "from", entry.TargetPath)
 
 	sourceHash, err := state.HashFile(entry.SourcePath)
 	if err != nil {
@@ -548,7 +550,6 @@ func (a *Applier) importFile(entry *source.Entry) error {
 		Mode:        entry.Mode.Perm(),
 	})
 }
-
 
 // readTarget reads a deployed file, falling back to elevated access when it is
 // unreadable as the invoking user -- the same reason hashTarget does.

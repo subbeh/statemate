@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -103,12 +104,14 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	if err := os.Remove(entry.SourcePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("removing source: %w", err)
 	}
+	slog.Info("source", "action", "delete", "path", entry.SourcePath)
 	fmt.Printf("Removed source: %s\n", util.ShortenPath(entry.SourcePath))
 
 	if !deleteKeepTarget {
 		if err := os.Remove(entry.TargetPath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("removing target: %w", err)
 		}
+		slog.Info("removed", "target", entry.TargetPath)
 		fmt.Printf("Removed target: %s\n", util.ShortenPath(entry.TargetPath))
 	}
 

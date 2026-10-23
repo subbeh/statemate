@@ -1,7 +1,9 @@
 package target
 
 import (
+	"bytes"
 	"io"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -43,7 +45,7 @@ func TestApplier_Apply(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	applier := NewApplier(db, nil, nil, false, false, 0)
+	applier := NewApplier(db, nil, nil, false, false, false)
 	result, err := applier.Apply(tree)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
@@ -99,7 +101,7 @@ func TestApplier_DryRun(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	applier := NewApplier(db, nil, nil, true, false, 0)
+	applier := NewApplier(db, nil, nil, true, false, false)
 	result, err := applier.Apply(tree)
 	if err != nil {
 		t.Fatalf("dry-run failed: %v", err)
@@ -278,7 +280,7 @@ func TestApplier_PermFixOnApply(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	applier := NewApplier(db, nil, nil, false, false, 0)
+	applier := NewApplier(db, nil, nil, false, false, false)
 	result, err := applier.Apply(tree)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
@@ -326,7 +328,7 @@ func TestApplier_CreatesMappedDirectoriesWithAttrs(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	applier := NewApplier(db, nil, nil, false, false, 0)
+	applier := NewApplier(db, nil, nil, false, false, false)
 	if _, err := applier.Apply(tree); err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -377,7 +379,7 @@ func TestApplier_LeavesExistingUnattributedDirectoriesAlone(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	applier := NewApplier(db, nil, nil, false, false, 0)
+	applier := NewApplier(db, nil, nil, false, false, false)
 	if _, err := applier.Apply(tree); err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -455,7 +457,7 @@ func TestApplier_SkipsExistingDirectoriesWhoseAttrsMatch(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	applier := NewApplier(db, nil, nil, false, false, 0)
+	applier := NewApplier(db, nil, nil, false, false, false)
 	if _, err := applier.Apply(tree); err != nil {
 		t.Fatalf("apply failed: %v", err)
 	}
@@ -561,7 +563,7 @@ func TestComputeChanges_MissingEmptyDirIsNew(t *testing.T) {
 
 	// Once applied it is no longer pending, and it counts towards the summary the
 	// same way --dry-run counts it.
-	applier := NewApplier(db, nil, nil, false, false, 0)
+	applier := NewApplier(db, nil, nil, false, false, false)
 	applyResult, err := applier.Apply(tree)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
@@ -642,7 +644,7 @@ func TestApplier_DryRunReportsEmptyDir(t *testing.T) {
 		t.Fatalf("scanning: %v", err)
 	}
 
-	applier := NewApplier(db, nil, nil, true, false, 0)
+	applier := NewApplier(db, nil, nil, true, false, false)
 	result, err := applier.Apply(tree)
 	if err != nil {
 		t.Fatalf("apply failed: %v", err)
@@ -677,10 +679,10 @@ func captureStdout(t *testing.T, fn func()) string {
 	return string(out)
 }
 
-// --verbose lists each file apply writes, with the same markers as --dry-run;
+// --list lists each file apply writes, with the same markers as --dry-run;
 // without it, only the summary the caller prints reports what happened.
-func TestApplier_VerboseListsWrittenFiles(t *testing.T) {
-	for _, verbose := range []int{0, 1} {
+func TestApplier_ListShowsWrittenFiles(t *testing.T) {
+	for _, list := range []bool{false, true} {
 		tmpDir := t.TempDir()
 		sourceDir := filepath.Join(tmpDir, "source")
 		targetDir := filepath.Join(tmpDir, "target")
@@ -711,7 +713,7 @@ func TestApplier_VerboseListsWrittenFiles(t *testing.T) {
 			t.Fatalf("scanning: %v", err)
 		}
 
-		applier := NewApplier(db, nil, nil, false, false, verbose)
+		applier := NewApplier(db, nil, nil, false, false, list)
 		out := captureStdout(t, func() {
 			if _, err := applier.Apply(tree); err != nil {
 				t.Errorf("apply failed: %v", err)
@@ -720,15 +722,15 @@ func TestApplier_VerboseListsWrittenFiles(t *testing.T) {
 		_ = db.Close()
 
 		newLine := "+ " + filepath.Join(targetDir, "new.txt")
-		if verbose > 0 {
+		if list {
 			if !strings.Contains(out, newLine) {
-				t.Errorf("verbose output missing %q:\n%s", newLine, out)
+				t.Errorf("--list output missing %q:\n%s", newLine, out)
 			}
 			if strings.Contains(out, "same.txt") {
-				t.Errorf("verbose output lists an unchanged file:\n%s", out)
+				t.Errorf("--list output lists an unchanged file:\n%s", out)
 			}
 		} else if out != "" {
-			t.Errorf("non-verbose apply printed per-file output:\n%s", out)
+			t.Errorf("apply without --list printed per-file output:\n%s", out)
 		}
 	}
 }
@@ -755,7 +757,7 @@ func TestEncryptedWithoutIdentityErrors(t *testing.T) {
 				t.Errorf("ComputeChanges: expected a missing-identity error, got %v", err)
 			}
 
-			_, err = NewApplier(f.db, nil, enc, false, false, 0).Apply(f.tree)
+			_, err = NewApplier(f.db, nil, enc, false, false, false).Apply(f.tree)
 			if err == nil || !strings.Contains(err.Error(), "is #enc but no age identity is configured") {
 				t.Errorf("Apply: expected a missing-identity error, got %v", err)
 			}
@@ -807,5 +809,27 @@ func TestChangeStatusMarker(t *testing.T) {
 	color.NoColor = false
 	if got := StatusNew.Marker(); got != "\x1b[32m+\x1b[0m" {
 		t.Errorf("colored StatusNew.Marker() = %q, want green +", got)
+	}
+}
+
+// The audit log records what an apply wrote, and a dry run writes nothing, so
+// it records nothing.
+func TestApply_LogsWrittenFiles(t *testing.T) {
+	var buf bytes.Buffer
+	orig := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	f := newImportFixture(t, "settings.json", "{}")
+	if _, err := NewApplier(f.db, nil, nil, true, false, false).Apply(f.tree); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), "msg=wrote") {
+		t.Errorf("dry run logged a write:\n%s", buf.String())
+	}
+
+	f.apply()
+	if want := "msg=wrote target=" + f.targetPath + " status=new"; !strings.Contains(buf.String(), want) {
+		t.Errorf("log does not contain %q:\n%s", want, buf.String())
 	}
 }

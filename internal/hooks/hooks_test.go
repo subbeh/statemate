@@ -207,7 +207,7 @@ func newRunner(t *testing.T, opts Options) (*Runner, *scripts.Executor) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	exec := scripts.NewExecutor(db, nil, opts.DryRun, false).WithConfirmation(opts.Force, opts.NoScripts)
+	exec := scripts.NewExecutor(db, nil, opts.DryRun).WithConfirmation(opts.Force, opts.NoScripts)
 	return NewRunner(exec, nil, opts), exec
 }
 

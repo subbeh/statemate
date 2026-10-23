@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -85,7 +86,7 @@ var (
 	force     bool
 	noScripts bool
 	noConfirm bool
-	verbose   int
+	list      bool
 )
 
 func init() {
@@ -94,7 +95,7 @@ func init() {
 	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite conflicting targets and auto-confirm scripts, hooks and package installs")
 	applyCmd.Flags().BoolVar(&noScripts, "no-scripts", false, "skip all scripts")
 	applyCmd.Flags().BoolVar(&noConfirm, "noconfirm", false, "apply without listing the changes and asking first")
-	applyCmd.Flags().CountVarP(&verbose, "verbose", "V", "list every file written, and with --dry-run the files and steps of each hook")
+	applyCmd.Flags().BoolVarP(&list, "list", "l", false, "list every file written, and with --dry-run the files and steps of each hook")
 	addScopeFlag(applyCmd)
 }
 
@@ -143,7 +144,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	// need them.
 	mgr, mgrErr := secrets.NewManager(enc, cfg.SecretsCache)
 	if mgrErr == nil && scope.Path == "" {
-		if err := fetchMissingSecrets(cfg, mgr, enc, profileName, scope.FilterSourcePaths(sourcePaths), dryRun, verbose); err != nil {
+		if err := fetchMissingSecrets(cfg, mgr, enc, profileName, scope.FilterSourcePaths(sourcePaths), dryRun, list); err != nil {
 			return err
 		}
 	}
@@ -244,7 +245,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose > 0).
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun).
 		WithConfirmation(force, noScripts).
 		WithChangedSources(changedSources(pending.Changes))
 
@@ -281,7 +282,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	applier := target.NewApplier(db, tmplCtx, enc, dryRun, force, verbose)
+	applier := target.NewApplier(db, tmplCtx, enc, dryRun, force, list)
 	result, err := applier.Apply(tree)
 	if err != nil {
 		return err
@@ -310,7 +311,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	hookRunner := hooks.NewRunner(executor, tmplCtx, hooks.Options{
 		DryRun:       dryRun,
-		Verbose:      verbose > 0,
+		Verbose:      list,
 		Force:        force,
 		NoScripts:    noScripts,
 		ProfileChain: profileChain,
@@ -319,7 +320,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if dryRun {
 		hookDB = nil // a dry run neither records nor clears pending hooks
 	}
-	hookRes, err := runTriggeredHooks(hookRunner, triggered, hookDB, verbose > 0 || dryRun)
+	hookRes, err := runTriggeredHooks(hookRunner, triggered, hookDB, list || dryRun)
 	if err != nil {
 		return err
 	}
@@ -367,7 +368,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	return hookRes.Err()
 }
 
-func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.AgeEncryptor, profileName string, sourcePaths []string, dryRun bool, verbose int) error {
+func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.AgeEncryptor, profileName string, sourcePaths []string, dryRun, list bool) error {
 	templateFiles := discoverTemplateFiles(cfg, profileName, sourcePaths)
 	if len(templateFiles) == 0 {
 		return nil
@@ -415,7 +416,7 @@ func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.
 		return fmt.Errorf("fetching secrets: %w", err)
 	}
 
-	if verbose > 0 {
+	if list {
 		fmt.Printf("Fetched %d secrets (%d changed, %d unchanged)\n",
 			result.Total, result.Changed, result.Unchanged)
 	}
@@ -501,6 +502,7 @@ func installMissingPackages(results []packages.SyncResult, cfg *config.Config, d
 		if err := manager.Install(missing); err != nil {
 			return fmt.Errorf("installing packages: %w", err)
 		}
+		slog.Info("installed", "manager", manager.Name(), "packages", missing)
 	}
 
 	warnSkippedPackages(skippedNoTTY)

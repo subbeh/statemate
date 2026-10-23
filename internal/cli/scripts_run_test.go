@@ -81,7 +81,6 @@ func TestRunScript_TemplateSeesSecretsAndEncryptedVars(t *testing.T) {
 	cmd.Flags().String("config", cfgPath, "")
 	cmd.Flags().String("profile", "", "")
 	cmd.Flags().Bool("dry-run", false, "")
-	cmd.Flags().Bool("verbose", false, "")
 
 	if err := runScript(cmd, []string{"show.sh#tmpl"}); err != nil {
 		t.Fatalf("runScript: %v", err)
