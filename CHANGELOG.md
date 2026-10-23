@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - A relative `targets` path such as `.config` now deploys under the global target base (normally `~`). Before, it produced a relative target path
 - `mate check` marks an `#import` change with `<`, as `mate status` does, instead of leaving the marker blank
+- On macOS, targets that can only be read with sudo are compared again. mate ran GNU `stat` options that macOS's `stat` rejects, so `mate status`, `diff`, `check` and `apply` reported every such target as skipped, even with `--sudo`. A symlink in such a target's place is now also recognised as one, on Linux too
 - `mate scripts list` no longer shows a source's `#onchange` scripts as pending when its only change is a `#tmpl` file that is already up to date. It compared the unrendered template with the deployed file, so it disagreed with `mate status` and `mate apply`
 
 ## [0.6.0] - 2026-10-17

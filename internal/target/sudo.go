@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -189,12 +190,23 @@ func SudoPrompt() bool {
 }
 
 func sudoLstat(path string) (os.FileInfo, error) {
-	cmd := util.Command("sudo", "-n", "stat", "-c", "%f %s %Y", path)
-	out, err := cmd.Output()
+	out, err := util.Command("sudo", append([]string{"-n"}, statCommand(path)...)...).Output()
 	if err != nil {
 		return nil, err
 	}
+	return parseStat(path, out)
+}
 
+// statCommand prints a file's raw mode in hex, its size and its mtime. GNU stat
+// and BSD stat (macOS) spell that format differently.
+func statCommand(path string) []string {
+	if runtime.GOOS == "linux" {
+		return []string{"stat", "-c", "%f %s %Y", path}
+	}
+	return []string{"stat", "-f", "%Xp %z %m", path}
+}
+
+func parseStat(path string, out []byte) (os.FileInfo, error) {
 	var modeHex string
 	var size int64
 	var mtime int64
@@ -202,11 +214,22 @@ func sudoLstat(path string) (os.FileInfo, error) {
 		return nil, fmt.Errorf("parsing stat output: %w", err)
 	}
 
-	mode, _ := strconv.ParseUint(modeHex, 16, 32)
+	raw, err := strconv.ParseUint(modeHex, 16, 32)
+	if err != nil {
+		return nil, fmt.Errorf("parsing stat mode %q: %w", modeHex, err)
+	}
+	// The raw Unix mode keeps the file type in bits os.FileMode does not use.
+	mode := os.FileMode(raw & 0777)
+	switch raw & syscall.S_IFMT {
+	case syscall.S_IFDIR:
+		mode |= os.ModeDir
+	case syscall.S_IFLNK:
+		mode |= os.ModeSymlink
+	}
 	return &sudoFileInfo{
 		name: filepath.Base(path),
 		size: size,
-		mode: os.FileMode(mode),
+		mode: mode,
 	}, nil
 }
 
