@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/packages"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/util"
 )
@@ -102,7 +103,7 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 	sources := profile.ResolveSources(cfg, profileName)
 	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),
 		packages.WithVerbose(packagesDescriptions), packages.WithExtras(packagesShowAll),
-		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
+		packages.WithDirConfigRenderer(plan.DirConfigRenderer(tmplCtx)))
 	if err != nil {
 		return fmt.Errorf("computing sync: %w", err)
 	}
@@ -208,7 +209,7 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 
 	sources := profile.ResolveSources(cfg, profileName)
 	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),
-		packages.WithExtras(packagesPrune), packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
+		packages.WithExtras(packagesPrune), packages.WithDirConfigRenderer(plan.DirConfigRenderer(tmplCtx)))
 	if err != nil {
 		return fmt.Errorf("computing sync: %w", err)
 	}

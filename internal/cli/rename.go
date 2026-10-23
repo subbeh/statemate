@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/hooks"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
@@ -112,7 +113,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 	}
 	slog.Info("source", "action", "rename", "path", entry.SourcePath, "to", newSourcePath)
 
-	db, err := openState(cfg)
+	db, err := plan.OpenState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

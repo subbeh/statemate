@@ -23,10 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** the `#encrypted`, `#template` and `#symlink` attributes are renamed to `#enc`, `#tmpl` and `#link`, and the long forms are no longer recognised. Scripts use `#tmpl` too. Rename existing sources, for example `ssh/.ssh/config#encrypted` to `ssh/.ssh/config#enc`; mate stops with "#encrypted was renamed to #enc" until they are. `mate encrypt` and `mate add --encrypt`/`--template` write the short forms, and a `var_files` or `include` entry named without a suffix finds the `#enc` file. Recorded script runs follow the rename, so `#once` scripts do not run again
 - **Breaking:** `-v` now means log output on every command, so the per-command verbose flags are renamed or removed: `mate apply -V`/`--verbose` is now `-l`/`--list`, `mate packages status -v`/`--verbose` is now `-d`/`--descriptions`, and `mate scripts run -v` and `mate hooks run -v` are removed; with `-v` they log each script and hook they run, and `-vv` shows each hook command
 - An unrecognised attribute in a file, directory or script name is now an error that names the file, and so is a `#perm:` mode that is not octal. Before, it was dropped silently, so a typo such as `config#templte` deployed an unrendered `config`
+- When the age identity fails to load (a missing key file, or an `identity_command` that fails), `mate status`, `diff`, `check` and `eval` now report why, naming the `#enc` file that needed it: `<file> is #enc, but the age identity failed to load: <reason>`. Before, status and check said no identity was configured, and diff and eval failed even when nothing had to be decrypted
+- `mate status`, `diff`, `check`, `scripts list` and shell completion run `age.identity_command` fewer times, so an identity that prompts (a password manager, a hardware key) asks less often
 
 ### Fixed
 - A relative `targets` path such as `.config` now deploys under the global target base (normally `~`). Before, it produced a relative target path
 - `mate check` marks an `#import` change with `<`, as `mate status` does, instead of leaving the marker blank
+- `mate scripts list` no longer shows a source's `#onchange` scripts as pending when its only change is a `#tmpl` file that is already up to date. It compared the unrendered template with the deployed file, so it disagreed with `mate status` and `mate apply`
 
 ## [0.6.0] - 2026-10-17
 

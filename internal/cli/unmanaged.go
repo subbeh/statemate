@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 )
 
@@ -34,27 +33,11 @@ func init() {
 }
 
 func runUnmanaged(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
-	}
-	tree, err := scanner.Scan(cfg.ResolveSourcePaths(profile.AllSources(cfg)))
+	tree, err := env.Scanner.Scan(env.Config.ResolveSourcePaths(profile.AllSources(env.Config)))
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)
 	}

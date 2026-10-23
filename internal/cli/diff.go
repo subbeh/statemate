@@ -8,9 +8,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
-	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/secrets"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/target"
@@ -42,90 +40,28 @@ func init() {
 }
 
 func runDiff(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
+	cfg, profileName, enc, tmplCtx := env.Config, env.Profile, env.Enc, env.TmplCtx
 
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-
-	scanner, err := newScanner(cfg, profileName)
+	p, err := env.Plan()
 	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
+		return err
 	}
-	tree, err := scanner.Scan(sourcePaths)
-	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
-	}
-
-	if profileName != "" {
-		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
-	}
+	defer func() { _ = p.Close() }()
+	tree := p.Tree
 
 	if tree.HasConflicts() {
-		fmt.Fprintf(os.Stderr, "%s conflicting targets detected\n", color.RedString("Error:"))
-		for _, c := range tree.Conflicts {
-			fmt.Fprintf(os.Stderr, "  %s defined in:\n", util.ShortenPath(c.TargetPath))
-			for _, s := range c.Sources {
-				fmt.Fprintf(os.Stderr, "    - %s\n", util.ShortenPath(s))
-			}
-		}
+		printConflicts(tree, color.RedString("Error:"))
 		return fmt.Errorf("resolve conflicts before diffing")
 	}
 
-	db, err := openState(cfg)
-	if err != nil {
-		return fmt.Errorf("opening state database: %w", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	var enc *encrypt.AgeEncryptor
-	if cfg.Age != nil {
-		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-		if err != nil {
-			return fmt.Errorf("setting up encryption: %w", err)
-		}
-	}
-
-	var ctxOpts []template.ContextOption
-	if enc != nil && enc.CanDecrypt() {
-		ctxOpts = append(ctxOpts, template.WithDecrypt(enc.Decrypt))
-	}
-	tmplCtx, err := template.NewContext(cfg, profileName, ctxOpts...)
-	if err != nil {
-		return fmt.Errorf("creating template context: %w", err)
-	}
-
-	{
-		mgr, err := secrets.NewManager(enc, cfg.SecretsCache)
-		if err == nil {
-			tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
-				key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
-				return mgr.Get(key)
-			}
-		}
-	}
-
 	useSudo, _ := cmd.Flags().GetBool("sudo")
-	result, err := target.ComputeChanges(tree, db, target.ComputeOpts{
-		TmplCtx: tmplCtx,
-		Enc:     enc,
-		Sudo:    useSudo,
-	})
+	result, err := p.Changes(useSudo)
 	if err != nil {
-		return fmt.Errorf("computing changes: %w", err)
+		return err
 	}
 	changes := result.Changes
 

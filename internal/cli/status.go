@@ -8,17 +8,13 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
-	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/packages"
-	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
 	"github.com/subbeh/statemate/internal/source"
-	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
-	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
 )
 
@@ -60,87 +56,39 @@ func init() {
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
+	cfg, profileName, sourcePaths, enc, tmplCtx := env.Config, env.Profile, env.SourcePaths, env.Enc, env.TmplCtx
 
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-
-	scanner, err := newScanner(cfg, profileName)
+	p, err := env.Plan()
 	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
+		return err
 	}
-	tree, err := scanner.Scan(sourcePaths)
-	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
-	}
-
-	if profileName != "" {
-		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
-	}
+	defer func() { _ = p.Close() }()
+	tree := p.Tree
 
 	if tree.HasConflicts() {
-		fmt.Fprintf(os.Stderr, "%s conflicting targets detected\n", color.YellowString("Warning:"))
-		for _, c := range tree.Conflicts {
-			fmt.Fprintf(os.Stderr, "  %s defined in:\n", util.ShortenPath(c.TargetPath))
-			for _, s := range c.Sources {
-				fmt.Fprintf(os.Stderr, "    - %s\n", util.ShortenPath(s))
-			}
-		}
+		printConflicts(tree, color.YellowString("Warning:"))
 		fmt.Fprintln(os.Stderr)
 	}
 
-	db, err := openState(cfg)
+	db, err := p.DB()
 	if err != nil {
-		return fmt.Errorf("opening state database: %w", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	var enc *encrypt.AgeEncryptor
-	if cfg.Age != nil {
-		enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-	}
-
-	var ctxOpts []template.ContextOption
-	if enc != nil && enc.CanDecrypt() {
-		ctxOpts = append(ctxOpts, template.WithDecrypt(enc.Decrypt))
-	}
-	tmplCtx, _ := template.NewContext(cfg, profileName, ctxOpts...)
-
-	if mgr, err := secrets.NewManager(enc, cfg.SecretsCache); err == nil {
-		tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
-			key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
-			return mgr.Get(key)
-		}
+		return err
 	}
 
 	useSudo, _ := cmd.Flags().GetBool("sudo")
-	result, err := target.ComputeChanges(tree, db, target.ComputeOpts{
-		TmplCtx: tmplCtx,
-		Enc:     enc,
-		Sudo:    useSudo,
-	})
+	result, err := p.Changes(useSudo)
 	if err != nil {
-		return fmt.Errorf("computing changes: %w", err)
+		return err
 	}
 	changes := result.Changes
 
-	orphans, err := findOrphans(db, tree)
+	orphans, err := p.Orphans()
 	if err != nil {
-		return fmt.Errorf("finding orphans: %w", err)
+		return err
 	}
 
 	discoverer := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths)
@@ -149,7 +97,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
 
-	profileChain := profile.InheritanceChain(cfg, profileName)
+	profileChain := env.Chain
 	pendingScripts, err := scripts.PendingScripts(
 		allScripts.Automatic().ByProfile(profileChain), db, changedSources(result.Changes))
 	if err != nil {
@@ -158,7 +106,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	var pendingSecrets int
 	{
-		if mgr, err := secrets.NewManager(enc, cfg.SecretsCache); err == nil {
+		if mgr := env.Secrets; mgr != nil {
 			templateFiles := discoverTemplateFiles(cfg, profileName, sourcePaths)
 			var decryptFn func([]byte) ([]byte, error)
 			if enc != nil && enc.CanDecrypt() {
@@ -185,7 +133,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 	var pendingPackages []missingPkgs
 	syncResults, err := packages.ComputeSync(cfg, profileName, sourcePaths,
-		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
+		packages.WithDirConfigRenderer(plan.DirConfigRenderer(tmplCtx)))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s not checking packages: %v\n", color.YellowString("Warning:"), err)
 	}
@@ -226,7 +174,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	// Hooks follow from the files apply would write: not imports (the target
 	// is the source of truth) and not mode-only fixes.
-	hookSet, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, allScripts)
+	hookSet, err := hooks.Collect(cfg, sourcePaths, env.Scanner.DirConfig, allScripts)
 	if err != nil {
 		return fmt.Errorf("invalid hooks: %w", err)
 	}
@@ -426,27 +374,4 @@ func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {
 		}
 	}
 	return false
-}
-
-func findOrphans(db *state.DB, tree *source.Tree) ([]string, error) {
-	managed, err := db.ListFiles()
-	if err != nil {
-		return nil, err
-	}
-
-	currentTargets := make(map[string]bool)
-	for _, e := range tree.Files() {
-		currentTargets[e.TargetPath] = true
-	}
-
-	var orphans []string
-	for _, m := range managed {
-		if !currentTargets[m.TargetPath] {
-			if _, err := os.Stat(m.TargetPath); err == nil {
-				orphans = append(orphans, m.TargetPath)
-			}
-		}
-	}
-
-	return orphans, nil
 }

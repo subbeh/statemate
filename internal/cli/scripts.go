@@ -12,11 +12,10 @@ import (
 	"golang.org/x/term"
 
 	"github.com/subbeh/statemate/internal/config"
-	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/state"
-	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 )
 
@@ -95,7 +94,7 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	db, err := openState(cfg)
+	db, err := plan.OpenState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
@@ -107,19 +106,12 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 	// here too -- otherwise this listing would disagree with what apply will run.
 	// Failures are non-fatal: the listing degrades to "no source changes".
 	var changed scripts.ChangedSources
-	if scanner, err := newScanner(cfg, profileName); err == nil {
-		if tree, err := scanner.Scan(sourcePaths); err == nil {
-			if profileName != "" {
-				tree = tree.FilterByProfile(profileChain)
-			}
-			// #enc files cannot be compared without the identity.
-			var enc *encrypt.AgeEncryptor
-			if cfg.Age != nil {
-				enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-			}
-			if res, err := target.ComputeChanges(tree, db, target.ComputeOpts{Enc: enc}); err == nil {
+	if env, err := plan.FromConfig(cfg, profileName); err == nil {
+		if p, err := env.Plan(); err == nil {
+			if res, err := p.Changes(false); err == nil {
 				changed = changedSources(res.Changes)
 			}
+			_ = p.Close()
 		}
 	}
 
@@ -348,7 +340,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("script not found: %s", scriptArg)
 	}
 
-	db, err := openState(cfg)
+	db, err := plan.OpenState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/packages"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
@@ -200,7 +201,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 	allScripts := scopedScripts(discovered, scope)
 
-	db, err := openState(cfg)
+	db, err := plan.OpenState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
@@ -446,7 +447,7 @@ func promptMissingPackages(cfg *config.Config, profileName string, sourcePaths [
 	// Packages never fail an apply whose files are already written, but a
 	// broken .mate.yaml must not make them disappear without a word.
 	results, err := packages.ComputeSync(cfg, profileName, sourcePaths,
-		packages.WithDirConfigRenderer(dirConfigRenderer(tmplCtx)))
+		packages.WithDirConfigRenderer(plan.DirConfigRenderer(tmplCtx)))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\n%s skipping packages: %v\n", color.YellowString("Warning:"), err)
 		return nil

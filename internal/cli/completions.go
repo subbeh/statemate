@@ -7,12 +7,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
-	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
-	"github.com/subbeh/statemate/internal/target"
 )
 
 // completeFilePaths hands completion to the shell's own filesystem completion.
@@ -69,25 +67,12 @@ func completeManagedFiles(cmd *cobra.Command, args []string, toComplete string) 
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	tree, err := scanner.Scan(sourcePaths)
+	sourcePaths := env.SourcePaths
+	tree, err := env.Scanner.Scan(sourcePaths)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -112,45 +97,17 @@ func completePendingFiles(cmd *cobra.Command, args []string, toComplete string) 
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-	sourcePaths := cfg.ResolveSourcePaths(profile.ResolveSources(cfg, profileName))
-
-	scanner, err := newScanner(cfg, profileName)
+	sourcePaths := env.SourcePaths
+	p, err := env.Plan()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
-	tree, err := scanner.Scan(sourcePaths)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	if profileName != "" {
-		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
-	}
-
-	db, err := openState(cfg)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	defer func() { _ = db.Close() }()
-
-	var enc *encrypt.AgeEncryptor
-	if cfg.Age != nil {
-		enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-	}
-	tmplCtx, err := newTemplateContext(cfg, profileName)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	result, err := target.ComputeChanges(tree, db, target.ComputeOpts{TmplCtx: tmplCtx, Enc: enc})
+	defer func() { _ = p.Close() }()
+	result, err := p.Changes(false)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
@@ -256,40 +213,16 @@ func completeScripts(cmd *cobra.Command, args []string, toComplete string) ([]st
 }
 
 func completeOrphanedFiles(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-
-	scanner, err := newScanner(cfg, profileName)
+	p, err := env.Plan()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
-	tree, err := scanner.Scan(sourcePaths)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	if profileName != "" {
-		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
-	}
-
-	db, err := openState(cfg)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-	defer func() { _ = db.Close() }()
-
-	orphans, err := findOrphans(db, tree)
+	defer func() { _ = p.Close() }()
+	orphans, err := p.Orphans()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}

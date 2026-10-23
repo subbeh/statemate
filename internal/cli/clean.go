@@ -7,9 +7,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/hooks"
-	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/util"
 )
@@ -45,47 +43,26 @@ func init() {
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
+	cfg, profileName, sourcePaths, scanner := env.Config, env.Profile, env.SourcePaths, env.Scanner
 
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-
-	scanner, err := newScanner(cfg, profileName)
+	p, err := env.Plan()
 	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
+		return err
 	}
-	tree, err := scanner.Scan(sourcePaths)
+	defer func() { _ = p.Close() }()
+
+	db, err := p.DB()
 	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
+		return err
 	}
 
-	if profileName != "" {
-		tree = tree.FilterByProfile(profile.InheritanceChain(cfg, profileName))
-	}
-
-	db, err := openState(cfg)
+	orphans, err := p.Orphans()
 	if err != nil {
-		return fmt.Errorf("opening state database: %w", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	orphans, err := findOrphans(db, tree)
-	if err != nil {
-		return fmt.Errorf("finding orphans: %w", err)
+		return err
 	}
 
 	if len(orphans) == 0 {

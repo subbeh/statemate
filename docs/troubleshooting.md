@@ -95,6 +95,12 @@ The file can only be deployed after it is decrypted. Configure `age.identity` or
 `age.identity_command`, and check with `mate doctor`. See
 [Encryption](encryption.md).
 
+### `… is #enc, but the age identity failed to load: …`
+
+An identity is configured, but loading it failed: the key file is missing or
+unreadable, or `identity_command` exited non-zero or printed something that is
+not an age key. The reason follows the colon. `mate doctor` runs the same check.
+
 ### `… /.mate.yaml: parsing YAML: …`
 
 A source's `.mate.yaml` is rendered as a template and then parsed. If it uses

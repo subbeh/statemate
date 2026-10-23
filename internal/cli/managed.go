@@ -9,7 +9,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/util"
@@ -43,21 +42,11 @@ func init() {
 }
 
 func runManaged(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
+	cfg, profileName := env.Config, env.Profile
 
 	allSources := profile.AllSources(cfg)
 	allSourcePaths := cfg.ResolveSourcePaths(allSources)
@@ -74,11 +63,7 @@ func runManaged(cmd *cobra.Command, args []string) error {
 		activeSourceSet[s] = true
 	}
 
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
-	}
-	tree, err := scanner.Scan(allSourcePaths)
+	tree, err := env.Scanner.Scan(allSourcePaths)
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)
 	}

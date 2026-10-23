@@ -16,6 +16,7 @@ import (
 
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/hooks"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/source"
@@ -90,51 +91,34 @@ type hookEnv struct {
 }
 
 func loadHookEnv(cmd *cobra.Command) (*hookEnv, error) {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, err
 	}
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
-	}
+	cfg, sourcePaths := env.Config, env.SourcePaths
 
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-	sourcePaths := cfg.ResolveSourcePaths(profile.ResolveSources(cfg, profileName))
-
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return nil, fmt.Errorf("creating scanner: %w", err)
-	}
 	// Scanning is what loads each source's .mate.yaml.
-	tree, err := scanner.Scan(sourcePaths)
+	p, err := env.Plan()
 	if err != nil {
-		return nil, fmt.Errorf("scanning sources: %w", err)
-	}
-	profileChain := profile.InheritanceChain(cfg, profileName)
-	if profileName != "" {
-		tree = tree.FilterByProfile(profileChain)
+		return nil, err
 	}
 
 	all, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover()
 	if err != nil {
 		return nil, fmt.Errorf("discovering scripts: %w", err)
 	}
-	set, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, all)
+	set, err := hooks.Collect(cfg, sourcePaths, env.Scanner.DirConfig, all)
 	if err != nil {
 		return nil, fmt.Errorf("invalid hooks: %w", err)
 	}
 
 	return &hookEnv{
 		cfg:          cfg,
-		profileName:  profileName,
-		profileChain: profileChain,
+		profileName:  env.Profile,
+		profileChain: env.Chain,
 		sourcePaths:  sourcePaths,
 		set:          set,
-		files:        tree.Files(),
+		files:        p.Tree.Files(),
 	}, nil
 }
 
@@ -217,7 +201,7 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("hook %s requires profile %q", h.Name, h.Profile)
 	}
 
-	db, err := openState(env.cfg)
+	db, err := plan.OpenState(env.cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
