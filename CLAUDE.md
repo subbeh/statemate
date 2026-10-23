@@ -70,6 +70,10 @@ non-test files under `internal/` or `cmd/` without staging `CHANGELOG.md` are re
 The same hook regenerates `docs/commands/` when `internal/cli/` changes, and rejects
 the commit if the result is not staged.
 
+`.githooks/post-commit` (linked as `post-merge` and `post-checkout`) runs
+`make build-all` so `dist/`, which the installed `mate` symlinks to, tracks the
+checked-out code. It only warns when the build fails.
+
 One-time setup after cloning (`core.hooksPath` is local git config, not version-controlled):
 
 ```bash
