@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
-	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/util"
@@ -23,7 +24,9 @@ var editCmd = &cobra.Command{
 	Long: `Edit a managed file in your editor.
 
 Paths are resolved like any other command-line tool: absolute paths are used
-as-is, relative paths resolve against the current directory.
+as-is, relative paths resolve against the current directory. A relative path
+that is not there is also looked up in the source directory. A bare file name
+is not searched for.
 
 Files under the source directory are opened directly. If you pass a target
 path (a deployed file), the corresponding source file is opened instead --
@@ -53,27 +56,13 @@ func init() {
 }
 
 func runEdit(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
+	cfg := env.Config
 
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	allSources := profile.AllSources(cfg)
-	allSourcePaths := cfg.ResolveSourcePaths(allSources)
-
-	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
-	tree, err := scanner.Scan(allSourcePaths)
-	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
-	}
-
-	editPath, isManagedSource, err := resolveEditPath(args[0], cfg, tree.Files())
+	editPath, isManagedSource, err := resolveEditPath(args[0], env)
 	if err != nil {
 		return err
 	}
@@ -230,16 +219,20 @@ func runEditor(editor, path string) error {
 //
 // The second return value reports whether the resolved file is a managed source
 // file, so callers can decide whether to show an "apply pending" hint.
-func resolveEditPath(input string, cfg *config.Config, entries []*source.Entry) (string, bool, error) {
-	abs, err := expandToAbs(input)
-	if err != nil {
+func resolveEditPath(input string, env *plan.Env) (string, bool, error) {
+	entry, err := env.Resolve(input)
+	if err == nil {
+		return resolveSymlinks(entry.SourcePath), true, nil
+	}
+	var notManaged *plan.NotManagedError
+	if !errors.As(err, &notManaged) {
 		return "", false, err
 	}
 
-	sourceDir := resolveSymlinks(cfg.SourceDir())
-	abs = resolveSymlinks(abs)
-
-	// Path is inside the repo -- edit it directly.
+	// Any other file inside the repo, such as an include or var_file, is
+	// edited directly.
+	sourceDir := resolveSymlinks(env.Config.SourceDir())
+	abs := resolveSymlinks(notManaged.Path)
 	if abs == sourceDir || strings.HasPrefix(abs, sourceDir+string(filepath.Separator)) {
 		if _, err := os.Stat(abs); err != nil {
 			if os.IsNotExist(err) {
@@ -247,17 +240,9 @@ func resolveEditPath(input string, cfg *config.Config, entries []*source.Entry) 
 			}
 			return "", false, err
 		}
-		return abs, isManagedSourcePath(abs, entries), nil
+		return abs, false, nil
 	}
-
-	// Path is outside the repo -- only valid if it is a managed target.
-	for _, e := range entries {
-		if resolveSymlinks(e.TargetPath) == abs {
-			return resolveSymlinks(e.SourcePath), true, nil
-		}
-	}
-
-	return "", false, fmt.Errorf("%s is not managed by mate", input)
+	return "", false, err
 }
 
 // resolveSymlinks returns the path with symlinks resolved, falling back to the
@@ -271,34 +256,3 @@ func resolveSymlinks(path string) string {
 	return path
 }
 
-// expandToAbs expands a leading ~ and resolves the path against the current
-// directory, returning a cleaned absolute path.
-func expandToAbs(path string) (string, error) {
-	if path == "~" || strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolving home directory: %w", err)
-		}
-		if path == "~" {
-			return home, nil
-		}
-		return filepath.Join(home, path[2:]), nil
-	}
-
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", fmt.Errorf("resolving path %s: %w", path, err)
-	}
-	return abs, nil
-}
-
-// isManagedSourcePath reports whether the path is the source of a managed entry.
-// The input is expected to already have symlinks resolved.
-func isManagedSourcePath(abs string, entries []*source.Entry) bool {
-	for _, e := range entries {
-		if resolveSymlinks(e.SourcePath) == abs {
-			return true
-		}
-	}
-	return false
-}

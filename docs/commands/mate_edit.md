@@ -7,7 +7,9 @@ Edit a managed file
 Edit a managed file in your editor.
 
 Paths are resolved like any other command-line tool: absolute paths are used
-as-is, relative paths resolve against the current directory.
+as-is, relative paths resolve against the current directory. A relative path
+that is not there is also looked up in the source directory. A bare file name
+is not searched for.
 
 Files under the source directory are opened directly. If you pass a target
 path (a deployed file), the corresponding source file is opened instead --

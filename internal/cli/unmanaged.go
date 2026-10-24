@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 var unmanagedCmd = &cobra.Command{
@@ -46,7 +47,7 @@ func runUnmanaged(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		root = args[0]
 	}
-	root, err = expandToAbs(root)
+	root, err = util.AbsPath(root)
 	if err != nil {
 		return err
 	}

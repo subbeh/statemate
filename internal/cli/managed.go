@@ -147,7 +147,7 @@ func matchesManagedFilter(e *source.Entry, srcPath, filter string) bool {
 // current directory; otherwise it stays a fragment so loose matching still works
 // from unrelated directories.
 func resolveFilterPath(filter string) (string, bool) {
-	abs, err := expandToAbs(filter)
+	abs, err := util.AbsPath(filter)
 	if err != nil {
 		return "", false
 	}

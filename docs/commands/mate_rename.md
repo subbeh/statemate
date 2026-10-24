@@ -8,6 +8,11 @@ Rename a managed file in both source and target.
 
 This renames the source file, the target file, and updates tracking.
 
+&lt;source> names the file by its source, with or without the attributes, or by
+its target. It is a path like any other: absolute, under ~, or relative to the
+current directory, and a relative path that is not there is also looked up in
+the source directory. A bare file name is not searched for.
+
 Attributes belong to the source file only; the target is always named
 without them. If &lt;new-name> has no attributes, the source keeps the ones it
 already has. If it has any, they replace the source's attributes, so give the
@@ -24,8 +29,8 @@ mate rename <source> <new-name> [flags]
 ## Examples
 
 ```
-  mate rename nvim/init.lua init.vim
-  mate rename zsh/.zshrc .zshrc.bak
+  mate rename nvim/.config/nvim/init.lua init.vim
+  mate rename ~/.zshrc .zshrc.bak
   mate rename git/.gitconfig#tmpl .gitconfig.local
       (source becomes .gitconfig.local#tmpl, target .gitconfig.local)
   mate rename ssh/.ssh/config config#perm:600

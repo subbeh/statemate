@@ -6,8 +6,12 @@ Delete file from source and target
 
 Delete a managed file from the source and the target, and stop tracking it.
 
-Give the target path, meaning the deployed file. The target is deleted as well
-unless --keep-target is given, and the deletion is confirmed unless --force (or --noconfirm) is.
+Give the target path, meaning the deployed file, or the source file. It is a
+path like any other: absolute, under ~, or relative to the current directory,
+and a relative path that is not there is also looked up in the source
+directory. The file may come from any source, not only the current profile's.
+The target is deleted as well unless --keep-target is given, and the deletion
+is confirmed unless --force (or --noconfirm) is.
 
 Hooks matching the removed target run afterwards (see 'mate hooks'); --force
 also confirms them. Nothing runs with --keep-target.

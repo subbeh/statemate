@@ -1,17 +1,15 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
-	"github.com/subbeh/statemate/internal/profile"
-	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/util"
 )
 
@@ -23,9 +21,10 @@ var encryptCmd = &cobra.Command{
 This reads the file, encrypts it using the configured age recipients,
 writes it back, and adds the #enc suffix to the filename.
 
-The file can be a managed source file or any file path (e.g. a var_file
-in .matedata/). Paths are resolved relative to the current directory,
-falling back to the source directory.
+The file can be a managed file, named by its source or its target, or any
+other file (e.g. a var_file in .matedata/). Paths are resolved relative to the
+current directory, falling back to the source directory. A bare file name is
+not searched for.
 
 The age recipients must be configured in mate.yaml:
 
@@ -44,16 +43,11 @@ func init() {
 }
 
 func runEncrypt(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
+	cfg := env.Config
 
 	if cfg.Age == nil || len(cfg.Age.Recipients) == 0 {
 		return fmt.Errorf("no age recipients configured in mate.yaml")
@@ -64,38 +58,21 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("setting up encryption: %w", err)
 	}
 
-	allSources := profile.AllSources(cfg)
-	allSourcePaths := cfg.ResolveSourcePaths(allSources)
-
-	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
-	tree, err := scanner.Scan(allSourcePaths)
-	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
-	}
-
 	srcPattern := args[0]
-
-	var entry *source.Entry
-	for _, e := range tree.Files() {
-		relPath := filepath.Join(filepath.Base(e.SourceDir), e.RelPath)
-		if relPath == srcPattern || e.SourcePath == srcPattern || e.TargetPath == srcPattern ||
-			strings.HasSuffix(relPath, "/"+srcPattern) ||
-			strings.HasSuffix(e.SourcePath, "/"+srcPattern) ||
-			strings.HasSuffix(e.TargetPath, "/"+srcPattern) {
-			entry = e
-			break
-		}
-	}
-
-	if entry != nil {
+	entry, err := env.Resolve(srcPattern)
+	var notManaged *plan.NotManagedError
+	switch {
+	case err == nil:
 		if entry.Attrs.Encrypted {
 			return fmt.Errorf("file is already encrypted: %s", srcPattern)
 		}
 		return encryptFileAt(entry.SourcePath, entry.Mode.Perm(), enc)
+	case !errors.As(err, &notManaged):
+		return err
 	}
 
-	// Fall back to resolving as a path relative to the source directory
-	filePath := resolveFilePath(srcPattern, cfg.SourceDir())
+	// Not a managed file, such as a var_file in .matedata/.
+	filePath := notManaged.Path
 	info, err := os.Stat(filePath)
 	if err != nil {
 		return fmt.Errorf("file not found: %s", srcPattern)
@@ -105,20 +82,6 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 	}
 
 	return encryptFileAt(filePath, info.Mode().Perm(), enc)
-}
-
-func resolveFilePath(pattern string, sourceDir string) string {
-	if filepath.IsAbs(pattern) {
-		return pattern
-	}
-	// Try relative to cwd first
-	if abs, err := filepath.Abs(pattern); err == nil {
-		if _, err := os.Stat(abs); err == nil {
-			return abs
-		}
-	}
-	// Fall back to relative to source directory
-	return filepath.Join(sourceDir, pattern)
 }
 
 func resolveEncryptedFilePath(pattern string, sourceDir string) string {

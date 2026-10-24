@@ -4,12 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/plan"
-	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/util"
 )
@@ -19,8 +16,12 @@ var deleteCmd = &cobra.Command{
 	Short: "Delete file from source and target",
 	Long: `Delete a managed file from the source and the target, and stop tracking it.
 
-Give the target path, meaning the deployed file. The target is deleted as well
-unless --keep-target is given, and the deletion is confirmed unless --force (or --noconfirm) is.
+Give the target path, meaning the deployed file, or the source file. It is a
+path like any other: absolute, under ~, or relative to the current directory,
+and a relative path that is not there is also looked up in the source
+directory. The file may come from any source, not only the current profile's.
+The target is deleted as well unless --keep-target is given, and the deletion
+is confirmed unless --force (or --noconfirm) is.
 
 Hooks matching the removed target run afterwards (see 'mate hooks'); --force
 also confirms them. Nothing runs with --keep-target.`,
@@ -44,46 +45,15 @@ func init() {
 }
 
 func runDelete(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
+	cfg, profileName, sourcePaths, scanner := env.Config, env.Profile, env.SourcePaths, env.Scanner
 
-	targetPath := expandPath(args[0])
-	absTarget, err := filepath.Abs(targetPath)
+	entry, err := env.Resolve(args[0])
 	if err != nil {
-		return fmt.Errorf("resolving path: %w", err)
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
-	}
-
-	sources := profile.ResolveSources(cfg, profileName)
-	sourcePaths := cfg.ResolveSourcePaths(sources)
-	tree, err := scanner.Scan(sourcePaths)
-	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
-	}
-
-	var entry *source.Entry
-	for _, e := range tree.Files() {
-		if e.TargetPath == absTarget {
-			entry = e
-			break
-		}
-	}
-
-	if entry == nil {
-		return fmt.Errorf("file not found in sources: %s", targetPath)
+		return err
 	}
 
 	if !deleteForce {

@@ -11,9 +11,10 @@ writes it back, and removes the #enc attribute from the filename
 wherever it appears among the attributes (config#enc#tmpl becomes
 config#tmpl).
 
-The file can be a managed source file or any file path (e.g. a var_file
-in .matedata/). Paths are resolved relative to the current directory,
-falling back to the source directory. The #enc suffix is optional.
+The file can be a managed file, named by its source or its target, or any
+other file (e.g. a var_file in .matedata/). Paths are resolved relative to the
+current directory, falling back to the source directory. The #enc suffix is
+optional. A bare file name is not searched for.
 
 The age identity must be configured in mate.yaml:
 

@@ -1,16 +1,15 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
-	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/util"
 )
@@ -25,9 +24,10 @@ writes it back, and removes the #enc attribute from the filename
 wherever it appears among the attributes (config#enc#tmpl becomes
 config#tmpl).
 
-The file can be a managed source file or any file path (e.g. a var_file
-in .matedata/). Paths are resolved relative to the current directory,
-falling back to the source directory. The #enc suffix is optional.
+The file can be a managed file, named by its source or its target, or any
+other file (e.g. a var_file in .matedata/). Paths are resolved relative to the
+current directory, falling back to the source directory. The #enc suffix is
+optional. A bare file name is not searched for.
 
 The age identity must be configured in mate.yaml:
 
@@ -45,16 +45,11 @@ func init() {
 }
 
 func runDecrypt(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
+	cfg := env.Config
 
 	if cfg.Age == nil || (cfg.Age.Identity == "" && cfg.Age.IdentityCommand == "") {
 		return fmt.Errorf("no age identity configured in mate.yaml")
@@ -65,37 +60,19 @@ func runDecrypt(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("setting up decryption: %w", err)
 	}
 
-	allSources := profile.AllSources(cfg)
-	allSourcePaths := cfg.ResolveSourcePaths(allSources)
-
-	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
-	tree, err := scanner.Scan(allSourcePaths)
-	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
-	}
-
 	srcPattern := args[0]
-
-	var entry *source.Entry
-	for _, e := range tree.Files() {
-		relPath := filepath.Join(filepath.Base(e.SourceDir), e.RelPath)
-		if relPath == srcPattern || e.SourcePath == srcPattern || e.TargetPath == srcPattern ||
-			strings.HasSuffix(relPath, "/"+srcPattern) ||
-			strings.HasSuffix(e.SourcePath, "/"+srcPattern) ||
-			strings.HasSuffix(e.TargetPath, "/"+srcPattern) {
-			entry = e
-			break
-		}
-	}
-
-	if entry != nil {
+	entry, err := env.Resolve(srcPattern)
+	switch {
+	case err == nil:
 		if !entry.Attrs.Encrypted {
 			return fmt.Errorf("file is not encrypted: %s", srcPattern)
 		}
 		return decryptFileAt(entry.SourcePath, entry.Mode.Perm(), enc)
+	case !errors.As(err, new(*plan.NotManagedError)):
+		return err
 	}
 
-	// Fall back to resolving as a path (try with #enc suffix too)
+	// Not a managed file, such as a var_file in .matedata/ (try with #enc suffix too)
 	filePath := resolveEncryptedFilePath(srcPattern, cfg.SourceDir())
 	if filePath == "" {
 		return fmt.Errorf("file not found: %s", srcPattern)

@@ -9,9 +9,10 @@ Encrypt a file in place.
 This reads the file, encrypts it using the configured age recipients,
 writes it back, and adds the #enc suffix to the filename.
 
-The file can be a managed source file or any file path (e.g. a var_file
-in .matedata/). Paths are resolved relative to the current directory,
-falling back to the source directory.
+The file can be a managed file, named by its source or its target, or any
+other file (e.g. a var_file in .matedata/). Paths are resolved relative to the
+current directory, falling back to the source directory. A bare file name is
+not searched for.
 
 The age recipients must be configured in mate.yaml:
 

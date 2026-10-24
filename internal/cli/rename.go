@@ -8,10 +8,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/plan"
-	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/util"
@@ -24,6 +22,11 @@ var renameCmd = &cobra.Command{
 
 This renames the source file, the target file, and updates tracking.
 
+<source> names the file by its source, with or without the attributes, or by
+its target. It is a path like any other: absolute, under ~, or relative to the
+current directory, and a relative path that is not there is also looked up in
+the source directory. A bare file name is not searched for.
+
 Attributes belong to the source file only; the target is always named
 without them. If <new-name> has no attributes, the source keeps the ones it
 already has. If it has any, they replace the source's attributes, so give the
@@ -32,8 +35,8 @@ not change the content: use 'mate encrypt' or 'mate decrypt'.
 
 Hooks matching the old or the new target path run afterwards, with a
 confirmation prompt (see 'mate hooks').`,
-	Example: `  mate rename nvim/init.lua init.vim
-  mate rename zsh/.zshrc .zshrc.bak
+	Example: `  mate rename nvim/.config/nvim/init.lua init.vim
+  mate rename ~/.zshrc .zshrc.bak
   mate rename git/.gitconfig#tmpl .gitconfig.local
       (source becomes .gitconfig.local#tmpl, target .gitconfig.local)
   mate rename ssh/.ssh/config config#perm:600
@@ -48,43 +51,16 @@ func init() {
 }
 
 func runRename(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
+	cfg := env.Config
 
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	allSources := profile.AllSources(cfg)
-	allSourcePaths := cfg.ResolveSourcePaths(allSources)
-
-	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
-	tree, err := scanner.Scan(allSourcePaths)
-	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
-	}
-
-	srcPattern := args[0]
 	newName := args[1]
-
-	var entry *source.Entry
-	for _, e := range tree.Files() {
-		relPath := filepath.Join(filepath.Base(e.SourceDir), e.RelPath)
-		if relPath == srcPattern || e.SourcePath == srcPattern || e.TargetPath == srcPattern ||
-			strings.HasSuffix(relPath, "/"+srcPattern) ||
-			strings.HasSuffix(e.SourcePath, "/"+srcPattern) ||
-			strings.HasSuffix(e.TargetPath, "/"+srcPattern) {
-			entry = e
-			break
-		}
-	}
-
-	if entry == nil {
-		return fmt.Errorf("file not found: %s", srcPattern)
+	entry, err := env.Resolve(args[0])
+	if err != nil {
+		return err
 	}
 
 	newSourceName, newTargetName, err := renamedNames(filepath.Base(entry.SourcePath), newName)
@@ -174,17 +150,12 @@ func runRename(cmd *cobra.Command, args []string) error {
 
 	// The old target is gone and the new one is written; both can trigger
 	// hooks. Only sources of the active profile contribute source hooks.
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-	sourcePaths := cfg.ResolveSourcePaths(profile.ResolveSources(cfg, profileName))
-	srcDir := hooks.OwningSource(entry.SourcePath, sourcePaths)
+	srcDir := hooks.OwningSource(entry.SourcePath, env.SourcePaths)
 	changes := []hooks.Change{
 		{Path: entry.TargetPath, SourceDir: srcDir},
 		{Path: newTargetPath, SourceDir: srcDir},
 	}
-	return runRemovalHooks(cfg, profileName, sourcePaths, scanner, db, changes, false)
+	return runRemovalHooks(cfg, env.Profile, env.SourcePaths, env.Scanner, db, changes, false)
 }
 
 // renamedNames works out the new source and target file names for renaming the
