@@ -165,6 +165,43 @@ func TestDiff(t *testing.T) {
 	}
 }
 
+// A target only root can read, such as /etc/crypttab, is diffed through sudo.
+// diff -u was handed the path and printed "Permission denied".
+func TestDiff_UnreadableTargetUsesSudo(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: mode 000 is still readable")
+	}
+	saved := color.NoColor
+	t.Cleanup(func() { color.NoColor = saved })
+	color.NoColor = true
+
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "sudo"), []byte("#!/bin/sh\nprintf 'deployed\\n'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "crypttab")
+	dst := filepath.Join(dir, "target")
+	if err := os.WriteFile(src, []byte("edited\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("unreadable\n"), 0000); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Diff(&Change{Entry: &source.Entry{SourcePath: src, TargetPath: dst}, Status: StatusConflict}, nil, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"-deployed", "+edited"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("diff does not contain %q:\n%s", want, got)
+		}
+	}
+}
+
 // mate diff shows a #link change as link text. Diffing the destinations
 // failed for a link to a directory or to a path that does not exist.
 func TestSymlinkDiff(t *testing.T) {
