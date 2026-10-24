@@ -1,7 +1,7 @@
 # Statemate
 
-Declarative system configuration management. Manage dotfiles, configs, and packages
-across machines.
+Declarative system configuration management. Manage dotfiles, configs, packages, and 
+maintenance tasks across machines.
 
 ## Features
 
@@ -59,9 +59,9 @@ Behavior is controlled by `#` suffixes on filenames, stripped from the target:
 
 ```
 .ssh/config#enc#perm:600         encrypted in the repo, mode 0600 deployed
-.gitconfig#tmpl                    rendered as a Go template
-.gitconfig#profile:work                only on machines matching the work profile
-.claude/settings.json#import           app owns it; changes flow back to the repo
+.gitconfig#tmpl                  rendered as a Go template
+.gitconfig#profile:work          only on machines matching the work profile
+.claude/settings.json#import     app owns it; changes flow back to the repo
 ```
 
 ## Documentation
