@@ -13,7 +13,7 @@ type Config struct {
 	Age           *AgeConfig          `yaml:"age" toml:"age"`
 	Variables     map[string]any      `yaml:"variables" toml:"variables"`
 	VarFiles      []string            `yaml:"var_files" toml:"var_files"`
-	Packages     *PackageList `yaml:"packages" toml:"packages"`
+	Packages     PackageList  `yaml:"packages" toml:"packages"`
 	Include      []string     `yaml:"include" toml:"include"`
 	Ignore       []string     `yaml:"ignore" toml:"ignore"`
 	AURHelper    string       `yaml:"aur_helper" toml:"aur_helper"`
@@ -96,7 +96,7 @@ type Profile struct {
 	Extends   string         `yaml:"extends" toml:"extends"`
 	Sources   []string       `yaml:"sources" toml:"sources"`
 	Detection *Detection     `yaml:"detection" toml:"detection"`
-	Packages  *PackageList   `yaml:"packages" toml:"packages"`
+	Packages  PackageList    `yaml:"packages" toml:"packages"`
 	Include   []string       `yaml:"include" toml:"include"`
 	Variables map[string]any `yaml:"variables" toml:"variables"`
 }
@@ -116,13 +116,6 @@ type AgeConfig struct {
 	Recipients      []string `yaml:"recipients" toml:"recipients"`
 }
 
-type PackageList struct {
-	Common []string `yaml:"common" toml:"common"`
-	Brew   []string `yaml:"brew" toml:"brew"`
-	Pacman []string `yaml:"pacman" toml:"pacman"`
-	AUR    []string `yaml:"aur" toml:"aur"`
-}
-
 type DirConfig struct {
 	TargetBase string                `yaml:"target_base" toml:"target_base"`
 	Profile    string                `yaml:"profile" toml:"profile"`
@@ -131,7 +124,7 @@ type DirConfig struct {
 	Owner      string                `yaml:"owner" toml:"owner"`
 	Group      string                `yaml:"group" toml:"group"`
 	Perm       string                `yaml:"perm" toml:"perm"`
-	Packages   *PackageList          `yaml:"packages" toml:"packages"`
+	Packages   PackageList           `yaml:"packages" toml:"packages"`
 	Generate   []GenerateConfig      `yaml:"generate" toml:"generate"`
 	Hooks      map[string]*Hook      `yaml:"hooks" toml:"hooks"`
 	Include    []string              `yaml:"include" toml:"include"`

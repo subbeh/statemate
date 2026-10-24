@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -284,7 +285,7 @@ func LoadDirConfigRaw(dir string, render TemplateRenderer) (*DirConfig, error) {
 			return nil, fmt.Errorf("loading include %s: %w", f, err)
 		}
 		if inc != nil {
-			cfg.Packages = mergePackageLists(cfg.Packages, inc.Packages)
+			cfg.Packages = slices.Concat(cfg.Packages, inc.Packages)
 			cfg.Variables = mergeVariables(cfg.Variables, inc.Variables)
 		}
 	}
@@ -422,18 +423,18 @@ func (c *Config) loadInclude(f string, dec *encrypt.AgeEncryptor) (*includeFile,
 }
 
 type includeFile struct {
-	Packages  *PackageList   `yaml:"packages" toml:"packages"`
+	Packages  PackageList    `yaml:"packages" toml:"packages"`
 	Variables map[string]any `yaml:"variables" toml:"variables"`
 }
 
 
 func (c *Config) mergePartial(inc *includeFile) {
-	c.Packages = mergePackageLists(c.Packages, inc.Packages)
+	c.Packages = slices.Concat(c.Packages, inc.Packages)
 	c.Variables = mergeVariables(c.Variables, inc.Variables)
 }
 
 func (p *Profile) mergePartial(inc *includeFile) {
-	p.Packages = mergePackageLists(p.Packages, inc.Packages)
+	p.Packages = slices.Concat(p.Packages, inc.Packages)
 	p.Variables = mergeVariables(p.Variables, inc.Variables)
 }
 
@@ -449,22 +450,6 @@ func (c *Config) ResolveRelPath(path string) string {
 	return c.resolveRelPath(path)
 }
 
-func mergePackageLists(base, add *PackageList) *PackageList {
-	if add == nil {
-		return base
-	}
-	if base == nil {
-		return add
-	}
-
-	return &PackageList{
-		Common: appendUniqueStrings(base.Common, add.Common...),
-		Brew:   appendUniqueStrings(base.Brew, add.Brew...),
-		Pacman: appendUniqueStrings(base.Pacman, add.Pacman...),
-		AUR:    appendUniqueStrings(base.AUR, add.AUR...),
-	}
-}
-
 func mergeVariables(base, add map[string]any) map[string]any {
 	if add == nil {
 		return base
@@ -476,19 +461,4 @@ func mergeVariables(base, add map[string]any) map[string]any {
 		base[k] = v
 	}
 	return base
-}
-
-func appendUniqueStrings(slice []string, items ...string) []string {
-	seen := make(map[string]bool)
-	for _, s := range slice {
-		seen[s] = true
-	}
-	result := slice
-	for _, item := range items {
-		if !seen[item] {
-			seen[item] = true
-			result = append(result, item)
-		}
-	}
-	return result
 }

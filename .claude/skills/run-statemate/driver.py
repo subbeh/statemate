@@ -120,7 +120,7 @@ def scaffold() -> Path:
     # "missing", and `mate apply --force` would try to install it and abort the
     # apply when that fails. Never pass bare --force here; see apply below.
     (repo / "app" / ".mate.yaml").write_text(
-        "packages:\n  common:\n    - statemate-no-such-package\n"
+        "packages:\n  - statemate-no-such-package\n"
     )
 
     # A source whose files need executable permissions via a recursive attr.

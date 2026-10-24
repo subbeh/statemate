@@ -107,14 +107,15 @@ profiles:
     variables:
       email: "me@company.com"
     packages:
-      brew: [slack]
+      - slack
 
 age:
   identity: "~/.config/statemate/key.txt"
   recipients: ["age1..."]
 
 packages:
-  brew: [ripgrep, fd]
+  - fd
+  - ripgrep
 ```
 
 See [Configuration](docs/configuration.md) for every key.

@@ -56,7 +56,8 @@ var_files:
   - .matedata/secrets.yaml
 
 packages:
-  brew: [ripgrep, fd]
+  - fd
+  - ripgrep
 
 include:
   - packages.yaml
@@ -168,7 +169,8 @@ include:
 ```yaml
 # packages.yaml
 packages:
-  brew: [ripgrep, fd]
+  - fd
+  - ripgrep
 variables:
   email: "me@example.com"
 ```
@@ -240,7 +242,8 @@ profiles:
     variables:
       email: "me@company.com"
     packages:
-      brew: [slack, awscli]
+      - awscli
+      - slack
 
   arch:
     extends: base
@@ -249,7 +252,7 @@ profiles:
       os: linux
       command: "test -f /etc/arch-release"
     packages:
-      pacman: [keyd]
+      - keyd
 ```
 
 ### Detection

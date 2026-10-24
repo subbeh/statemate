@@ -82,7 +82,7 @@ generate:
   - target: out
     content: '{{ .Vars.bws.projectId }} {{ $v | toJson }}'
 `
-	vars := "variables:\n  bws:\n    projectId: p1\n    secrets:\n      KEY: [item]\npackages:\n  brew: [jq]\n"
+	vars := "variables:\n  bws:\n    projectId: p1\n    secrets:\n      KEY: [item]\npackages:\n  - jq: brew\n"
 	if err := os.MkdirAll(filepath.Join(src, "sub"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -113,8 +113,8 @@ generate:
 	if got := dirCfg.Generate[0].Content; got != `p1 {"KEY":"s-item"}` {
 		t.Errorf("generate content = %q", got)
 	}
-	if dirCfg.Packages == nil || len(dirCfg.Packages.Brew) != 1 || dirCfg.Packages.Brew[0] != "jq" {
-		t.Errorf("expected packages.brew=[jq] from the include, got %+v", dirCfg.Packages)
+	if len(dirCfg.Packages) != 1 || dirCfg.Packages[0].Managers["brew"] != "jq" {
+		t.Errorf("expected packages=[jq: brew] from the include, got %+v", dirCfg.Packages)
 	}
 }
 

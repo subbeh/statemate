@@ -11,7 +11,7 @@ makes it so.
   git/.config/git/config#tmpl →  ~/.config/git/config, rendered per machine
   ssh/.ssh/config#enc       →  ~/.ssh/config, decrypted
   arch/etc#owner-r:root/keyd/…    →  /etc/keyd/…, owned by root
-  nvim/.mate.yaml                    packages: { common: [neovim] }
+  nvim/.mate.yaml                    packages: [neovim]
   nvim/.matescripts/
     70-plugins.sh#monthly#after      run after applying, once a month
 ```

@@ -97,25 +97,24 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 	}
 	entries := make(map[string]*pkgEntry) // key: "manager\x00name"
 
-	addPkgs := func(pkgs *config.PackageList, source string) {
-		if pkgs == nil {
-			return
-		}
-		add := func(manager string, specs []string) {
-			for _, spec := range specs {
-				name := spec
-				key := manager + "\x00" + name
-				if e, ok := entries[key]; ok {
-					e.sources = appendUnique(e.sources, source)
-				} else {
-					entries[key] = &pkgEntry{manager: manager, spec: spec, sources: []string{source}}
-				}
+	addPkgs := func(pkgs config.PackageList, source string) {
+		add := func(manager, spec string) {
+			key := manager + "\x00" + spec
+			if e, ok := entries[key]; ok {
+				e.sources = appendUnique(e.sources, source)
+			} else {
+				entries[key] = &pkgEntry{manager: manager, spec: spec, sources: []string{source}}
 			}
 		}
-		add("common", pkgs.Common)
-		add("brew", pkgs.Brew)
-		add("pacman", pkgs.Pacman)
-		add("aur", pkgs.AUR)
+		for _, p := range pkgs {
+			// No managers means the system manager, resolved below as "common".
+			if len(p.Managers) == 0 {
+				add("common", p.Name)
+			}
+			for manager, name := range p.Managers {
+				add(manager, name)
+			}
+		}
 	}
 
 	// Global packages

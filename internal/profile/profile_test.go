@@ -3,6 +3,7 @@ package profile
 import (
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/subbeh/statemate/internal/config"
@@ -125,18 +126,14 @@ func TestResolveInheritance(t *testing.T) {
 	cfg := &config.Config{
 		Profiles: map[string]*config.Profile{
 			"base": {
-				Packages: &config.PackageList{
-					Brew: []string{"git", "neovim"},
-				},
+				Packages: config.PackageList{{Name: "git"}, {Name: "neovim"}},
 				Variables: map[string]any{
 					"editor": "vim",
 				},
 			},
 			"work": {
 				Extends: "base",
-				Packages: &config.PackageList{
-					Brew: []string{"slack"},
-				},
+				Packages: config.PackageList{{Name: "slack"}},
 				Variables: map[string]any{
 					"editor": "nvim",
 					"proxy":  "http://proxy:8080",
@@ -150,22 +147,12 @@ func TestResolveInheritance(t *testing.T) {
 		t.Fatal("Resolve returned nil")
 	}
 
-	brew := resolved.Packages.Brew
-	if len(brew) != 3 {
-		t.Errorf("expected 3 brew packages, got %d: %v", len(brew), brew)
+	var names []string
+	for _, p := range resolved.Packages {
+		names = append(names, p.Name)
 	}
-
-	has := func(pkg string) bool {
-		for _, p := range brew {
-			if p == pkg {
-				return true
-			}
-		}
-		return false
-	}
-
-	if !has("git") || !has("neovim") || !has("slack") {
-		t.Errorf("missing expected packages: %v", brew)
+	if strings.Join(names, ",") != "git,neovim,slack" {
+		t.Errorf("expected packages git, neovim, slack, got %v", names)
 	}
 
 	if resolved.Variables["editor"] != "nvim" {
@@ -181,21 +168,15 @@ func TestResolveChainedInheritance(t *testing.T) {
 	cfg := &config.Config{
 		Profiles: map[string]*config.Profile{
 			"base": {
-				Packages: &config.PackageList{
-					Brew: []string{"git"},
-				},
+				Packages: config.PackageList{{Name: "git"}},
 			},
 			"dev": {
 				Extends: "base",
-				Packages: &config.PackageList{
-					Brew: []string{"neovim"},
-				},
+				Packages: config.PackageList{{Name: "neovim"}},
 			},
 			"work-dev": {
 				Extends: "dev",
-				Packages: &config.PackageList{
-					Brew: []string{"slack"},
-				},
+				Packages: config.PackageList{{Name: "slack"}},
 			},
 		},
 	}
@@ -205,9 +186,8 @@ func TestResolveChainedInheritance(t *testing.T) {
 		t.Fatal("Resolve returned nil")
 	}
 
-	brew := resolved.Packages.Brew
-	if len(brew) != 3 {
-		t.Errorf("expected 3 brew packages from chain, got %d: %v", len(brew), brew)
+	if len(resolved.Packages) != 3 {
+		t.Errorf("expected 3 packages from chain, got %v", resolved.Packages)
 	}
 }
 

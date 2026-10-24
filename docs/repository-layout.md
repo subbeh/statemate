@@ -62,13 +62,9 @@ names shared by Homebrew and pacman and the manager-specific keys for the rest:
 ```yaml
 # git/.mate.yaml
 packages:
-  common:
-    - git
-    - lazygit
-  brew:
-    - gh
-  pacman:
-    - github-cli
+  - gh: [brew, pacman: github-cli]
+  - git
+  - lazygit
 ```
 
 The packages are only considered while the source is active, so a macOS-only

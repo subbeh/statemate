@@ -57,7 +57,7 @@ target_base: "~"
 #     detection:
 #       hostname: "work-*"
 #     packages:
-#       brew: [slack]
+#       - slack
 #
 #   personal:
 #     detection:
@@ -76,9 +76,8 @@ target_base: "~"
 
 # Global packages (installed regardless of profile)
 # packages:
-#   brew:
-#     - ripgrep
-#     - fd
+#   - fd
+#   - ripgrep
 `
 
 const defaultConfigTOML = `# Statemate configuration
@@ -95,12 +94,14 @@ sources = []
 # Default target for deployed files (default: $HOME)
 target_base = "~"
 
+# Global packages (installed regardless of profile)
+# packages = ["fd", "ripgrep"]
+
 # Profiles for machine-specific configuration
 # [profiles.work]
+# packages = ["slack"]
 # [profiles.work.detection]
 # hostname = "work-*"
-# [profiles.work.packages]
-# brew = ["slack"]
 
 # [profiles.personal]
 # [profiles.personal.detection]
@@ -115,10 +116,6 @@ target_base = "~"
 # [variables]
 # email = "you@example.com"
 # editor = "nvim"
-
-# Global packages (installed regardless of profile)
-# [packages]
-# brew = ["ripgrep", "fd"]
 `
 
 const defaultReadme = `# Dotfiles

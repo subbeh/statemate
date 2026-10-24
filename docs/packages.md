@@ -1,42 +1,55 @@
 # Packages
 
 Packages are declared in configuration and installed by the native package
-manager.
+manager. `packages:` is a list with one package per item, so it can be kept
+sorted by name:
 
 ```yaml
 packages:
-  brew: [ripgrep, fd, jq]
-  pacman: [keyd, base-devel]
-  aur: [statemate-bin]
-  common: [git, curl]
+  - gh: [brew, pacman: github-cli]   # brew gh, pacman github-cli
+  - gnu-sed: brew                    # brew only
+  - paru: aur                        # the AUR only
+  - ripgrep                          # the system manager, on every machine
+  - tpack: [brew, aur: tpack-bin]    # brew tpack, and tpack-bin from the AUR
 ```
+
+- **A bare name** goes to the system manager: brew if it is present, otherwise
+  pacman. It never goes to the AUR.
+- **A name followed by managers** is installed with exactly those managers: one
+  (`gnu-sed: brew`) or a list (`[brew, aur]`). An entry of the list can rename
+  the package for that manager (`pacman: github-cli`).
+
+The same item written in block style:
+
+```yaml
+packages:
+  - tpack:
+      - brew
+      - aur: tpack-bin
+```
+
+In TOML the list is an array: `packages = ["ripgrep", {gnu-sed = "brew"},
+{gh = ["brew", {pacman = "github-cli"}]}]`.
+
+A package that is installed with both pacman and the AUR is two packages, so
+listing `pacman` and `aur` on one item is an error. So is an unknown manager, a
+manager listed twice, or a map with several names in one item. The manager-keyed
+lists of earlier versions (`brew: [...]`, `common: [...]`) are rejected with a
+hint showing the list form.
 
 ## Supported managers
 
-| Key | Manager | Detected by |
-|-----|---------|-------------|
+| Manager | | Detected by |
+|---------|-|-------------|
 | `brew` | Homebrew | `brew` on `$PATH` |
 | `pacman` | Arch's pacman | `pacman` on `$PATH` |
 | `aur` | An AUR helper (`yay` or `paru`) | the helper on `$PATH` |
-| `common` | Whichever of brew/pacman is present | — |
 
-Homebrew casks go under `brew:` too; there is no separate `cask:` key.
+Homebrew casks are `brew` packages too; there is no separate `cask` manager.
 
 A manager that is not available is ignored entirely, so one config can serve both
-a macOS and an Arch machine.
-
-### `common`
-
-`common` resolves to the **primary** manager: brew if present, otherwise pacman.
-It never resolves to the AUR. Use it for packages named identically everywhere:
-
-```yaml
-packages:
-  common: [git, ripgrep, fd]
-```
-
-If the same package is also listed under a specific manager, the two entries merge
-rather than duplicating.
+a macOS and an Arch machine. A package that resolves to the same manager and name
+in several places is listed once, with every place that declared it.
 
 ### Homebrew taps
 
@@ -45,9 +58,8 @@ name or bare, and both are recognised as installed:
 
 ```yaml
 packages:
-  brew:
-    - hashicorp/tap/terraform   # fully qualified
-    - terraform                 # equivalent for an installed formula
+  - hashicorp/tap/terraform: brew   # fully qualified
+  - terraform: brew                 # equivalent for an installed formula
 ```
 
 Prefer the qualified form: `brew install` needs it to find a formula that is not
@@ -70,7 +82,7 @@ When `aur_helper` is unset, statemate uses `yay` if it is on `$PATH`, otherwise
 aur_helper: paru
 ```
 
-Without either helper, `aur:` packages are ignored, like any unavailable manager.
+Without either helper, `aur` packages are ignored, like any unavailable manager.
 
 AUR packages are queried separately from native ones, so an AUR package is not
 reported as an unexpected extra under pacman.
@@ -82,12 +94,12 @@ All of these are merged, and a package may appear in several:
 ```yaml
 # mate.yaml — every machine
 packages:
-  brew: [ripgrep]
+  - ripgrep
 
 profiles:
   work:
     packages:                 # only under the work profile
-      brew: [awscli]
+      - awscli
 
 include:
   - packages.yaml             # packages: and variables: only
@@ -100,7 +112,7 @@ its own `include:`.
 ```yaml
 # nvim/.mate.yaml — only when this source is active
 packages:
-  common: [neovim]
+  - neovim
 ```
 
 `mate packages list` shows where each package was declared, which is the
