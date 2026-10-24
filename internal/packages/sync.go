@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
@@ -283,11 +282,6 @@ func ComputeSync(cfg *config.Config, profileName string, sources []string, opts 
 			jExtra := result.Statuses[j].Status == StatusExtra
 			if iExtra != jExtra {
 				return !iExtra
-			}
-			si := strings.Join(result.Statuses[i].Sources, ",")
-			sj := strings.Join(result.Statuses[j].Sources, ",")
-			if si != sj {
-				return si < sj
 			}
 			return result.Statuses[i].Name < result.Statuses[j].Name
 		})

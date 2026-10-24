@@ -299,7 +299,7 @@ func TestComputeSync_NonVerboseLeavesDescriptionsUnflagged(t *testing.T) {
 
 // A profile inherits the packages of every profile it extends, as it already
 // inherits their sources and variables. Each package is attributed to the
-// profile that declared it, so `mate packages status` shows where it came from.
+// profile that declared it, so `mate packages list` shows where it came from.
 func TestComputeSync_InheritsPackagesAlongExtendsChain(t *testing.T) {
 	f := &fakeManager{installed: []Package{{Name: "git"}}}
 	withFakeManager(t, f)
@@ -416,5 +416,32 @@ func TestComputeSync_VersionedFormulaIsItsOwnPackage(t *testing.T) {
 
 	if missing := results[0].Missing(); len(missing) != 1 || missing[0] != "node@20" {
 		t.Errorf("missing packages: got %v, want [node@20]", missing)
+	}
+}
+
+// Packages list by name, extras after the declared ones. Sorting by source first
+// scattered the names of a profile that extends others.
+func TestComputeSync_SortsByName(t *testing.T) {
+	f := &fakeManager{installed: []Package{{Name: "zsh"}, {Name: "bat"}, {Name: "abc"}}}
+	withFakeManager(t, f)
+
+	cfg := &config.Config{
+		Packages: &config.PackageList{Brew: []string{"ripgrep"}},
+		Profiles: map[string]*config.Profile{
+			"base": {Packages: &config.PackageList{Brew: []string{"zsh"}}},
+			"work": {Extends: "base", Packages: &config.PackageList{Brew: []string{"awk"}}},
+		},
+	}
+	results, err := ComputeSync(cfg, "work", nil, WithExtras(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	for _, s := range results[0].Statuses {
+		got = append(got, s.Name)
+	}
+	if want := "awk ripgrep zsh abc bat"; strings.Join(got, " ") != want {
+		t.Errorf("order = %v, want %s", got, want)
 	}
 }
