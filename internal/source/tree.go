@@ -7,6 +7,8 @@ import (
 
 type Entry struct {
 	SourcePath string
+	// SourceDir is the directory of the source the entry comes from.
+	SourceDir  string
 	TargetPath string
 	RelPath    string
 	Name       string

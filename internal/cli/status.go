@@ -332,8 +332,7 @@ func printShortStatus(changes []*target.Change, orphans []string, pending script
 }
 
 func extractSourceDir(entry *source.Entry) string {
-	srcDir := strings.TrimSuffix(entry.SourcePath, "/"+entry.RelPath)
-	return filepath.Base(srcDir)
+	return filepath.Base(entry.SourceDir)
 }
 
 // changedSources collects the sources with pending changes, which is what

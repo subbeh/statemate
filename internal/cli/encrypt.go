@@ -77,8 +77,7 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 
 	var entry *source.Entry
 	for _, e := range tree.Files() {
-		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
-		relPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
+		relPath := filepath.Join(filepath.Base(e.SourceDir), e.RelPath)
 		if relPath == srcPattern || e.SourcePath == srcPattern || e.TargetPath == srcPattern ||
 			strings.HasSuffix(relPath, "/"+srcPattern) ||
 			strings.HasSuffix(e.SourcePath, "/"+srcPattern) ||

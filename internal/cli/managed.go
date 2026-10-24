@@ -75,8 +75,7 @@ func runManaged(cmd *cobra.Command, args []string) error {
 
 	var data [][]string
 	for _, e := range tree.Files() {
-		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
-		srcPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
+		srcPath := filepath.Join(filepath.Base(e.SourceDir), e.RelPath)
 
 		if filterPath != "" && !matchesManagedFilter(e, srcPath, filterPath) {
 			continue

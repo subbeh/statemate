@@ -170,6 +170,7 @@ func (s *Scanner) buildEntries(sourceDir, fullPath, relPath string, info os.File
 	for _, targetPath := range s.resolveTargets(relPath, name, dirCfg) {
 		entries = append(entries, &Entry{
 			SourcePath: fullPath,
+			SourceDir:  sourceDir,
 			TargetPath: targetPath,
 			RelPath:    relPath,
 			Name:       name,
@@ -322,6 +323,7 @@ func (s *Scanner) processGenerateDirectives(sourceDir string, dirCfg *config.Dir
 
 		entry := &Entry{
 			SourcePath:      sourceDir,
+			SourceDir:       sourceDir,
 			TargetPath:      targetPath,
 			RelPath:         strings.TrimPrefix(targetPath, s.targetBase+"/"),
 			Name:            filepath.Base(targetPath),

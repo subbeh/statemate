@@ -49,8 +49,7 @@ func (s Scope) Matches(entry *source.Entry, sourceDir string) bool {
 // entrySourceName returns the base name of the source directory an entry came
 // from, e.g. "nvim" for nvim/.config/nvim/init.lua.
 func entrySourceName(entry *source.Entry) string {
-	srcDir := strings.TrimSuffix(entry.SourcePath, "/"+entry.RelPath)
-	return filepath.Base(srcDir)
+	return filepath.Base(entry.SourceDir)
 }
 
 // Validate checks the scope against what the tree actually contains, so a typo
@@ -130,8 +129,7 @@ func (p *Plan) Narrow(s Scope) error {
 }
 
 func matchesPath(entry *source.Entry, pattern, sourceDir string) bool {
-	srcDir := strings.TrimSuffix(entry.SourcePath, "/"+entry.RelPath)
-	relPath := filepath.Join(filepath.Base(srcDir), entry.RelPath)
+	relPath := filepath.Join(filepath.Base(entry.SourceDir), entry.RelPath)
 
 	if relPath == pattern || entry.SourcePath == pattern || entry.TargetPath == pattern {
 		return true

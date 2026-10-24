@@ -10,6 +10,7 @@ import (
 func entry(sourceName, rel string) *source.Entry {
 	return &source.Entry{
 		SourcePath: filepath.Join("/repo", sourceName, rel),
+		SourceDir:  filepath.Join("/repo", sourceName),
 		TargetPath: filepath.Join("/home/u", rel),
 		RelPath:    rel,
 	}
@@ -107,6 +108,7 @@ func TestMatchesPathRelativeDirectory(t *testing.T) {
 	t.Chdir(home)
 	e := &source.Entry{
 		SourcePath: "/repo/app/.config/app/app.conf",
+		SourceDir:  "/repo/app",
 		RelPath:    ".config/app/app.conf",
 		TargetPath: filepath.Join(home, ".config", "app", "app.conf"),
 	}

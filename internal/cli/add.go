@@ -256,10 +256,7 @@ func unmanagedAddFiles(files []addFile, sourceDir string, tree *source.Tree) ([]
 	for _, file := range files {
 		owners := managed[file.path]
 		for _, owner := range owners {
-			ownerDir := owner.SourcePath
-			if !owner.Generated {
-				ownerDir = strings.TrimSuffix(owner.SourcePath, string(filepath.Separator)+owner.RelPath)
-			}
+			ownerDir := owner.SourceDir
 			if filepath.Clean(ownerDir) != filepath.Clean(sourceDir) {
 				return nil, fmt.Errorf("file already managed by another source: %s (in %s)", file.path, ownerDir)
 			}
