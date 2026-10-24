@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/fatih/color"
@@ -138,12 +140,6 @@ func classify(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Change, er
 		return computeSymlinkChange(entry, db)
 	}
 
-	// Without an identity the source can only be compared and deployed as
-	// ciphertext, which status would then report as up to date.
-	if entry.Attrs.Encrypted && (opts.Enc == nil || !opts.Enc.CanDecrypt()) {
-		return nil, errNoIdentity(entry)
-	}
-
 	var sourceHash string
 	var err error
 	if entry.Generated {
@@ -156,11 +152,16 @@ func classify(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Change, er
 	}
 	change.NewHash = sourceHash
 
+	// The target is compared with what apply would write. A render that fails
+	// fails the comparison too: falling back to the source's own hash reported a
+	// status that apply then contradicted.
 	renderedHash := sourceHash
 	if !entry.Generated && (entry.Attrs.Encrypted || entry.Attrs.Template) {
-		if h, err := getRenderedHash(entry, opts); err == nil {
-			renderedHash = h
+		content, err := render(entry, opts.TmplCtx, opts.Enc)
+		if err != nil {
+			return nil, err
 		}
+		renderedHash = state.HashBytes(content)
 	}
 
 	existing, err := db.GetFile(entry.TargetPath)
@@ -369,37 +370,104 @@ func computeSymlinkChange(entry *source.Entry, db *state.DB) (*Change, error) {
 	return change, nil
 }
 
-func showDiff(sourcePath, targetPath string) error {
-	return ShowDiffWithTool(sourcePath, targetPath, "")
-}
-
-func ShowDiffWithTool(sourcePath, targetPath, diffTool string) error {
-	if diffTool != "" {
-		cmd := util.UserCommand(diffTool, targetPath, sourcePath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		cmd.Stdin = os.Stdin
-		_ = cmd.Run()
-		return nil
+// Diff shows what applying a change would do: the target is the old side and
+// what apply would write the new one. An #import change runs the other way, since
+// the target is what will be written into the source. Without a tool it runs
+// diff -u and colors the result; a tool's output is returned as is.
+func Diff(change *Change, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, tool string) (string, error) {
+	entry := change.Entry
+	if entry.Attrs.Symlink {
+		// What changes is the link text; diffing what it points at would fail
+		// for a directory or a destination that does not exist.
+		return colorizeDiff(symlinkDiff(entry)), nil
 	}
 
-	cmd := util.Command("diff", "-u", targetPath, sourcePath)
+	rendered, err := render(entry, tmplCtx, enc)
+	if err != nil {
+		return "", err
+	}
+	targetLabel := entry.TargetPath
+	current, err := readTarget(entry.TargetPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		targetLabel = "/dev/null"
+	} else if err != nil {
+		return "", err
+	}
+	if isBinary(rendered) || isBinary(current) {
+		return "Binary files differ", nil
+	}
+
+	oldLabel, oldContent, newLabel, newContent := targetLabel, current, entry.SourcePath, rendered
+	if change.Status == StatusImport {
+		oldLabel, oldContent, newLabel, newContent = newLabel, newContent, oldLabel, oldContent
+	}
+
+	// Named after the target, so a tool can tell the file type from the extension.
+	name := filepath.Base(entry.TargetPath)
+	oldPath, err := writeTemp(oldContent, name)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(oldPath) }()
+	newPath, err := writeTemp(newContent, name)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(newPath) }()
+
+	cmd := util.Command("diff", "-u", "--label", oldLabel, "--label", newLabel, oldPath, newPath)
+	if tool != "" {
+		cmd = util.UserCommand(tool, oldPath, newPath)
+	}
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
-
+	// diff exits 1 when the files differ, and tools disagree on what theirs means.
 	_ = cmd.Run()
 
-	diff := out.String()
-	if diff == "" {
-		fmt.Println("  (no differences)")
-	} else {
-		fmt.Println(ColorizeDiff(diff))
+	if tool != "" {
+		return out.String(), nil
 	}
-	return nil
+	return colorizeDiff(out.String()), nil
 }
 
-func ColorizeDiff(diff string) string {
+// symlinkDiff describes a pending #link change as the link the target has
+// now and the one apply will create.
+func symlinkDiff(entry *source.Entry) string {
+	var lines []string
+	if old, err := os.Readlink(entry.TargetPath); err == nil {
+		lines = append(lines, "- -> "+old)
+	} else if _, err := os.Lstat(entry.TargetPath); err == nil {
+		lines = append(lines, "- (not a symlink)")
+	}
+	if dest, err := os.Readlink(entry.SourcePath); err == nil {
+		lines = append(lines, "+ -> "+dest)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func writeTemp(content []byte, name string) (string, error) {
+	f, err := os.CreateTemp("", "mate-*-"+name)
+	if err != nil {
+		return "", err
+	}
+	_, err = f.Write(content)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return "", err
+	}
+	return f.Name(), nil
+}
+
+// isBinary looks for a NUL in the first 512 bytes, as diff itself does.
+func isBinary(content []byte) bool {
+	return bytes.IndexByte(content[:min(len(content), 512)], 0) >= 0
+}
+
+func colorizeDiff(diff string) string {
 	if diff == "" {
 		return ""
 	}
@@ -428,85 +496,38 @@ func ColorizeDiff(diff string) string {
 	return strings.TrimSuffix(result.String(), "\n")
 }
 
-func GenerateDiff(sourcePath, targetPath string) (string, error) {
-	return GenerateDiffWithTool(sourcePath, targetPath, "")
-}
-
-// GenerateDiffWithTool diffs a deployed target against its source, showing what
-// applying would do: the target is the old side, the source the new one.
-func GenerateDiffWithTool(sourcePath, targetPath, diffTool string) (string, error) {
-	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-		content, err := os.ReadFile(sourcePath)
-		if err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("+++ %s (new file)\n%s", targetPath, content), nil
-	}
-
-	return GenerateDiffBetween(targetPath, sourcePath, diffTool)
-}
-
-// GenerateDiffBetween diffs two paths in an explicit direction. #import reverses
-// the usual one, since for those files the target is what will be written into
-// the source.
-func GenerateDiffBetween(oldPath, newPath, diffTool string) (string, error) {
-	cmd := util.Command("diff", "-u", oldPath, newPath)
-	if diffTool != "" {
-		cmd = util.UserCommand(diffTool, oldPath, newPath)
-	}
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	_ = cmd.Run()
-
-	return out.String(), nil
-}
-
-func IsBinaryFile(path string) bool {
-	f, err := os.Open(path)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = f.Close() }()
-
-	buf := make([]byte, 512)
-	n, err := f.Read(buf)
-	if err != nil {
-		return false
-	}
-
-	for i := 0; i < n; i++ {
-		if buf[i] == 0 {
-			return true
-		}
-	}
-	return false
-}
-
 func errNoIdentity(entry *source.Entry) error {
 	return fmt.Errorf("%s is #enc but no age identity is configured", entry.SourcePath)
 }
 
-func getRenderedHash(entry *source.Entry, opts *ComputeOpts) (string, error) {
+// render returns the bytes an entry deploys to its target: generated content as
+// is, and a source file decrypted when #enc and rendered when #tmpl. Apply writes
+// them, classify hashes them and Diff compares them, so the three agree.
+func render(entry *source.Entry, tmplCtx *template.Context, enc *encrypt.AgeEncryptor) ([]byte, error) {
+	if entry.Generated {
+		return []byte(entry.GeneratedContent), nil
+	}
 	content, err := os.ReadFile(entry.SourcePath)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	if entry.Attrs.Encrypted && opts.Enc != nil {
-		content, err = opts.Enc.Decrypt(content)
-		if err != nil {
-			return "", err
+	if entry.Attrs.Encrypted {
+		// Never fall through to the ciphertext, which apply would deploy and
+		// status would then report as up to date.
+		if enc == nil || !enc.CanDecrypt() {
+			return nil, errNoIdentity(entry)
+		}
+		if content, err = enc.Decrypt(content); err != nil {
+			return nil, fmt.Errorf("decrypting %s: %w", entry.SourcePath, err)
 		}
 	}
-
-	if entry.Attrs.Template && opts.TmplCtx != nil {
-		content, err = template.Render(content, opts.TmplCtx)
-		if err != nil {
-			return "", err
+	if entry.Attrs.Template {
+		if tmplCtx == nil {
+			return nil, fmt.Errorf("%s is #tmpl but there is no template context to render it with", entry.SourcePath)
+		}
+		if content, err = template.Render(content, tmplCtx); err != nil {
+			return nil, fmt.Errorf("rendering %s: %w", entry.SourcePath, err)
 		}
 	}
-
-	return state.HashBytes(content), nil
+	return content, nil
 }

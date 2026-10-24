@@ -6,46 +6,6 @@ import (
 	"testing"
 )
 
-func TestIsBinaryFile(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	textFile := filepath.Join(tmpDir, "text.txt")
-	if err := os.WriteFile(textFile, []byte("hello world\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	binaryFile := filepath.Join(tmpDir, "binary.bin")
-	if err := os.WriteFile(binaryFile, []byte{0x00, 0x01, 0x02, 0x03}, 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if IsBinaryFile(textFile) {
-		t.Error("text file detected as binary")
-	}
-
-	if !IsBinaryFile(binaryFile) {
-		t.Error("binary file not detected as binary")
-	}
-}
-
-func TestGenerateDiff(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	srcFile := filepath.Join(tmpDir, "source.txt")
-	if err := os.WriteFile(srcFile, []byte("line1\nline2\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	diff, err := GenerateDiff(srcFile, filepath.Join(tmpDir, "nonexistent.txt"))
-	if err != nil {
-		t.Fatalf("GenerateDiff failed: %v", err)
-	}
-
-	if diff == "" {
-		t.Error("expected diff output for new file")
-	}
-}
-
 func TestNeedsSudo(t *testing.T) {
 	home, _ := os.UserHomeDir()
 

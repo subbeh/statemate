@@ -21,6 +21,9 @@ import (
 )
 
 type Applier struct {
+	// DiffTool is the external tool a conflict's [d]iff runs, empty for diff -u.
+	DiffTool string
+
 	db      *state.DB
 	tmplCtx *template.Context
 	enc     *encrypt.AgeEncryptor
@@ -301,34 +304,9 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 		mode = os.FileMode(entry.Attrs.Perm)
 	}
 
-	var content []byte
-	var err error
-
-	if entry.Generated {
-		content = []byte(entry.GeneratedContent)
-	} else {
-		content, err = os.ReadFile(entry.SourcePath)
-		if err != nil {
-			return err
-		}
-
-		if entry.Attrs.Encrypted {
-			// Never fall through to writing the ciphertext as the target.
-			if a.enc == nil {
-				return errNoIdentity(entry)
-			}
-			content, err = a.enc.Decrypt(content)
-			if err != nil {
-				return fmt.Errorf("decrypting: %w", err)
-			}
-		}
-
-		if entry.Attrs.Template && a.tmplCtx != nil {
-			content, err = template.Render(content, a.tmplCtx)
-			if err != nil {
-				return fmt.Errorf("rendering template: %w", err)
-			}
-		}
+	content, err := render(entry, a.tmplCtx, a.enc)
+	if err != nil {
+		return err
 	}
 
 	// Remove existing symlink if target should be a regular file
@@ -457,56 +435,20 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 		case "a":
 			return "abort", nil
 		case "d":
-			if err := a.showConflictDiff(change.Entry); err != nil {
+			diff, err := Diff(change, a.tmplCtx, a.enc, a.DiffTool)
+			switch {
+			case err != nil:
 				fmt.Printf("Error showing diff: %v\n", err)
+			case diff == "":
+				fmt.Println("  (no differences)")
+			default:
+				fmt.Println(diff)
 			}
 			fmt.Print(prompt)
 		default:
 			fmt.Print("\n" + prompt)
 		}
 	}
-}
-
-func (a *Applier) showConflictDiff(entry *source.Entry) error {
-	if entry.Attrs.Encrypted || entry.Attrs.Template {
-		content, err := os.ReadFile(entry.SourcePath)
-		if err != nil {
-			return err
-		}
-
-		if entry.Attrs.Encrypted {
-			if a.enc == nil || !a.enc.CanDecrypt() {
-				return fmt.Errorf("cannot show diff: file is encrypted and no decryption key available")
-			}
-			content, err = a.enc.Decrypt(content)
-			if err != nil {
-				return fmt.Errorf("decrypting source: %w", err)
-			}
-		}
-
-		if entry.Attrs.Template && a.tmplCtx != nil {
-			content, err = template.Render(content, a.tmplCtx)
-			if err != nil {
-				return fmt.Errorf("rendering template: %w", err)
-			}
-		}
-
-		tmpFile, err := os.CreateTemp("", "mate-diff-*")
-		if err != nil {
-			return err
-		}
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
-
-		if _, err := tmpFile.Write(content); err != nil {
-			_ = tmpFile.Close()
-			return err
-		}
-		_ = tmpFile.Close()
-
-		return showDiff(tmpFile.Name(), entry.TargetPath)
-	}
-
-	return showDiff(entry.SourcePath, entry.TargetPath)
 }
 
 func (a *Applier) importFile(entry *source.Entry) error {

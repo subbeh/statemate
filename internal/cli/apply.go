@@ -225,6 +225,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	}
 
 	applier := target.NewApplier(db, tmplCtx, enc, dryRun, force, list)
+	applier.DiffTool = cfg.DiffTool
 	result, err := applier.Apply(tree)
 	if err != nil {
 		return err

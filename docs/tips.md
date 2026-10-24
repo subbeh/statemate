@@ -165,7 +165,10 @@ exec delta --side-by-side --width="${cols:-160}" "$1" "$2"
 diff_tool: mate-diff
 ```
 
-`mate diff --tool <name>` overrides the setting for one run.
+The two files are temporary copies named after the target (`mate-123-config.toml`),
+so a tool that picks a syntax from the extension still can. The `[d]iff` answer to
+a conflict during `mate apply` uses the tool too, and `mate diff --tool <name>`
+overrides the setting for one run.
 
 ## Status in your status bar
 
