@@ -10,6 +10,7 @@ import (
 	"filippo.io/age"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 )
@@ -428,10 +429,11 @@ func TestAddDirectoryWithTargetMappingAndAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanner, err := newScanner(cfg, "")
+	env, err := plan.FromConfig(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	scanner := env.Scanner
 	tree, err := scanner.Scan([]string{sourceDir})
 	if err != nil {
 		t.Fatal(err)

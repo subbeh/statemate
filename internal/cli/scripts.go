@@ -350,10 +350,11 @@ func runScript(cmd *cobra.Command, args []string) error {
 	// secrets and encrypted var_files resolve here too.
 	var tmplCtx *template.Context
 	if script.Template {
-		tmplCtx, err = newTemplateContext(cfg, profileName)
+		env, err := plan.FromConfig(cfg, profileName)
 		if err != nil {
-			return fmt.Errorf("creating template context: %w", err)
+			return err
 		}
+		tmplCtx = env.TmplCtx
 	}
 
 	executor := scripts.NewExecutor(db, tmplCtx, dryRun)

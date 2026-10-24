@@ -155,7 +155,7 @@ func runRename(cmd *cobra.Command, args []string) error {
 		{Path: entry.TargetPath, SourceDir: srcDir},
 		{Path: newTargetPath, SourceDir: srcDir},
 	}
-	return runRemovalHooks(cfg, env.Profile, env.SourcePaths, env.Scanner, db, changes, false)
+	return runRemovalHooks(env, db, changes, false)
 }
 
 // renamedNames works out the new source and target file names for renaming the

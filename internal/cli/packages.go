@@ -95,10 +95,11 @@ func runPackagesStatus(cmd *cobra.Command, args []string) error {
 		profileName = profile.Detect(cfg)
 	}
 
-	tmplCtx, err := newTemplateContext(cfg, profileName)
+	env, err := plan.FromConfig(cfg, profileName)
 	if err != nil {
-		return fmt.Errorf("creating template context: %w", err)
+		return err
 	}
+	tmplCtx := env.TmplCtx
 
 	sources := profile.ResolveSources(cfg, profileName)
 	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),
@@ -202,10 +203,11 @@ func runPackagesApply(cmd *cobra.Command, args []string) error {
 		profileName = profile.Detect(cfg)
 	}
 
-	tmplCtx, err := newTemplateContext(cfg, profileName)
+	env, err := plan.FromConfig(cfg, profileName)
 	if err != nil {
-		return fmt.Errorf("creating template context: %w", err)
+		return err
 	}
+	tmplCtx := env.TmplCtx
 
 	sources := profile.ResolveSources(cfg, profileName)
 	results, err := packages.ComputeSync(cfg, profileName, cfg.ResolveSourcePaths(sources),

@@ -49,7 +49,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, profileName, sourcePaths, scanner := env.Config, env.Profile, env.SourcePaths, env.Scanner
+	cfg := env.Config
 
 	entry, err := env.Resolve(args[0])
 	if err != nil {
@@ -99,5 +99,5 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	if deleteKeepTarget {
 		return nil
 	}
-	return runRemovalHooks(cfg, profileName, sourcePaths, scanner, db, hookChanges([]*source.Entry{entry}, sourcePaths), deleteForce)
+	return runRemovalHooks(env, db, hookChanges([]*source.Entry{entry}, env.SourcePaths), deleteForce)
 }

@@ -255,4 +255,3 @@ func resolveSymlinks(path string) string {
 	}
 	return path
 }
-

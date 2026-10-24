@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/template"
@@ -100,10 +101,11 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("file not found: %s", targetPath)
 	}
 
-	scanner, err := newScanner(cfg, profileName)
+	env, err := plan.FromConfig(cfg, profileName)
 	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
+		return err
 	}
+	scanner := env.Scanner
 	tree, err := scanner.Scan(absSources)
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)

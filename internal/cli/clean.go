@@ -47,7 +47,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	cfg, profileName, sourcePaths, scanner := env.Config, env.Profile, env.SourcePaths, env.Scanner
+	sourcePaths := env.SourcePaths
 
 	p, err := env.Plan()
 	if err != nil {
@@ -140,5 +140,5 @@ func runClean(cmd *cobra.Command, args []string) error {
 		removed = append(removed, change)
 	}
 
-	return runRemovalHooks(cfg, profileName, sourcePaths, scanner, db, removed, force)
+	return runRemovalHooks(env, db, removed, force)
 }

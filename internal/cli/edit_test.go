@@ -133,4 +133,3 @@ func TestResolveEditPath_MissingFileErrors(t *testing.T) {
 		t.Error("expected error for nonexistent file under source_dir")
 	}
 }
-

@@ -17,10 +17,10 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/hooks"
 	"github.com/subbeh/statemate/internal/plan"
-	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/template"
 )
 
 var hooksCmd = &cobra.Command{
@@ -88,6 +88,7 @@ type hookEnv struct {
 	sourcePaths  []string
 	set          hooks.Set
 	files        []*source.Entry
+	tmplCtx      *template.Context
 }
 
 func loadHookEnv(cmd *cobra.Command) (*hookEnv, error) {
@@ -119,6 +120,7 @@ func loadHookEnv(cmd *cobra.Command) (*hookEnv, error) {
 		sourcePaths:  sourcePaths,
 		set:          set,
 		files:        p.Tree.Files(),
+		tmplCtx:      env.TmplCtx,
 	}, nil
 }
 
@@ -207,11 +209,7 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	tmplCtx, err := newTemplateContext(env.cfg, env.profileName)
-	if err != nil {
-		return fmt.Errorf("creating template context: %w", err)
-	}
-
+	tmplCtx := env.tmplCtx
 	executor := scripts.NewExecutor(db, tmplCtx, dryRun).WithConfirmation(true, false)
 	runner := hooks.NewRunner(executor, tmplCtx, hooks.Options{
 		DryRun:       dryRun,
@@ -303,26 +301,22 @@ func runTriggeredHooks(runner *hooks.Runner, triggered []*hooks.Triggered, db *s
 // runRemovalHooks runs the hooks triggered by files that clean, delete, or
 // rename changed on disk. Those commands have no --no-scripts, so --force alone
 // decides whether hooks are confirmed.
-func runRemovalHooks(cfg *config.Config, profileName string, sourcePaths []string, scanner *source.Scanner, db *state.DB, changes []hooks.Change, force bool) error {
+func runRemovalHooks(env *plan.Env, db *state.DB, changes []hooks.Change, force bool) error {
 	if len(changes) == 0 {
 		return nil
 	}
+	cfg, sourcePaths := env.Config, env.SourcePaths
 
 	all, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover()
 	if err != nil {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
-	set, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, all)
+	set, err := hooks.Collect(cfg, sourcePaths, env.Scanner.DirConfig, all)
 	if err != nil {
 		return fmt.Errorf("invalid hooks: %w", err)
 	}
 
-	tmplCtx, err := newTemplateContext(cfg, profileName)
-	if err != nil {
-		return fmt.Errorf("creating template context: %w", err)
-	}
-
-	chain := profile.InheritanceChain(cfg, profileName)
+	tmplCtx, chain := env.TmplCtx, env.Chain
 	executor := scripts.NewExecutor(db, tmplCtx, false).WithConfirmation(force, false)
 	runner := hooks.NewRunner(executor, tmplCtx, hooks.Options{Force: force, ProfileChain: chain})
 
