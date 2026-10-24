@@ -1,10 +1,11 @@
-# mate packages status
+# mate packages list
 
-Show package sync status
+List packages and whether they are installed
 
 ## Synopsis
 
-Show package sync status across configured package managers.
+List declared packages across configured package managers, and whether each
+is installed. Each manager's packages are sorted by name.
 
 Packages can be defined in:
 
@@ -27,7 +28,7 @@ that only exists on another platform; an empty description means the package
 exists but publishes none.
 
 ```
-mate packages status [flags]
+mate packages list [flags]
 ```
 
 ## Options
@@ -35,7 +36,7 @@ mate packages status [flags]
 ```
       --all            also show extra packages not in config
   -d, --descriptions   show package descriptions
-  -h, --help           help for status
+  -h, --help           help for list
 ```
 
 ## Options inherited from parent commands

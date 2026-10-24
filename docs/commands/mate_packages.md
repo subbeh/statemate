@@ -27,5 +27,5 @@ Declarative package management across package managers
 
 * [mate](mate.md)	 - Statemate - system configuration management
 * [mate packages apply](mate_packages_apply.md)	 - Install missing packages
-* [mate packages status](mate_packages_status.md)	 - Show package sync status
+* [mate packages list](mate_packages_list.md)	 - List packages and whether they are installed
 

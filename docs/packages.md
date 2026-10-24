@@ -103,7 +103,7 @@ packages:
   common: [neovim]
 ```
 
-`mate packages status` shows where each package was declared, which is the
+`mate packages list` shows where each package was declared, which is the
 quickest way to find out why something is on the list: `config` for `mate.yaml`
 and its includes, `profile:<name>` for a profile, or the source's name.
 
@@ -123,9 +123,9 @@ packages:
 ## Commands
 
 ```bash
-mate packages status           # every declared package: ✓ installed, + missing
-mate packages status --all     # also list installed packages not in config
-mate packages status -d        # include package descriptions
+mate packages list             # every declared package: ✓ installed, + missing
+mate packages list --all       # also list installed packages not in config
+mate packages list -d          # include package descriptions
 mate packages apply            # install what is missing
 mate packages apply --prune    # also remove packages not in config
 mate packages apply -y         # without the confirmation prompt (or --noconfirm)
@@ -160,7 +160,7 @@ fail the whole batch.
 
 ### `--all` and extras
 
-Without `--all`, `mate packages status` reports only what is *missing*. Listing
+Without `--all`, `mate packages list` reports only what is *missing*. Listing
 extras — installed packages that no source declares — means asking the manager for
 every explicitly-installed package, which takes about a second with `brew`. That
 cost is only paid when you ask for it:
@@ -171,9 +171,9 @@ Use --all to also show packages not in config.
 
 For the same reason `mate status` and `mate apply` never compute extras.
 
-### `-v` and `<unknown>`
+### `-d` and `<unknown>`
 
-`-v` adds a DESCRIPTION column. Two kinds of empty look different on purpose:
+`-d` adds a DESCRIPTION column. Two kinds of empty look different on purpose:
 
 ```
  ✓  font-hack-nerd-font    brew   macos
@@ -201,7 +201,7 @@ publishes contain no aliases — declaring the canonical name avoids the ambigui
 
 `--prune` uninstalls anything not declared in your configuration. Since "not
 declared" includes packages you installed deliberately but never wrote down, review
-`mate packages status --all` first.
+`mate packages list --all` first.
 
 ## What counts as installed
 

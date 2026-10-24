@@ -24,10 +24,11 @@ var packagesCmd = &cobra.Command{
 	Long:  "Declarative package management across package managers",
 }
 
-var packagesStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show package sync status",
-	Long: `Show package sync status across configured package managers.
+var packagesListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List packages and whether they are installed",
+	Long: `List declared packages across configured package managers, and whether each
+is installed. Each manager's packages are sorted by name.
 
 Packages can be defined in:
   - mate.yaml packages (global packages)
@@ -47,7 +48,7 @@ Use --descriptions to show package descriptions. A description of <unknown> mean
 package manager does not recognise the name at all, usually a typo or a package
 that only exists on another platform; an empty description means the package
 exists but publishes none.`,
-	RunE: runPackagesStatus,
+	RunE: runPackagesList,
 }
 
 var packagesApplyCmd = &cobra.Command{
@@ -72,17 +73,17 @@ var (
 
 func init() {
 	rootCmd.AddCommand(packagesCmd)
-	packagesCmd.AddCommand(packagesStatusCmd)
+	packagesCmd.AddCommand(packagesListCmd)
 	packagesCmd.AddCommand(packagesApplyCmd)
 
-	packagesStatusCmd.Flags().BoolVar(&packagesShowAll, "all", false, "also show extra packages not in config")
-	packagesStatusCmd.Flags().BoolVarP(&packagesDescriptions, "descriptions", "d", false, "show package descriptions")
+	packagesListCmd.Flags().BoolVar(&packagesShowAll, "all", false, "also show extra packages not in config")
+	packagesListCmd.Flags().BoolVarP(&packagesDescriptions, "descriptions", "d", false, "show package descriptions")
 	packagesApplyCmd.Flags().BoolVarP(&packagesAutoConfirm, "yes", "y", false, "auto-confirm all changes")
 	packagesApplyCmd.Flags().BoolVar(&packagesAutoConfirm, "noconfirm", false, "same as --yes")
 	packagesApplyCmd.Flags().BoolVar(&packagesPrune, "prune", false, "remove packages not in config (dangerous)")
 }
 
-func runPackagesStatus(cmd *cobra.Command, args []string) error {
+func runPackagesList(cmd *cobra.Command, args []string) error {
 	cfgPath, _ := cmd.Flags().GetString("config")
 
 	cfg, err := config.Load(cfgPath)

@@ -45,7 +45,7 @@ Why this works:
 - **Profiles pick whole tools.** A profile adds the sources that only make sense
   on some machines (`hyprland` on Linux, `aerospace` on macOS), with no per-file
   bookkeeping. See [Different Machines](machines.md).
-- **`mate packages status` explains itself.** Each package is listed with the
+- **`mate packages list` explains itself.** Each package is listed with the
   source that declared it.
 - **Scripts run when their tool changes.** An [`#onchange`](scripts.md#onchange)
   script fires when anything in *its* source changes, so a per-tool source gives
