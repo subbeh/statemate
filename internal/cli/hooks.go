@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
@@ -150,7 +149,6 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 			h.Scope(),
 			strings.Join(h.Match, ", "),
 			h.Profile,
-			strconv.Itoa(len(h.Do)),
 			status,
 			h.Description,
 		})
@@ -158,7 +156,7 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 
 	// Same layout rules as 'mate scripts list': the description is trimmed to
 	// the terminal and printed in full when piped.
-	headers := []string{"NAME", "SCOPE", "MATCH", "PROFILE", "STEPS", "STATUS", "DESCRIPTION"}
+	headers := []string{"NAME", "SCOPE", "MATCH", "PROFILE", "STATUS", "DESCRIPTION"}
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
 			truncateDescriptions(data, descriptionBudget(data, headers, w))
@@ -170,7 +168,7 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 		tablewriter.WithRowAutoWrap(tw.WrapTruncate),
 		tablewriter.WithAlignment(tw.Alignment{
 			tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
-			tw.AlignRight, tw.AlignLeft, tw.AlignLeft,
+			tw.AlignLeft, tw.AlignLeft,
 		}),
 		tablewriter.WithRendition(tw.Rendition{
 			Borders: tw.BorderNone,
