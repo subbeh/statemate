@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-25
+
 ### Added
 - `mate add -s <name>` offers to create the source when its directory does not exist yet, then adds the file to it. The config is not changed: mate warns that the new source must still be listed under `sources:` before it is deployed
 - `mate unmanaged [dir]` lists the files under the current directory, or the given one, that no source deploys for any profile. Only files are listed, not directories, and paths are relative to the current directory so they can be passed to `mate add`
