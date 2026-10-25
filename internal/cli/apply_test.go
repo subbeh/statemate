@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/packages"
+	"github.com/subbeh/statemate/internal/plan"
 )
 
 // hookRepo is a throwaway repository for running mate apply end to end. Every
@@ -158,7 +159,7 @@ func TestApply_HookPatternsIgnoreSourceAttributes(t *testing.T) {
 	r := newHookRepo(t, `sources: [app]
 hooks:
   attributed:
-    match: ".config#perm-r:700/app/*.conf#template#perm:600"
+    match: ".config#perm-r:700/app/*.conf#tmpl#perm:600"
     do:
       - run: printf '%s' "$STATEMATE_HOOK_FILES" > "$MARKS/attributed"
 `)
@@ -168,10 +169,10 @@ hooks:
 		t.Fatal(err)
 	}
 	plainFile := filepath.Join(attrDir, "app", "app.conf")
-	if err := os.Rename(plainFile, plainFile+"#template#perm:600"); err != nil {
+	if err := os.Rename(plainFile, plainFile+"#tmpl#perm:600"); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, plainFile+"#template#perm:600", `{{ "rendered" }}`, 0644)
+	writeFile(t, plainFile+"#tmpl#perm:600", `{{ "rendered" }}`, 0644)
 
 	if err := r.apply(t, nil, ""); err != nil {
 		t.Fatalf("apply failed: %v", err)
@@ -280,7 +281,7 @@ func TestInstallMissingPackages_WarnsWithoutTerminal(t *testing.T) {
 		{Manager: "pacman", Statuses: missing("neovim")},
 	}
 
-	runErr := installMissingPackages(results, &config.Config{}, false, false, Scope{})
+	runErr := installMissingPackages(results, &config.Config{}, false, false, plan.Scope{})
 
 	_ = stdoutW.Close()
 	_ = stderrW.Close()

@@ -71,8 +71,8 @@ autocommand plugin solves each of them. The complete version is
 
 ### Filetype detection for source files
 
-Neovim reads `settings.json#profile:work#encrypted` as a file with the extension
-`json#profile:work#encrypted`, so highlighting and LSP stop working. Strip the
+Neovim reads `settings.json#profile:work#enc` as a file with the extension
+`json#profile:work#enc`, so highlighting and LSP stop working. Strip the
 attributes and detect again:
 
 ```lua
@@ -99,7 +99,7 @@ autocommand can ask which one you meant:
 
 ```
 statemate: managed file, edit which?
-1: source: config#encrypted
+1: source: config#enc
 2: target: ~/.ssh/config
 ```
 
@@ -107,9 +107,9 @@ The plugin runs `mate managed` on the opened path and switches the buffer to the
 source if you pick it. It skips files whose `ACTIVE` column is empty, since their
 source belongs to a profile that is not in use.
 
-### Edit `#encrypted` files in place
+### Edit `#enc` files in place
 
-`BufReadCmd` and `BufWriteCmd` autocommands on `*#encrypted*` can decrypt with
+`BufReadCmd` and `BufWriteCmd` autocommands on `*#enc*` can decrypt with
 `age --decrypt --identity <key>` on read and re-encrypt with
 `age --armor --recipient <key>…` on write, reading the recipients from
 `mate.yaml`. Disable the swap file, undo file, and backups for those buffers so
@@ -128,7 +128,7 @@ encrypted on disk and in the repository:
 
 ```gitattributes
 # .gitattributes in the repository
-*#encrypted* diff=age
+*#enc* diff=age
 ```
 
 ```ini
@@ -137,8 +137,8 @@ encrypted on disk and in the repository:
     textconv = age --decrypt --identity ~/.config/statemate/key.txt
 ```
 
-The pattern ends in `*` because `#encrypted` need not be the last attribute
-(`settings.json#encrypted#import`). Tools that use git's diff machinery, such as
+The pattern ends in `*` because `#enc` need not be the last attribute
+(`settings.json#enc#import`). Tools that use git's diff machinery, such as
 lazygit and tig, pick this up too.
 
 ## Diffs with an external tool
@@ -165,7 +165,10 @@ exec delta --side-by-side --width="${cols:-160}" "$1" "$2"
 diff_tool: mate-diff
 ```
 
-`mate diff --tool <name>` overrides the setting for one run.
+The two files are temporary copies named after the target (`mate-123-config.toml`),
+so a tool that picks a syntax from the extension still can. The `[d]iff` answer to
+a conflict during `mate apply` uses the tool too, and `mate diff --tool <name>`
+overrides the setting for one run.
 
 ## Status in your status bar
 
@@ -217,7 +220,7 @@ And a key binding that runs `mate apply` in a popup, after confirming:
 
 ```tmux
 bind . confirm-before -p "Run mate apply?" \
-  "display-popup -E 'mate apply --verbose; read -n 1 -s -r -p \"Press any key\"'"
+  "display-popup -E 'mate apply --list; read -n 1 -s -r -p \"Press any key\"'"
 ```
 
 The full versions are
@@ -273,7 +276,7 @@ include:
 ```
 
 ```gotemplate
-# kitty/.config/kitty/theme.conf#template
+# kitty/.config/kitty/theme.conf#tmpl
 background #{{ .Vars.color.bg.default }}
 foreground #{{ .Vars.color.fg.default }}
 ```

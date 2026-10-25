@@ -48,6 +48,7 @@ hooks:
 | `profile` | string | Only active under this profile, or one inheriting from it |
 | `description` | string | Shown in the prompt, `mate hooks list`, and `mate status` |
 | `enabled` | bool | Default `true`. `false` switches the hook off |
+| `confirm` | bool | Default `true`. `false` runs the hook without asking — see [Confirmation](#confirmation) |
 
 In TOML the same structure is `[hooks.keyd]` with `[[hooks.keyd.do]]` steps.
 
@@ -56,7 +57,7 @@ In TOML the same structure is `[hooks.keyd]` with `[[hooks.keyd.do]]` steps.
 | File | Matches |
 |------|---------|
 | `mate.yaml` | Files from every source |
-| Local config (`~/.config/statemate/mate.yaml`) | Files from every source |
+| Local config (`~/.config/statemate/config.yaml`) | Files from every source |
 | A source's `.mate.yaml` | Only that source's files, and only while the source is active |
 
 Hooks from `mate.yaml` and the local config share one namespace. A local hook
@@ -64,7 +65,7 @@ with the same name **replaces** the repository one entirely; fields are not
 merged. To switch a repository hook off on one machine:
 
 ```yaml
-# ~/.config/statemate/mate.yaml
+# ~/.config/statemate/config.yaml
 hooks:
   systemd-reload: { enabled: false }
 ```
@@ -91,14 +92,14 @@ Patterns match the **target** path, meaning where the file is deployed:
   limits it to files inside the directory.
 - There is no `!` negation, unlike [`ignore`](configuration.md#ignore). A hook
   that should skip some files needs narrower patterns.
-- Attributes such as `#template` are not part of the target path, so a pattern
+- Attributes such as `#tmpl` are not part of the target path, so a pattern
   never needs them. Recognized source attributes in a pattern are ignored, on
   file and directory components alike:
-  `.config#perm-r:700/tmux/*.conf#template` matches the same files as
+  `.config#perm-r:700/tmux/*.conf#tmpl` matches the same files as
   `.config/tmux/*.conf`. Attributes do not filter matches by profile or file
   type.
-- Unknown `#` suffixes stay literal. To match a literal `#template` in a target
-  path, write `[#]template` or `\#template`. In YAML, a pattern containing a
+- Unknown `#` suffixes stay literal. To match a literal `#tmpl` in a target
+  path, write `[#]template` or `\#tmpl`. In YAML, a pattern containing a
   backslash must be in single quotes.
 - `target_base` and `targets:` mappings make no difference: a unit deployed to
   `/etc/systemd/system` matches both `*.service` and
@@ -208,6 +209,8 @@ Run hook keyd (2 files)?
   written.
 - `--force` confirms without asking. `--no-scripts` skips hooks too.
 - Without a terminal, hooks are skipped with a warning.
+- A hook with `confirm: false` runs without asking, even without a terminal.
+  `mate hooks list` shows it as `noconfirm`. `--no-scripts` still skips it.
 
 ## Pending hooks
 
@@ -253,9 +256,9 @@ which usually means a typo.
 
 | Command | Purpose |
 |---------|---------|
-| `mate hooks list` | Every hook: NAME, SCOPE, MATCH, PROFILE, STEPS, STATUS, DESCRIPTION |
+| `mate hooks list` | Every hook: NAME, SCOPE, MATCH, PROFILE, STATUS, DESCRIPTION |
 | `mate hooks run <name>` | Run a hook now, without a prompt. `--dry-run` shows the steps instead |
-| `mate apply --dry-run` | Lists the hooks that would run; `-V` adds the files and steps |
+| `mate apply --dry-run` | Lists the hooks that would run; `-l` adds the files and steps |
 | `mate status` | Lists the hooks that pending changes would trigger |
 
 In `mate hooks list`, SCOPE is `repo`, `local`, or the source name. STATUS is
@@ -266,7 +269,9 @@ active.
 ## Hooks or `#onchange` scripts
 
 An [`onchange`](scripts.md#onchange) script runs when anything in its source
-changes and needs a file of its own. Use a hook when the follow-up depends on
-*which* files changed, or when it is a single command. Use an `onchange` script
-for longer logic tied to a whole source, or call that script from a hook with
+changes, or what its [`# Onchange:`](scripts.md#choosing-the-triggers) comment
+names, and needs a file of its own. Use a hook when the follow-up needs the
+changed files (`.Files`), runs after `mate clean` or `mate delete`, or is a single
+command. Use an `onchange` script for longer logic, for one that should also run
+when the script itself is edited, or call that script from a hook with
 `script:`.

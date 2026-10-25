@@ -12,11 +12,10 @@ import (
 	"golang.org/x/term"
 
 	"github.com/subbeh/statemate/internal/config"
-	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/state"
-	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 )
 
@@ -66,7 +65,6 @@ func init() {
 	scriptsCmd.AddCommand(scriptsRunCmd)
 
 	scriptsRunCmd.Flags().Bool("dry-run", false, "show what would be done without running")
-	scriptsRunCmd.Flags().BoolP("verbose", "v", false, "verbose output")
 }
 
 func runScriptsList(cmd *cobra.Command, args []string) error {
@@ -96,7 +94,7 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	db, err := openState(cfg)
+	db, err := plan.OpenState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
@@ -108,19 +106,12 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 	// here too -- otherwise this listing would disagree with what apply will run.
 	// Failures are non-fatal: the listing degrades to "no source changes".
 	var changed scripts.ChangedSources
-	if scanner, err := newScanner(cfg, profileName); err == nil {
-		if tree, err := scanner.Scan(sourcePaths); err == nil {
-			if profileName != "" {
-				tree = tree.FilterByProfile(profileChain)
-			}
-			// #encrypted files cannot be compared without the identity.
-			var enc *encrypt.AgeEncryptor
-			if cfg.Age != nil {
-				enc, _ = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-			}
-			if res, err := target.ComputeChanges(tree, db, target.ComputeOpts{Enc: enc}); err == nil {
+	if env, err := plan.FromConfig(cfg, profileName); err == nil {
+		if p, err := env.Plan(); err == nil {
+			if res, err := p.Changes(false); err == nil {
 				changed = changedSources(res.Changes)
 			}
+			_ = p.Close()
 		}
 	}
 
@@ -166,6 +157,9 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		}
 		if script.Template {
 			name += " [T]"
+		}
+		if script.NoConfirm {
+			name += " [noconfirm]"
 		}
 
 		source := ""
@@ -292,7 +286,6 @@ func matchesChain(target string, chain []string) bool {
 func runScript(cmd *cobra.Command, args []string) error {
 	cfgPath, _ := cmd.Flags().GetString("config")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
-	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
@@ -347,7 +340,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("script not found: %s", scriptArg)
 	}
 
-	db, err := openState(cfg)
+	db, err := plan.OpenState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
@@ -357,13 +350,14 @@ func runScript(cmd *cobra.Command, args []string) error {
 	// secrets and encrypted var_files resolve here too.
 	var tmplCtx *template.Context
 	if script.Template {
-		tmplCtx, err = newTemplateContext(cfg, profileName)
+		env, err := plan.FromConfig(cfg, profileName)
 		if err != nil {
-			return fmt.Errorf("creating template context: %w", err)
+			return err
 		}
+		tmplCtx = env.TmplCtx
 	}
 
-	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose)
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun)
 	if err := executor.ExecuteOne(script); err != nil {
 		return fmt.Errorf("running script: %w", err)
 	}

@@ -1,7 +1,7 @@
 # Statemate
 
-Declarative system configuration management. Manage dotfiles, configs, and packages
-across machines.
+Declarative system configuration management. Manage dotfiles, configs, packages, and 
+maintenance tasks across machines.
 
 ## Features
 
@@ -58,10 +58,10 @@ A source directory is deployed relative to your home directory:
 Behavior is controlled by `#` suffixes on filenames, stripped from the target:
 
 ```
-.ssh/config#encrypted#perm:600         encrypted in the repo, mode 0600 deployed
-.gitconfig#template                    rendered as a Go template
-.gitconfig#profile:work                only on machines matching the work profile
-.claude/settings.json#import           app owns it; changes flow back to the repo
+.ssh/config#enc#perm:600         encrypted in the repo, mode 0600 deployed
+.gitconfig#tmpl                  rendered as a Go template
+.gitconfig#profile:work          only on machines matching the work profile
+.claude/settings.json#import     app owns it; changes flow back to the repo
 ```
 
 ## Documentation
@@ -73,6 +73,7 @@ built from [`docs/`](docs/README.md):
 |-------|----------|
 | [Getting Started](docs/getting-started.md) | Install, create a repository, add your first file |
 | [Concepts](docs/concepts.md) | Sources, targets, state, and how a change is detected |
+| [Comparison](docs/comparison.md) | statemate next to chezmoi, yadm, GNU Stow, and dotbot |
 | [How-to guides](docs/README.md#how-to-guides) | Repository layout, multiple machines, encryption, system files, new machines, tips |
 | [Configuration](docs/configuration.md) | `mate.yaml`, `.mate.yaml`, profiles, local overrides |
 | [File Attributes](docs/attributes.md) | Every `#` suffix and what it does |
@@ -106,14 +107,15 @@ profiles:
     variables:
       email: "me@company.com"
     packages:
-      brew: [slack]
+      - slack
 
 age:
   identity: "~/.config/statemate/key.txt"
   recipients: ["age1..."]
 
 packages:
-  brew: [ripgrep, fd]
+  - fd
+  - ripgrep
 ```
 
 See [Configuration](docs/configuration.md) for every key.

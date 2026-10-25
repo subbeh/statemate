@@ -17,7 +17,7 @@ var catCmd = &cobra.Command{
 Works like cat, but an age-encrypted file is decrypted with the configured
 identity. The path is used as given: absolute, starting with ~, or relative to
 the current directory.`,
-	Example: `  mate cat ssh/.ssh/config#encrypted
+	Example: `  mate cat ssh/.ssh/config#enc
   mate cat ~/.config/app/config.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runCat,

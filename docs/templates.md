@@ -1,10 +1,10 @@
 # Templates
 
-A file marked [`#template`](attributes.md#template) (or `#tmpl`) is rendered with
+A file marked [`#tmpl`](attributes.md#tmpl) (or `#tmpl`) is rendered with
 Go's [`text/template`](https://pkg.go.dev/text/template) before being deployed.
 
 ```
-gitconfig#template
+gitconfig#tmpl
 ```
 
 ```gotemplate
@@ -21,15 +21,15 @@ gitconfig#template
 Preview the result without applying:
 
 ```bash
-mate eval git/gitconfig#template
-mate eval --profile work git/gitconfig#template
+mate eval git/gitconfig#tmpl
+mate eval --profile work git/gitconfig#tmpl
 ```
 
 Templates are also rendered in:
 
 - a source's [`.mate.yaml`](configuration.md#source-directory-config), including
   its `generate` content
-- scripts marked [`#template`](scripts.md#template)
+- scripts marked [`#tmpl`](scripts.md#tmpl)
 - hook [`run:`](hooks.md#run) commands, which also get `.Files`
 
 The repository's own `mate.yaml`, var files, and include files are **not**
@@ -59,8 +59,7 @@ values inside a block scalar, which need [`indent`](#statemates-own).
 1. [`variables`](configuration.md#keys), and variables from
    [`include`](configuration.md#include) files
 2. [`var_files`](configuration.md#var_files), in order
-3. [`variable_commands`](configuration.md#variable_commands)
-4. profile `variables`, parent first, so the active profile wins
+3. profile `variables`, parent first, so the active profile wins
 
 Each layer replaces top-level keys rather than merging into them: a profile that
 sets `color:` replaces the whole `color` map, not just the keys it names.
@@ -129,8 +128,9 @@ These take precedence over sprig where a name collides.
 {{ var "some-key-with-dashes" }}
 ```
 
-`cmd` returns an empty string if the command fails, so use `required` around it
-when the value matters.
+`cmd` fails rendering if the command exits non-zero, showing its stderr. Append
+`|| true` to the command to accept a failure and get its output, possibly empty.
+A variable can hold a `cmd` call too — see [variables](configuration.md#variables).
 
 `indent` is written for embedding a block inside structured output:
 
@@ -167,7 +167,7 @@ template file itself is untouched.
 ## Debugging
 
 `mate eval <file>` renders to stdout, which is the fastest way to find a mistake.
-It renders any file you give it, whether or not it is marked `#template`. A
+It renders any file you give it, whether or not it is marked `#tmpl`. A
 template that fails to parse reports the line:
 
 ```

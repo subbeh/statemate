@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/subbeh/statemate/internal/encrypt"
 )
 
@@ -41,8 +43,8 @@ type CachedValue struct {
 }
 
 type Cache struct {
-	FetchedAt time.Time                `json:"fetched_at"`
-	Items     map[string]*CachedValue  `json:"items"`
+	FetchedAt time.Time               `json:"fetched_at"`
+	Items     map[string]*CachedValue `json:"items"`
 }
 
 type Provider interface {
@@ -110,7 +112,7 @@ func (m *Manager) Fetch(items []FetchItem) (*FetchResult, error) {
 
 	if err := m.loadCache(); err != nil {
 		if errors.Is(err, errUnencryptedCache) {
-			fmt.Fprintf(os.Stderr, "Warning: replacing unencrypted secrets cache %s with an encrypted one\n", m.cachePath)
+			fmt.Fprintf(os.Stderr, "%s replacing unencrypted secrets cache %s with an encrypted one\n", color.YellowString("Warning:"), m.cachePath)
 		}
 		m.cache = &Cache{Items: make(map[string]*CachedValue)}
 	}
@@ -165,6 +167,7 @@ func (m *Manager) Fetch(items []FetchItem) (*FetchResult, error) {
 	}
 
 	result.Unchanged = result.Total - result.Changed
+	slog.Info("secrets fetched", "total", result.Total, "changed", result.Changed)
 	return result, nil
 }
 

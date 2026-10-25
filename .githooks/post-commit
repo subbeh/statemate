@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# Rebuilds dist/ after a commit, merge or checkout (post-merge and
+# post-checkout link here), so a `mate` symlinked to dist/mate-<os>-<arch>
+# always runs the checked-out code. Git ignores the exit status of these hooks,
+# so a failed build only warns.
+
+# post-checkout passes 0 as $3 for a file checkout, which moves no commit.
+[ "${3:-1}" = 0 ] && exit 0
+
+make -s build-all >/dev/null || echo "⚠ make build-all failed: dist/ is stale" >&2

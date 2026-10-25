@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 type SecretLookup func(item, typ, field string) (string, error)
@@ -84,14 +86,6 @@ func NewContext(cfg *config.Config, profileName string, opts ...ContextOption) (
 		}
 	}
 
-	for name, cmd := range cfg.VarCmds {
-		val, err := runCommand(cmd)
-		if err != nil {
-			return nil, err
-		}
-		ctx.Vars[name] = strings.TrimSpace(val)
-	}
-
 	if profileName != "" {
 		resolved := profile.Resolve(cfg, profileName)
 		if resolved != nil {
@@ -100,6 +94,18 @@ func NewContext(cfg *config.Config, profileName string, opts ...ContextOption) (
 			}
 		}
 	}
+
+	// Variables may hold templates, such as '{{ cmd "..." }}'. They render against
+	// the unrendered variables, so one templated variable cannot use another.
+	vars := make(map[string]any, len(ctx.Vars))
+	for k, v := range ctx.Vars {
+		r, err := renderValue(v, ctx)
+		if err != nil {
+			return nil, fmt.Errorf("variable %s: %w", k, err)
+		}
+		vars[k] = r
+	}
+	ctx.Vars = vars
 
 	// A source's .mate.yaml must be rendered to read its include, and its template
 	// may use what that include provides, so this first render leaves those empty.
@@ -128,15 +134,13 @@ func (c *Context) loadVarFile(path string) error {
 
 	encrypted := false
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// Try the #encrypted variant
-		if _, err := os.Stat(path + "#encrypted"); err == nil {
-			path = path + "#encrypted"
-			encrypted = true
-		} else {
+		// Try the #enc variant
+		if path = util.EncryptedVariant(path); path == "" {
 			return nil
 		}
+		encrypted = true
 	} else if _, attrs := source.ParseAttrs(filepath.Base(path)); attrs.Encrypted {
-		// #encrypted may be any of the attributes, not only the last.
+		// #enc may be any of the attributes, not only the last.
 		encrypted = true
 	}
 
@@ -183,18 +187,48 @@ func parseVarFile(data []byte, path string) (map[string]any, error) {
 	return vars, nil
 }
 
-func runCommand(cmd string) (string, error) {
-	out, err := exec.Command("sh", "-c", cmd).Output()
-	if err != nil {
-		return "", err
+// renderValue renders the strings in a variable value, descending into lists and
+// maps, so a list item or nested key can be a template too.
+func renderValue(v any, ctx *Context) (any, error) {
+	switch v := v.(type) {
+	case string:
+		if !strings.Contains(v, "{{") {
+			return v, nil
+		}
+		out, err := Render([]byte(v), ctx)
+		return string(out), err
+	case []any:
+		list := make([]any, len(v))
+		for i, item := range v {
+			r, err := renderValue(item, ctx)
+			if err != nil {
+				return nil, err
+			}
+			list[i] = r
+		}
+		return list, nil
+	case map[string]any:
+		m := make(map[string]any, len(v))
+		for k, item := range v {
+			r, err := renderValue(item, ctx)
+			if err != nil {
+				return nil, err
+			}
+			m[k] = r
+		}
+		return m, nil
 	}
-	return string(out), nil
+	return v, nil
 }
 
-func (c *Context) Cmd(cmd string) string {
-	out, err := runCommand(cmd)
+func (c *Context) Cmd(cmd string) (string, error) {
+	out, err := util.Command("sh", "-c", cmd).Output()
 	if err != nil {
-		return ""
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			err = fmt.Errorf("%w: %s", err, strings.TrimSpace(string(exitErr.Stderr)))
+		}
+		return "", fmt.Errorf("cmd %q: %w", cmd, err)
 	}
-	return strings.TrimSpace(out)
+	return strings.TrimSpace(string(out)), nil
 }

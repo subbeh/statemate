@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -26,7 +25,7 @@ In a directory that already has a mate.yaml, mate.yml or mate.toml, such as a
 fresh clone on a new machine, it only registers the directory.
 
 Registering writes source_dir to the local config
-(~/.config/statemate/mate.yaml), so mate works from any directory. Other
+(~/.config/statemate/config.yaml), so mate works from any directory. Other
 settings in that file are kept.`,
 	RunE: runInit,
 }
@@ -58,7 +57,7 @@ target_base: "~"
 #     detection:
 #       hostname: "work-*"
 #     packages:
-#       brew: [slack]
+#       - slack
 #
 #   personal:
 #     detection:
@@ -77,9 +76,8 @@ target_base: "~"
 
 # Global packages (installed regardless of profile)
 # packages:
-#   brew:
-#     - ripgrep
-#     - fd
+#   - fd
+#   - ripgrep
 `
 
 const defaultConfigTOML = `# Statemate configuration
@@ -96,12 +94,14 @@ sources = []
 # Default target for deployed files (default: $HOME)
 target_base = "~"
 
+# Global packages (installed regardless of profile)
+# packages = ["fd", "ripgrep"]
+
 # Profiles for machine-specific configuration
 # [profiles.work]
+# packages = ["slack"]
 # [profiles.work.detection]
 # hostname = "work-*"
-# [profiles.work.packages]
-# brew = ["slack"]
 
 # [profiles.personal]
 # [profiles.personal.detection]
@@ -116,10 +116,6 @@ target_base = "~"
 # [variables]
 # email = "you@example.com"
 # editor = "nvim"
-
-# Global packages (installed regardless of profile)
-# [packages]
-# brew = ["ripgrep", "fd"]
 `
 
 const defaultReadme = `# Dotfiles
@@ -214,7 +210,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println("\nNext steps:")
+	fmt.Println("\n" + bold("Next steps:"))
 	fmt.Printf("  1. Create a source directory and list it in %s:\n", configPath)
 	fmt.Println("       mkdir zsh      and set      sources: [zsh]")
 	fmt.Println("  2. Add files: mate add ~/.zshrc")
@@ -280,12 +276,12 @@ func registerSourceDir(cwd string) error {
 }
 
 func initGitRepo() error {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	cmd := util.Command("git", "rev-parse", "--is-inside-work-tree")
 	if err := cmd.Run(); err == nil {
 		return nil
 	}
 
-	cmd = exec.Command("git", "init")
+	cmd = util.Command("git", "init")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("initializing git repository: %w", err)
 	}

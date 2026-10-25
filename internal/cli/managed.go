@@ -9,7 +9,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/util"
@@ -43,21 +42,11 @@ func init() {
 }
 
 func runManaged(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
+	cfg, profileName := env.Config, env.Profile
 
 	allSources := profile.AllSources(cfg)
 	allSourcePaths := cfg.ResolveSourcePaths(allSources)
@@ -74,11 +63,7 @@ func runManaged(cmd *cobra.Command, args []string) error {
 		activeSourceSet[s] = true
 	}
 
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
-	}
-	tree, err := scanner.Scan(allSourcePaths)
+	tree, err := env.Scanner.Scan(allSourcePaths)
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)
 	}
@@ -90,8 +75,7 @@ func runManaged(cmd *cobra.Command, args []string) error {
 
 	var data [][]string
 	for _, e := range tree.Files() {
-		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
-		srcPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
+		srcPath := filepath.Join(filepath.Base(e.SourceDir), e.RelPath)
 
 		if filterPath != "" && !matchesManagedFilter(e, srcPath, filterPath) {
 			continue
@@ -163,7 +147,7 @@ func matchesManagedFilter(e *source.Entry, srcPath, filter string) bool {
 // current directory; otherwise it stays a fragment so loose matching still works
 // from unrelated directories.
 func resolveFilterPath(filter string) (string, bool) {
-	abs, err := expandToAbs(filter)
+	abs, err := util.AbsPath(filter)
 	if err != nil {
 		return "", false
 	}
@@ -211,13 +195,13 @@ func formatAttrs(a source.Attrs) string {
 		parts = append(parts, "group:"+a.Group)
 	}
 	if a.Encrypted {
-		parts = append(parts, "encrypted")
+		parts = append(parts, "enc")
 	}
 	if a.Template {
-		parts = append(parts, "template")
+		parts = append(parts, "tmpl")
 	}
 	if a.Symlink {
-		parts = append(parts, "symlink")
+		parts = append(parts, "link")
 	}
 	if a.Import {
 		parts = append(parts, "import")

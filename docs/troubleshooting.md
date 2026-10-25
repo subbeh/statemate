@@ -9,7 +9,7 @@ mate doctor
 It loads and validates the configuration, checks that every source directory
 exists, that your age identity and recipients work, which package managers are
 available, that every active hook matches at least one file, and that every
-`#encrypted` file really is encrypted. It exits 1 if anything is an error.
+`#enc` file really is encrypted. It exits 1 if anything is an error.
 
 Other read-only commands that narrow a problem down:
 
@@ -18,8 +18,9 @@ Other read-only commands that narrow a problem down:
 | `mate profile` | Which profile is active, why, and which sources it uses |
 | `mate config source-dir` | Which repository `mate` is using |
 | `mate managed <path>` | Which source a deployed file comes from, and whether it is active |
+| `mate unmanaged [dir]` | Which files in a directory no source deploys |
 | `mate eval <file>` | What a template renders to |
-| `mate apply --dry-run -V` | Everything an apply would do, without doing it |
+| `mate apply --dry-run -l` | Everything an apply would do, without doing it |
 | `mate scripts list`, `mate hooks list` | Scripts and hooks, and why they would or would not run |
 
 ## Common errors
@@ -55,7 +56,8 @@ be missing.
 
 `mate add --source` names a source that is not in the active list. Under a
 profile, the active list is the top-level `sources` plus the profile's own. Use
-`-p <profile>` to add to a source only another profile uses.
+`-p <profile>` to add to a source only another profile uses. A source that
+`mate add` created for you shows this until you list it under `sources:`.
 
 ### `no files match "zsh"; did you mean --source zsh?`
 
@@ -82,16 +84,22 @@ filtered, so every variant is deployed and they collide.
 Profiles in the local config *replace* the repository's entirely, so a local
 `profiles:` block can cause this too.
 
-### `#import cannot be combined with #template`
+### `#import cannot be combined with #tmpl`
 
 Importing would write the rendered output over the template. Drop one of the two
 attributes; see [`#import`](attributes.md#import).
 
-### `… is #encrypted but no age identity is configured`
+### `… is #enc but no age identity is configured`
 
 The file can only be deployed after it is decrypted. Configure `age.identity` or
 `age.identity_command`, and check with `mate doctor`. See
 [Encryption](encryption.md).
+
+### `… is #enc, but the age identity failed to load: …`
+
+An identity is configured, but loading it failed: the key file is missing or
+unreadable, or `identity_command` exited non-zero or printed something that is
+not an age key. The reason follows the colon. `mate doctor` runs the same check.
 
 ### `… /.mate.yaml: parsing YAML: …`
 
@@ -157,14 +165,64 @@ There is one state database per user, shared by every repository. Files the
 other repository deployed have no source in this one, so they look orphaned.
 **Do not run `mate clean --all` there.**
 
-### A setting in `~/.config/statemate/mate.yaml` has no effect
+### A setting in `~/.config/statemate/config.yaml` has no effect
 
 The local config honours only some keys, and a file that fails to parse is
 ignored silently. See [Local config](configuration.md#local-config) for the list,
 and check the YAML.
 
+## Logging
+
+To watch what mate does as it runs, add `-v`: it prints a log record to stderr
+for each change (`-v`) or for each decision too (`-vv`):
+
+```bash
+mate apply -vv
+```
+
+To keep a record, write a log file:
+
+```bash
+mate apply --log-file /tmp/mate.log --log-level debug
+```
+
+The file is appended to, so it keeps earlier runs. The levels are:
+
+- `info` (the default): an audit log of what changed -- each target file
+  written (`wrote`), moved or removed, each change to the source tree (`source`,
+  with `action=add`, `edit`, `rename`, `encrypt`, `decrypt`, `import` or
+  `delete`), each `forget`, each secrets fetch, each script and hook that ran,
+  each package installed or uninstalled, and the error a run ended with. A
+  `--dry-run` changes nothing, so it records nothing. Each run's records follow
+  a `msg=run` line giving the version and arguments; a run that changed nothing
+  leaves no line at all.
+- `debug`: every run's `msg=run` line, and also every external command mate runs
+  (brew, pacman, sudo, bw, scripts, hooks, `cmd` templates) with its exit code
+  and duration, the config and profile mate resolved, the status of every file
+  (`new`, `modified`, `unchanged`, `conflict`, ...), the answer to each
+  conflict, whether each script was due, and each hook that was triggered
+
+`-v` and the log file are independent: `-vv` does not raise the file's level,
+and `--log-level debug` prints nothing to the terminal.
+
+To keep a log on one machine, set it in the local config:
+
+```yaml
+# ~/.config/statemate/config.yaml
+log_file: "~/.local/state/statemate/mate.log"
+log_level: debug
+```
+
+`--log-file` and `--log-level` win over `STATEMATE_LOG_FILE` and
+`STATEMATE_LOG_LEVEL`, which win over `log_file` and `log_level` in either
+config. A relative path is relative to the current directory. The log records
+commands' arguments, never their output or environment, and is created readable
+only by you; a hook command that a template filled with a secret still shows
+it.
+
 ## Reporting a bug
 
-Include the output of `mate version` and `mate doctor`, and the smallest
+Include the output of `mate version` and `mate doctor`, a `--log-level debug`
+log of the failing command, and the smallest
 `mate.yaml` and source layout that reproduces it, at
 <https://github.com/subbeh/statemate/issues>.

@@ -10,6 +10,7 @@ import (
 	"filippo.io/age"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 )
@@ -239,7 +240,7 @@ func TestAddDirectoryAppliesFlagsToEachFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"one", "nested/two"} {
-		path := filepath.Join(filepath.Dir(cfgPath), "extra", "configs", name+"#profile:work#template")
+		path := filepath.Join(filepath.Dir(cfgPath), "extra", "configs", name+"#profile:work#tmpl")
 		got, err := os.ReadFile(path)
 		if err != nil || string(got) != "{{ .Profile }}\n" {
 			t.Errorf("template %s: content = %q, err = %v", path, got, err)
@@ -400,7 +401,7 @@ func TestAddDirectoryEncrypted(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"one", "nested/two"} {
-		path := filepath.Join(filepath.Dir(cfgPath), "base", "secrets", name+"#encrypted")
+		path := filepath.Join(filepath.Dir(cfgPath), "base", "secrets", name+"#enc")
 		got, err := enc.DecryptFile(path)
 		if err != nil || string(got) != "secret "+name {
 			t.Fatalf("encrypted file %s: %q, %v", path, got, err)
@@ -428,10 +429,11 @@ func TestAddDirectoryWithTargetMappingAndAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanner, err := newScanner(cfg, "")
+	env, err := plan.FromConfig(cfg, "")
 	if err != nil {
 		t.Fatal(err)
 	}
+	scanner := env.Scanner
 	tree, err := scanner.Scan([]string{sourceDir})
 	if err != nil {
 		t.Fatal(err)
@@ -453,4 +455,40 @@ func writeAddTestFile(t *testing.T, path, content string) {
 
 func osName() string {
 	return runtime.GOOS
+}
+
+// A source named with --source that does not exist yet is offered for creation.
+// mate only creates its directory: registering it in the config stays manual.
+func TestAddCreatesMissingSource(t *testing.T) {
+	cfgPath, file := addRepo(t)
+	withStdin(t, "y\n")
+
+	if err := executeAdd(t, "-c", cfgPath, "-s", "newsource", file); err != nil {
+		t.Fatalf("mate add -s newsource: %v", err)
+	}
+
+	want := filepath.Join(filepath.Dir(cfgPath), "newsource", ".gitconfig")
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("expected %s: %v", want, err)
+	}
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "newsource") {
+		t.Errorf("config was modified: %s", data)
+	}
+}
+
+func TestAddMissingSourceDeclined(t *testing.T) {
+	cfgPath, file := addRepo(t)
+	withStdin(t, "n\n")
+
+	err := executeAdd(t, "-c", cfgPath, "-s", "newsource", file)
+	if err == nil || !strings.Contains(err.Error(), "not in configured sources") {
+		t.Errorf("expected a not-configured error, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(cfgPath), "newsource")); !os.IsNotExist(err) {
+		t.Errorf("source directory created after declining: %v", err)
+	}
 }

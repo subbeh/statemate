@@ -53,6 +53,7 @@ nav:
   - Getting Started:
       - getting-started.md
       - concepts.md
+      - comparison.md
   - Guides:
       - repository-layout.md
       - machines.md

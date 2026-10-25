@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/subbeh/statemate/internal/util"
 )
 
 type PacmanManager struct{}
@@ -24,7 +26,7 @@ func (p *PacmanManager) IsAvailable() bool {
 }
 
 func (p *PacmanManager) ListInstalled() ([]Package, error) {
-	cmd := exec.Command("pacman", "-Qen")
+	cmd := util.Command("pacman", "-Qen")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -58,7 +60,7 @@ func (p *PacmanManager) QueryInstalled(pkgs []string) ([]Package, error) {
 
 	// Bulk query first (fast path)
 	args := append([]string{"-Q"}, pkgs...)
-	cmd := exec.Command("pacman", args...)
+	cmd := util.Command("pacman", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	_ = cmd.Run()
@@ -88,7 +90,7 @@ func (p *PacmanManager) QueryInstalled(pkgs []string) ([]Package, error) {
 			packages = append(packages, pkg)
 			continue
 		}
-		cmd := exec.Command("pacman", "-Q", name)
+		cmd := util.Command("pacman", "-Q", name)
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		if err := cmd.Run(); err != nil {
@@ -119,7 +121,7 @@ func (p *PacmanManager) Describe(pkgs []string) (Descriptions, error) {
 		return Descriptions{}, nil
 	}
 	args := append([]string{"-Qi"}, pkgs...)
-	cmd := exec.Command("pacman", args...)
+	cmd := util.Command("pacman", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	// pacman -Qi exits non-zero when any argument is not installed, but still
@@ -150,7 +152,7 @@ func (p *PacmanManager) Install(pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"-S", "--noconfirm"}, pkgs...)
-	cmd := exec.Command("sudo", append([]string{"pacman"}, args...)...)
+	cmd := util.Command("sudo", append([]string{"pacman"}, args...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -162,7 +164,7 @@ func (p *PacmanManager) Uninstall(pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"-R", "--noconfirm"}, pkgs...)
-	cmd := exec.Command("sudo", append([]string{"pacman"}, args...)...)
+	cmd := util.Command("sudo", append([]string{"pacman"}, args...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

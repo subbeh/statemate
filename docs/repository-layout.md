@@ -16,7 +16,7 @@ and the scripts that set it up.
   mate.yaml
   git/
     .mate.yaml                      ← packages: git, lazygit, gh
-    .config/git/config#template
+    .config/git/config#tmpl
   nvim/
     .mate.yaml                      ← packages: neovim, tree-sitter-cli
     .config/nvim/init.lua
@@ -45,7 +45,7 @@ Why this works:
 - **Profiles pick whole tools.** A profile adds the sources that only make sense
   on some machines (`hyprland` on Linux, `aerospace` on macOS), with no per-file
   bookkeeping. See [Different Machines](machines.md).
-- **`mate packages status` explains itself.** Each package is listed with the
+- **`mate packages list` explains itself.** Each package is listed with the
   source that declared it.
 - **Scripts run when their tool changes.** An [`#onchange`](scripts.md#onchange)
   script fires when anything in *its* source changes, so a per-tool source gives
@@ -62,13 +62,9 @@ names shared by Homebrew and pacman and the manager-specific keys for the rest:
 ```yaml
 # git/.mate.yaml
 packages:
-  common:
-    - git
-    - lazygit
-  brew:
-    - gh
-  pacman:
-    - github-cli
+  - gh: [brew, pacman: github-cli]
+  - git
+  - lazygit
 ```
 
 The packages are only considered while the source is active, so a macOS-only
@@ -146,7 +142,7 @@ only changes attributes is fine: `mate status` shows no change.
 Two changes need a command, because they touch more than the name:
 
 ```bash
-mate encrypt ssh/.ssh/config             # adds #encrypted and encrypts the content
-mate decrypt ssh/.ssh/config#encrypted   # removes it and decrypts the content
+mate encrypt ssh/.ssh/config             # adds #enc and encrypts the content
+mate decrypt ssh/.ssh/config#enc   # removes it and decrypts the content
 mate rename  zsh/.zshrc .zshrc.local     # renames the deployed file too
 ```

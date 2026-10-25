@@ -13,14 +13,15 @@ type Config struct {
 	Age           *AgeConfig          `yaml:"age" toml:"age"`
 	Variables     map[string]any      `yaml:"variables" toml:"variables"`
 	VarFiles      []string            `yaml:"var_files" toml:"var_files"`
-	VarCmds       map[string]string   `yaml:"variable_commands" toml:"variable_commands"`
-	Packages     *PackageList `yaml:"packages" toml:"packages"`
+	Packages     PackageList  `yaml:"packages" toml:"packages"`
 	Include      []string     `yaml:"include" toml:"include"`
 	Ignore       []string     `yaml:"ignore" toml:"ignore"`
 	AURHelper    string       `yaml:"aur_helper" toml:"aur_helper"`
 	SecretsCache string       `yaml:"secrets_cache" toml:"secrets_cache"`
 	DiffTool     string       `yaml:"diff_tool" toml:"diff_tool"`
 	Hooks        map[string]*Hook `yaml:"hooks" toml:"hooks"`
+	LogFile      string       `yaml:"log_file" toml:"log_file"`
+	LogLevel     string       `yaml:"log_level" toml:"log_level"`
 
 	sourceDir string
 }
@@ -53,9 +54,6 @@ func (c *Config) ApplyOverrides(override *Config) {
 	if len(override.VarFiles) > 0 {
 		c.VarFiles = override.VarFiles
 	}
-	if override.VarCmds != nil {
-		c.VarCmds = override.VarCmds
-	}
 	if override.Packages != nil {
 		c.Packages = override.Packages
 	}
@@ -64,6 +62,12 @@ func (c *Config) ApplyOverrides(override *Config) {
 	}
 	if override.DiffTool != "" {
 		c.DiffTool = override.DiffTool
+	}
+	if override.LogFile != "" {
+		c.LogFile = override.LogFile
+	}
+	if override.LogLevel != "" {
+		c.LogLevel = override.LogLevel
 	}
 	c.Hooks = mergeHooks(c.Hooks, override.Hooks)
 }
@@ -92,7 +96,7 @@ type Profile struct {
 	Extends   string         `yaml:"extends" toml:"extends"`
 	Sources   []string       `yaml:"sources" toml:"sources"`
 	Detection *Detection     `yaml:"detection" toml:"detection"`
-	Packages  *PackageList   `yaml:"packages" toml:"packages"`
+	Packages  PackageList    `yaml:"packages" toml:"packages"`
 	Include   []string       `yaml:"include" toml:"include"`
 	Variables map[string]any `yaml:"variables" toml:"variables"`
 }
@@ -112,25 +116,18 @@ type AgeConfig struct {
 	Recipients      []string `yaml:"recipients" toml:"recipients"`
 }
 
-type PackageList struct {
-	Common []string `yaml:"common" toml:"common"`
-	Brew   []string `yaml:"brew" toml:"brew"`
-	Pacman []string `yaml:"pacman" toml:"pacman"`
-	AUR    []string `yaml:"aur" toml:"aur"`
-}
-
 type DirConfig struct {
-	TargetBase string            `yaml:"target_base" toml:"target_base"`
-	Profile    string            `yaml:"profile" toml:"profile"`
-	Targets    map[string]string `yaml:"targets" toml:"targets"`
-	Ignore     []string          `yaml:"ignore" toml:"ignore"`
-	Owner      string            `yaml:"owner" toml:"owner"`
-	Group      string            `yaml:"group" toml:"group"`
-	Perm       string            `yaml:"perm" toml:"perm"`
-	Packages   *PackageList      `yaml:"packages" toml:"packages"`
-	Generate   []GenerateConfig  `yaml:"generate" toml:"generate"`
-	Hooks      map[string]*Hook  `yaml:"hooks" toml:"hooks"`
-	Include    []string          `yaml:"include" toml:"include"`
+	TargetBase string                `yaml:"target_base" toml:"target_base"`
+	Profile    string                `yaml:"profile" toml:"profile"`
+	Targets    map[string]StringList `yaml:"targets" toml:"targets"`
+	Ignore     []string              `yaml:"ignore" toml:"ignore"`
+	Owner      string                `yaml:"owner" toml:"owner"`
+	Group      string                `yaml:"group" toml:"group"`
+	Perm       string                `yaml:"perm" toml:"perm"`
+	Packages   PackageList           `yaml:"packages" toml:"packages"`
+	Generate   []GenerateConfig      `yaml:"generate" toml:"generate"`
+	Hooks      map[string]*Hook      `yaml:"hooks" toml:"hooks"`
+	Include    []string              `yaml:"include" toml:"include"`
 
 	// Variables holds what Include loaded; .mate.yaml cannot set them itself.
 	Variables map[string]any `yaml:"-" toml:"-"`

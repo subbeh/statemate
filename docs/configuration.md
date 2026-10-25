@@ -5,15 +5,16 @@ Statemate reads three levels of configuration:
 | File | Purpose |
 |------|---------|
 | `mate.yaml` in the repository | The configuration itself, committed and shared |
-| `~/.config/statemate/mate.yaml` | Machine-local overrides, not committed |
+| `~/.config/statemate/config.yaml` | Machine-local overrides, not committed |
 | `.mate.yaml` in a source directory | Settings scoped to one source |
 
 The repository config may be YAML or TOML: `mate.yaml`, `mate.yml` and
 `mate.toml` are looked for in that order, and the same goes for `.mate.yaml` in a
-source. The local config is always `mate.yaml`. The **directory containing the
-config file is the source directory**, and relative paths in `sources`,
-`var_files` and `include` resolve against it. Other paths, such as
-`age.identity` and `secrets_cache`, should be absolute or start with `~/`.
+source. The local config is YAML only: `config.yaml`, or `config.yml`. The
+**directory containing the config file is the source directory**, and relative
+paths in `sources`, `var_files` and `include` resolve against it. Other paths,
+such as `age.identity` and `secrets_cache`, should be absolute or start with
+`~/`.
 
 Unknown keys are ignored without a warning, so a misspelt key simply has no
 effect. `mate doctor` and `mate check` catch most of the mistakes that matter.
@@ -49,15 +50,14 @@ age:
 
 variables:
   email: "you@example.com"
-
-variable_commands:
-  gpg_key: "gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}'"
+  gpg_key: '{{ cmd "gpg --list-secret-keys --with-colons | awk -F: ''/^fpr/{print $10; exit}''" }}'
 
 var_files:
   - .matedata/secrets.yaml
 
 packages:
-  brew: [ripgrep, fd]
+  - fd
+  - ripgrep
 
 include:
   - packages.yaml
@@ -83,10 +83,9 @@ secrets_cache: "~/.local/state/statemate/secrets.age"
 | `profile` | string | Force a profile, skipping detection |
 | `source_dir` | string | Where to find `mate.yaml`. Only meaningful in the local config |
 | `editor` | string | Editor for `mate edit`, with any arguments (`code --wait`). Overrides `$VISUAL` and `$EDITOR`; falls back to `vi` |
-| `diff_tool` | string | External diff tool for `mate diff`, with any arguments. Run as `<tool> <old> <new>` |
+| `diff_tool` | string | External diff tool for `mate diff` and the `[d]iff` answer to a conflict during `mate apply`, with any arguments. Run as `<tool> <old> <new>` |
 | `age` | map | Encryption settings — see [age](#age) |
-| `variables` | map | Values available to templates as `.Vars` |
-| `variable_commands` | map | Variables whose values come from shell commands, run at load |
+| `variables` | map | Values available to templates as `.Vars`. Values may be templates — see [variables](#variables) |
 | `var_files` | list | YAML/TOML files to load variables from |
 | `packages` | map | Packages to install — see [Packages](packages.md) |
 | `hooks` | map | Commands to run when matching files change — see [Hooks](hooks.md) |
@@ -94,6 +93,8 @@ secrets_cache: "~/.local/state/statemate/secrets.age"
 | `ignore` | list | gitignore-style patterns excluded from scanning |
 | `aur_helper` | string | AUR helper binary, `yay` or `paru`. If unset, `yay` is used if installed, else `paru` |
 | `secrets_cache` | string | Path to the encrypted secrets cache |
+| `log_file` | string | Append an audit log of what each run changed to this file — see [Logging](troubleshooting.md#logging) |
+| `log_level` | string | `debug`, `info`, `warn` or `error`. Defaults to `info` |
 
 ### `age`
 
@@ -116,18 +117,28 @@ key that needs to read them. SSH keys are not supported as recipients.
 
 [Encryption](encryption.md) walks through creating a key and storing it.
 
-### `variable_commands`
+### `variables`
 
-Runs a shell command and stores its trimmed output as a variable:
+A variable's value may be a template, which is how a value comes from a shell
+command:
 
 ```yaml
-variable_commands:
-  hostname_short: "hostname -s"
-  gpg_key: "gpg --card-status | awk '/Signature key/{print $NF}'"
+variables:
+  hostname_short: '{{ cmd "hostname -s" }}'
+  gpg_keys:
+    - '{{ cmd "gpg --card-status | awk ''/Signature key/{print $NF}''" }}'
 ```
 
-Each command runs through `sh -c` whenever templates are rendered, which is most
-commands, so keep them fast. A failing command aborts the command you ran.
+Quote the value: an unquoted `{` starts a YAML map. Any string containing `{{` is
+rendered, including list items and nested keys, and so are the values from
+`include`, `var_files` and profile `variables`. All the
+[template functions](templates.md#functions) and variables such as `.OS` and
+`.Hostname` are available, except `bitwarden`. `.Vars` holds the unrendered
+values, so one templated variable cannot use another's result.
+
+Variables render whenever templates do, which is most commands, so keep commands
+fast. A failing `cmd` aborts the command you ran. To keep a literal `{{` in a
+value, write `{{ "{{" }}`.
 
 ### `var_files`
 
@@ -136,13 +147,13 @@ Loads variables from YAML or TOML files, merged in order after `variables`:
 ```yaml
 var_files:
   - .matedata/vars.yaml
-  - .matedata/secrets.yaml   # resolves .matedata/secrets.yaml#encrypted too
+  - .matedata/secrets.yaml   # resolves .matedata/secrets.yaml#enc too
 ```
 
 Paths are relative to the source directory, or absolute, or start with `~/`. A
 missing file is skipped without error, and so is a file that is not `.yaml`,
 `.yml` or `.toml`. If the plain path does not exist, statemate looks for the same
-path with an `#encrypted` suffix and decrypts it, so the config need not change
+path with an `#enc` suffix and decrypts it, so the config need not change
 when you encrypt a var file.
 
 ### `include`
@@ -152,13 +163,14 @@ Splits **packages and variables** across files:
 ```yaml
 include:
   - packages.yaml
-  - .matedata/secrets.yaml#encrypted
+  - .matedata/secrets.yaml#enc
 ```
 
 ```yaml
 # packages.yaml
 packages:
-  brew: [ripgrep, fd]
+  - fd
+  - ripgrep
 variables:
   email: "me@example.com"
 ```
@@ -168,7 +180,7 @@ ignored. Package lists are appended (duplicates dropped) and variables merged, s
 an include adds to what `mate.yaml` already declares. Where both define the same
 variable, the include wins. A missing include file is skipped.
 
-An included file may be `#encrypted`, and as with `var_files` the suffix is found
+An included file may be `#enc`, and as with `var_files` the suffix is found
 automatically if the plain path does not exist. This is the usual way to keep a
 list of secret-bearing variables in the repository.
 
@@ -181,7 +193,7 @@ profiles:
 ```
 
 Every profile's includes are read when the config loads, including inactive
-profiles. An `#encrypted` include therefore needs a working age identity on every
+profiles. An `#enc` include therefore needs a working age identity on every
 machine, not only on those that use that profile.
 
 ### `ignore`
@@ -230,7 +242,8 @@ profiles:
     variables:
       email: "me@company.com"
     packages:
-      brew: [slack, awscli]
+      - awscli
+      - slack
 
   arch:
     extends: base
@@ -239,7 +252,7 @@ profiles:
       os: linux
       command: "test -f /etc/arch-release"
     packages:
-      pacman: [keyd]
+      - keyd
 ```
 
 ### Detection
@@ -299,7 +312,7 @@ sources or variables, and only files tagged with that exact name pass the
 
 ## Local config
 
-`~/.config/statemate/mate.yaml` (or `$XDG_CONFIG_HOME/statemate/mate.yaml`) holds
+`~/.config/statemate/config.yaml` (or `$XDG_CONFIG_HOME/statemate/config.yaml`) holds
 machine-specific settings that should not be committed:
 
 ```yaml
@@ -313,7 +326,7 @@ looks for `mate.yaml` in the current directory.
 
 Only a subset of keys is honoured here: `sources`, `default_source`,
 `target_base`, `profile`, `editor`, `age`, `variables`, `var_files`,
-`variable_commands`, `packages`, `profiles`, `diff_tool`, and `hooks`. Others,
+`packages`, `profiles`, `diff_tool`, `hooks`, `log_file` and `log_level`. Others,
 including `include`, `ignore`, `aur_helper` and `secrets_cache`, are ignored.
 
 Each key **replaces** the repository's value; nothing is merged. A local
@@ -356,7 +369,7 @@ generate:
 |-----|-------------|
 | `profile` | Default [`#profile:`](attributes.md#profilename) for every file in the source that has none of its own |
 | `target_base` | Deploy this source relative to a different root. Disables `targets` |
-| `targets` | Map a top-level subdirectory to a path |
+| `targets` | Map a top-level subdirectory to a path, or a list of paths |
 | `ignore` | Patterns as for [`ignore`](#ignore), matched against the path inside this source |
 | `owner` | Default owner for files and directories in the source |
 | `group` | Default group for files and directories |
@@ -406,7 +419,7 @@ every template while the source is active, this `.mate.yaml` included, and win
 over profile variables of the same name. While statemate reads the `include` list,
 variables from the include are still unset and `bitwarden` returns an empty
 string, so a template that loops over an included variable must tolerate it being
-empty. `#encrypted` is not supported here. An included file inside the source is
+empty. `#enc` is not supported here. An included file inside the source is
 deployed like any other file unless it is listed under `ignore`.
 
 ### `targets`
@@ -414,7 +427,8 @@ deployed like any other file unless it is listed under `ignore`.
 Maps a subdirectory of the source onto another path, which is how system files
 are managed. Only the first component of a file's path is looked up, so `etc`
 maps the whole `etc/` subtree; a key such as `etc/keyd` never matches. Values may
-start with `~` and may use template variables. See
+start with `~` and may use template variables. A relative value is taken relative
+to the global `target_base`, normally your home directory. See
 [Managing System Files](system-files.md).
 
 ```yaml
@@ -428,6 +442,16 @@ arch_root/
   etc/
     issue                    →  /etc/issue
     keyd/default.conf        →  /etc/keyd/default.conf
+```
+
+A value can also be a list, which deploys the subdirectory to every path in it.
+Each copy is tracked separately, so `mate status` reports drift in each one:
+
+```yaml
+targets:
+  .claude.shared:
+    - .claude.personal       # ~/.claude.personal
+    - .claude.work           # ~/.claude.work
 ```
 
 Files outside the mapped directories still deploy to the source's normal target
@@ -471,11 +495,14 @@ content assembled from variables or secrets.
 | `STATEMATE_DIR` | Where to find `mate.yaml`. Overrides `source_dir` and the current directory, but not `--config` |
 | `STATEMATE_PROFILE` | Selects a profile, below config but above detection |
 | `STATEMATE_KEY_FILE` | Path to the age private key. Overrides `age.identity` and `age.identity_command` in either config |
+| `STATEMATE_LOG_FILE` | Log file. Overrides `log_file` in either config, but not `--log-file` |
+| `STATEMATE_LOG_LEVEL` | Log level. Overrides `log_level` in either config, but not `--log-level` |
 | `XDG_CONFIG_HOME` | Where the local config lives. Default `~/.config` |
 | `XDG_DATA_HOME` | Where `state.db` lives. Default `~/.local/share` |
 | `XDG_STATE_HOME` | Where the secrets cache lives. Default `~/.local/state` |
 | `VISUAL`, `EDITOR` | Editor for `mate edit`, if `editor:` is unset |
 | `USER`, `USERNAME` | The user for profile detection and `.Username` |
+| `NO_COLOR` | Set to any value to turn off colored output, like `--no-color`. Color is also off when stdout is not a terminal |
 
 `STATEMATE_DIR` is handy for working against a second repository without touching
 your config:

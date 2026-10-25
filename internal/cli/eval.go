@@ -6,10 +6,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
-	"github.com/subbeh/statemate/internal/encrypt"
-	"github.com/subbeh/statemate/internal/profile"
-	"github.com/subbeh/statemate/internal/secrets"
 	"github.com/subbeh/statemate/internal/template"
 )
 
@@ -19,13 +15,13 @@ var evalCmd = &cobra.Command{
 	Long: `Render a file as a template and print the result.
 
 Useful for debugging a template, or previewing what apply would deploy. Any
-file is rendered, whether or not it is marked #template. An encrypted file is
+file is rendered, whether or not it is marked #tmpl. An encrypted file is
 decrypted first, which needs the age identity.
 
 The path is used as given: absolute, starting with ~, or relative to the
 current directory. Use --profile to render it as another profile would.`,
-	Example: `  mate eval git/.config/git/config#template
-  mate eval --profile work git/.config/git/config#template`,
+	Example: `  mate eval git/.config/git/config#tmpl
+  mate eval --profile work git/.config/git/config#tmpl`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runEval,
 	ValidArgsFunction: completeFilePaths,
@@ -38,57 +34,26 @@ func init() {
 func runEval(cmd *cobra.Command, args []string) error {
 	filePath := expandPath(args[0])
 
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
-
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-
-	var enc *encrypt.AgeEncryptor
-	if cfg.Age != nil {
-		enc, err = encrypt.NewAgeEncryptor(cfg.Age.Identity, cfg.Age.IdentityCommand, cfg.Age.Recipients)
-		if err != nil {
-			return fmt.Errorf("setting up encryption: %w", err)
-		}
-	}
-
-	var ctxOpts []template.ContextOption
-	if enc != nil && enc.CanDecrypt() {
-		ctxOpts = append(ctxOpts, template.WithDecrypt(enc.Decrypt))
-	}
-	tmplCtx, err := template.NewContext(cfg, profileName, ctxOpts...)
-	if err != nil {
-		return fmt.Errorf("creating template context: %w", err)
-	}
-
-	if enc != nil && enc.CanDecrypt() {
-		mgr, err := secrets.NewManager(enc, cfg.SecretsCache)
-		if err == nil {
-			tmplCtx.SecretLookup = func(item, typ, field string) (string, error) {
-				key := secrets.CacheKey{Provider: "bitwarden", Item: item, Type: typ, Field: field}
-				return mgr.Get(key)
-			}
-		}
-	}
+	enc, tmplCtx := env.Enc, env.TmplCtx
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("reading file: %w", err)
 	}
 
-	if enc != nil && enc.CanDecrypt() && isEncrypted(content) {
-		content, err = enc.Decrypt(content)
-		if err != nil {
-			return fmt.Errorf("decrypting file: %w", err)
+	if isEncrypted(content) {
+		if err := env.CheckDecrypt(); err != nil {
+			return err
+		}
+		if enc != nil && enc.CanDecrypt() {
+			content, err = enc.Decrypt(content)
+			if err != nil {
+				return fmt.Errorf("decrypting file: %w", err)
+			}
 		}
 	}
 

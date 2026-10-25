@@ -2,12 +2,13 @@ package hooks
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
-	"os/exec"
 	"strings"
 
 	"golang.org/x/term"
 
+	"github.com/fatih/color"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -73,11 +74,12 @@ func (r *Runner) Run(triggered []*Triggered) (*Result, error) {
 	}
 
 	for _, t := range triggered {
+		slog.Debug("hook", "name", t.Name, "files", t.Files)
 		title := fmt.Sprintf("hook %s (%s)", t.Name, FileCount(len(t.Files)))
 
 		rendered, err := r.render(t)
 		if err != nil {
-			fmt.Printf("<<< failed:  hook %s (%v)\n", t.Name, err)
+			fmt.Printf("%s  hook %s (%v)\n", color.RedString("<<< failed:"), t.Name, err)
 			res.Failed = append(res.Failed, fmt.Errorf("hook %s: %w", t.Name, err))
 			continue
 		}
@@ -99,23 +101,27 @@ func (r *Runner) Run(triggered []*Triggered) (*Result, error) {
 			continue
 		}
 
-		if !r.opts.Force && !isInteractive() {
-			res.SkippedNoTTY = append(res.SkippedNoTTY, title)
-			continue
-		}
+		// A hook with `confirm: false` needs no answer, so it runs without a
+		// terminal too.
+		if t.Confirms() {
+			if !r.opts.Force && !isInteractive() {
+				res.SkippedNoTTY = append(res.SkippedNoTTY, title)
+				continue
+			}
 
-		var details []string
-		if t.Description != "" {
-			details = append(details, t.Description)
-		}
-		details = append(details, stepLines(t, rendered)...)
-		ok, err := r.exec.Confirm(title, details)
-		if err != nil {
-			return res, err
-		}
-		if !ok {
-			res.Declined = append(res.Declined, t.Name)
-			continue
+			var details []string
+			if t.Description != "" {
+				details = append(details, t.Description)
+			}
+			details = append(details, stepLines(t, rendered)...)
+			ok, err := r.exec.Confirm(title, details)
+			if err != nil {
+				return res, err
+			}
+			if !ok {
+				res.Declined = append(res.Declined, t.Name)
+				continue
+			}
 		}
 
 		if err := r.runSteps(t, rendered); err != nil {
@@ -186,12 +192,12 @@ func (r *Runner) runSteps(t *Triggered, rendered []string) error {
 		"STATEMATE_HOOK_FILES=" + strings.Join(t.Files, "\n"),
 	}
 
-	fmt.Printf(">>> running: hook %s\n", t.Name)
+	fmt.Printf("%s hook %s\n", color.CyanString(">>> running:"), t.Name)
 	for i, s := range t.steps {
 		var err error
 		if s.script != nil {
 			if s.script.Profile != "" && !matchesChain(s.script.Profile, r.opts.ProfileChain) {
-				fmt.Fprintf(os.Stderr, "Warning: hook %s: skipping script %s (profile %s is not active)\n",
+				fmt.Fprintf(os.Stderr, "%s hook %s: skipping script %s (profile %s is not active)\n", color.YellowString("Warning:"),
 					t.Name, s.script.Name, s.script.Profile)
 				continue
 			}
@@ -204,16 +210,19 @@ func (r *Runner) runSteps(t *Triggered, rendered []string) error {
 			err = r.runCommand(t, rendered[i], env)
 		}
 		if err != nil {
-			fmt.Printf("<<< failed:  hook %s (step %d: %v)\n", t.Name, i+1, err)
-			return fmt.Errorf("step %d: %w", i+1, err)
+			fmt.Printf("%s  hook %s (step %d: %v)\n", color.RedString("<<< failed:"), t.Name, i+1, err)
+			err = fmt.Errorf("step %d: %w", i+1, err)
+			slog.Info("ran hook", "name", t.Name, "err", err)
+			return err
 		}
 	}
-	fmt.Printf("<<< done:    hook %s\n", t.Name)
+	fmt.Printf("%s    hook %s\n", color.GreenString("<<< done:"), t.Name)
+	slog.Info("ran hook", "name", t.Name)
 	return nil
 }
 
 func (r *Runner) runCommand(t *Triggered, command string, env []string) error {
-	cmd := exec.Command("sh", "-c", command)
+	cmd := util.Command("sh", "-c", command)
 	cmd.Dir = t.Dir()
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

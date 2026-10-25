@@ -188,7 +188,6 @@ func TestConfigKeysAreDocumented(t *testing.T) {
 		{"profile", config.Profile{}, "docs/configuration.md"},
 		{"detection", config.Detection{}, "docs/configuration.md"},
 		{"age", config.AgeConfig{}, "docs/configuration.md"},
-		{"packages", config.PackageList{}, "docs/packages.md"},
 		{".mate.yaml", config.DirConfig{}, "docs/configuration.md"},
 		{"generate", config.GenerateConfig{}, "docs/configuration.md"},
 		{"hook", config.Hook{}, "docs/hooks.md"},
@@ -200,6 +199,12 @@ func TestConfigKeysAreDocumented(t *testing.T) {
 			if !strings.Contains(guides, key) {
 				t.Errorf("%s key %q is not mentioned in docs/ -- add it to %s", c.name, key, c.file)
 			}
+		}
+	}
+
+	for _, m := range config.PackageManagers {
+		if !strings.Contains(guides, "`"+m+"`") {
+			t.Errorf("package manager %q is not mentioned in docs/ -- add it to docs/packages.md", m)
 		}
 	}
 }

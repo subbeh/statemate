@@ -1,6 +1,7 @@
 package scripts
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -66,11 +67,18 @@ func (d *Discoverer) discoverDir(dir, sourceDir string) (Scripts, error) {
 			return nil
 		}
 
+		if err := CheckScriptName(entry.Name()); err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
 		name, freq, timing, template, profile, order := ParseScriptName(entry.Name())
 
 		contentHash, err := state.HashFile(path)
 		if err != nil {
 			return err
+		}
+		onchange, err := ReadOnchange(path, freq)
+		if err != nil {
+			return fmt.Errorf("%s: %w", path, err)
 		}
 
 		scripts = append(scripts, &Script{
@@ -79,11 +87,13 @@ func (d *Discoverer) discoverDir(dir, sourceDir string) (Scripts, error) {
 			Frequency:   freq,
 			Timing:      timing,
 			Template:    template,
+			NoConfirm:   HasNoConfirm(entry.Name()),
 			Profile:     profile,
 			Order:       order,
 			SourceDir:   sourceDir,
 			ContentHash: contentHash,
 			Description: ReadDescription(path),
+			Onchange:    onchange,
 		})
 		return nil
 	})

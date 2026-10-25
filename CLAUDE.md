@@ -70,6 +70,10 @@ non-test files under `internal/` or `cmd/` without staging `CHANGELOG.md` are re
 The same hook regenerates `docs/commands/` when `internal/cli/` changes, and rejects
 the commit if the result is not staged.
 
+`.githooks/post-commit` (linked as `post-merge` and `post-checkout`) runs
+`make build-all` so `dist/`, which the installed `mate` symlinks to, tracks the
+checked-out code. It only warns when the build fails.
+
 One-time setup after cloning (`core.hooksPath` is local git config, not version-controlled):
 
 ```bash
@@ -105,6 +109,17 @@ Active development happens on the `develop` branch. Commit directly there — no
 6. **Push**: `git push` directly to develop
 
 When ready for a release, merge `develop` into `main` (via PR or direct merge).
+Tag the merge commit on main (`git tag -a vX.Y.Z -m vX.Y.Z`) to run the release
+workflow. Then merge `main` back into `develop` and push it:
+
+```bash
+git checkout develop && git merge --no-ff origin/main && git push
+```
+
+The tag sits on main's merge commit, so without this step develop never contains
+it and `git describe` -- the version `make build-all` stamps into `mate version`
+-- keeps reporting the previous release. The repo deletes the head branch when a
+PR merges, so `develop` may have to be pushed back first anyway.
 
 **No direct pushes to main** — main is the stable release branch.
 

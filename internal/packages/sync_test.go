@@ -3,6 +3,7 @@ package packages
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -74,9 +75,19 @@ func withFakeManager(t *testing.T, f *fakeManager) {
 	t.Cleanup(func() { getManager, availableManager = origGet, origAvail })
 }
 
+// brew declares brew-only packages, so a test never depends on which manager
+// this machine treats as the system one.
+func brew(names ...string) config.PackageList {
+	var l config.PackageList
+	for _, n := range names {
+		l = append(l, config.Package{Name: n, Managers: map[string]string{"brew": n}})
+	}
+	return l
+}
+
 func syncConfig() *config.Config {
 	return &config.Config{
-		Packages: &config.PackageList{Brew: []string{"git", "ripgrep"}},
+		Packages: brew("git", "ripgrep"),
 	}
 }
 
@@ -158,10 +169,7 @@ func TestComputeSync_TapQualifiedPackageIsInstalled(t *testing.T) {
 	}
 	withFakeManager(t, f)
 
-	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{
-		"hashicorp/tap/terraform",
-		"slack",
-	}}}
+	cfg := &config.Config{Packages: brew("hashicorp/tap/terraform", "slack",)}
 
 	results, err := ComputeSync(cfg, "", nil, WithExtras(true))
 	if err != nil {
@@ -185,7 +193,7 @@ func TestComputeSync_BareNameMatchesTapInstall(t *testing.T) {
 	f := &fakeManager{installed: []Package{{Name: "hashicorp/tap/terraform"}}}
 	withFakeManager(t, f)
 
-	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"terraform"}}}
+	cfg := &config.Config{Packages: brew("terraform")}
 
 	results, err := ComputeSync(cfg, "", nil, WithExtras(true))
 	if err != nil {
@@ -209,10 +217,7 @@ func TestComputeSync_UnrelatedPackagesStillClassified(t *testing.T) {
 	}}
 	withFakeManager(t, f)
 
-	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{
-		"hashicorp/tap/terraform",
-		"hashicorp/tap/absent",
-	}}}
+	cfg := &config.Config{Packages: brew("hashicorp/tap/terraform", "hashicorp/tap/absent",)}
 
 	results, err := ComputeSync(cfg, "", nil, WithExtras(true))
 	if err != nil {
@@ -240,7 +245,7 @@ func TestComputeSync_VerboseMarksUnresolvableNames(t *testing.T) {
 	}
 	withFakeManager(t, f)
 
-	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"git", "ripgrep", "man"}}}
+	cfg := &config.Config{Packages: brew("git", "ripgrep", "man")}
 	results, err := ComputeSync(cfg, "", nil, WithVerbose(true))
 	if err != nil {
 		t.Fatal(err)
@@ -284,7 +289,7 @@ func TestComputeSync_NonVerboseLeavesDescriptionsUnflagged(t *testing.T) {
 	}
 	withFakeManager(t, f)
 
-	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"git", "man"}}}
+	cfg := &config.Config{Packages: brew("git", "man")}
 	results, err := ComputeSync(cfg, "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -299,16 +304,16 @@ func TestComputeSync_NonVerboseLeavesDescriptionsUnflagged(t *testing.T) {
 
 // A profile inherits the packages of every profile it extends, as it already
 // inherits their sources and variables. Each package is attributed to the
-// profile that declared it, so `mate packages status` shows where it came from.
+// profile that declared it, so `mate packages list` shows where it came from.
 func TestComputeSync_InheritsPackagesAlongExtendsChain(t *testing.T) {
 	f := &fakeManager{installed: []Package{{Name: "git"}}}
 	withFakeManager(t, f)
 
 	cfg := &config.Config{Profiles: map[string]*config.Profile{
-		"base":  {Packages: &config.PackageList{Brew: []string{"git"}}},
-		"mac":   {Extends: "base", Packages: &config.PackageList{Brew: []string{"ripgrep"}}},
-		"work":  {Extends: "mac", Packages: &config.PackageList{Brew: []string{"kubectl"}}},
-		"other": {Packages: &config.PackageList{Brew: []string{"unrelated"}}},
+		"base":  {Packages: brew("git")},
+		"mac":   {Extends: "base", Packages: brew("ripgrep")},
+		"work":  {Extends: "mac", Packages: brew("kubectl")},
+		"other": {Packages: brew("unrelated")},
 	}}
 
 	results, err := ComputeSync(cfg, "work", nil)
@@ -357,10 +362,9 @@ func TestComputeSync_RendersTemplatedDirConfig(t *testing.T) {
 	withFakeManager(t, &fakeManager{})
 
 	source := writeDirConfig(t, `packages:
-  brew:
-    - "{{ .Vars.editor }}"
+  - "{{ .Vars.editor }}": brew
 {{- range .Vars.extras }}
-    - {{ . }}
+  - {{ . }}: brew
 {{- end }}
 `)
 
@@ -390,7 +394,7 @@ func TestComputeSync_RendersTemplatedDirConfig(t *testing.T) {
 func TestComputeSync_ReportsBrokenDirConfig(t *testing.T) {
 	withFakeManager(t, &fakeManager{})
 
-	source := writeDirConfig(t, "packages:\n  brew: [git\n")
+	source := writeDirConfig(t, "packages:\n  - git: [brew\n")
 
 	_, err := ComputeSync(syncConfig(), "", []string{source})
 	if err == nil {
@@ -408,7 +412,7 @@ func TestComputeSync_VersionedFormulaIsItsOwnPackage(t *testing.T) {
 	f := &fakeManager{installed: []Package{{Name: "node"}}}
 	withFakeManager(t, f)
 
-	cfg := &config.Config{Packages: &config.PackageList{Brew: []string{"node@20"}}}
+	cfg := &config.Config{Packages: brew("node@20")}
 	results, err := ComputeSync(cfg, "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -416,5 +420,57 @@ func TestComputeSync_VersionedFormulaIsItsOwnPackage(t *testing.T) {
 
 	if missing := results[0].Missing(); len(missing) != 1 || missing[0] != "node@20" {
 		t.Errorf("missing packages: got %v, want [node@20]", missing)
+	}
+}
+
+// Packages list by name, extras after the declared ones. Sorting by source first
+// scattered the names of a profile that extends others.
+func TestComputeSync_SortsByName(t *testing.T) {
+	f := &fakeManager{installed: []Package{{Name: "zsh"}, {Name: "bat"}, {Name: "abc"}}}
+	withFakeManager(t, f)
+
+	cfg := &config.Config{
+		Packages: brew("ripgrep"),
+		Profiles: map[string]*config.Profile{
+			"base": {Packages: brew("zsh")},
+			"work": {Extends: "base", Packages: brew("awk")},
+		},
+	}
+	results, err := ComputeSync(cfg, "work", nil, WithExtras(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	for _, s := range results[0].Statuses {
+		got = append(got, s.Name)
+	}
+	if want := "awk ripgrep zsh abc bat"; strings.Join(got, " ") != want {
+		t.Errorf("order = %v, want %s", got, want)
+	}
+}
+
+// An item installs with exactly the managers it lists, each under its own name
+// there; only a bare name goes to the system manager.
+func TestComputeSync_ResolvesManagersPerItem(t *testing.T) {
+	withFakeManager(t, &fakeManager{})
+
+	cfg := &config.Config{Packages: config.PackageList{
+		{Name: "gh", Managers: map[string]string{"brew": "gh", "pacman": "github-cli"}},
+		{Name: "sudo", Managers: map[string]string{"pacman": "sudo"}},
+		{Name: "tpack", Managers: map[string]string{"brew": "tpack", "aur": "tpack-bin"}},
+	}}
+	results, err := ComputeSync(cfg, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := make(map[string]string)
+	for _, r := range results {
+		got[r.Manager] = strings.Join(r.Missing(), " ")
+	}
+	want := map[string]string{"brew": "gh tpack", "pacman": "github-cli sudo", "aur": "tpack-bin"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("missing per manager = %v, want %v", got, want)
 	}
 }

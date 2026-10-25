@@ -82,7 +82,7 @@ generate:
   - target: out
     content: '{{ .Vars.bws.projectId }} {{ $v | toJson }}'
 `
-	vars := "variables:\n  bws:\n    projectId: p1\n    secrets:\n      KEY: [item]\npackages:\n  brew: [jq]\n"
+	vars := "variables:\n  bws:\n    projectId: p1\n    secrets:\n      KEY: [item]\npackages:\n  - jq: brew\n"
 	if err := os.MkdirAll(filepath.Join(src, "sub"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -113,15 +113,18 @@ generate:
 	if got := dirCfg.Generate[0].Content; got != `p1 {"KEY":"s-item"}` {
 		t.Errorf("generate content = %q", got)
 	}
-	if dirCfg.Packages == nil || len(dirCfg.Packages.Brew) != 1 || dirCfg.Packages.Brew[0] != "jq" {
-		t.Errorf("expected packages.brew=[jq] from the include, got %+v", dirCfg.Packages)
+	if len(dirCfg.Packages) != 1 || dirCfg.Packages[0].Managers["brew"] != "jq" {
+		t.Errorf("expected packages=[jq: brew] from the include, got %+v", dirCfg.Packages)
 	}
 }
 
-func TestContextVarCommands(t *testing.T) {
+func TestContextTemplatedVars(t *testing.T) {
 	cfg := &config.Config{
-		VarCmds: map[string]string{
-			"test_var": "echo hello",
+		Variables: map[string]any{
+			"plain":  "{not a template}",
+			"host":   `{{ cmd "echo hello" }}`,
+			"keys":   []any{`{{ cmd "echo k1" }}`, "k2"},
+			"nested": map[string]any{"os": "{{ .OS }}"},
 		},
 	}
 
@@ -130,8 +133,22 @@ func TestContextVarCommands(t *testing.T) {
 		t.Fatalf("NewContext failed: %v", err)
 	}
 
-	if ctx.Vars["test_var"] != "hello" {
-		t.Errorf("expected test_var=hello, got %v", ctx.Vars["test_var"])
+	if ctx.Vars["plain"] != "{not a template}" || ctx.Vars["host"] != "hello" {
+		t.Errorf("plain=%v host=%v", ctx.Vars["plain"], ctx.Vars["host"])
+	}
+	if keys, _ := ctx.Vars["keys"].([]any); len(keys) != 2 || keys[0] != "k1" || keys[1] != "k2" {
+		t.Errorf("keys=%v", ctx.Vars["keys"])
+	}
+	if nested, _ := ctx.Vars["nested"].(map[string]any); nested["os"] != runtime.GOOS {
+		t.Errorf("nested=%v", ctx.Vars["nested"])
+	}
+	if cfg.Variables["host"] != `{{ cmd "echo hello" }}` {
+		t.Errorf("rendering modified the config: %v", cfg.Variables["host"])
+	}
+
+	cfg.Variables = map[string]any{"bad": []any{`{{ cmd "echo oops >&2; false" }}`}}
+	if _, err := NewContext(cfg, ""); err == nil || !strings.Contains(err.Error(), "variable bad") || !strings.Contains(err.Error(), "oops") {
+		t.Errorf("expected a failing cmd to name the variable and its stderr, got %v", err)
 	}
 }
 
@@ -341,11 +358,11 @@ nested:
 	}
 }
 
-// A var_file is encrypted when #encrypted is among its attributes, not only
+// A var_file is encrypted when #enc is among its attributes, not only
 // when it is the last one.
 func TestLoadVarFileEncryptedNotLastAttribute(t *testing.T) {
 	dir := t.TempDir()
-	varFile := dir + "/secrets.yaml#encrypted#perm:600"
+	varFile := dir + "/secrets.yaml#enc#perm:600"
 	if err := os.WriteFile(varFile, []byte("ciphertext"), 0600); err != nil {
 		t.Fatal(err)
 	}

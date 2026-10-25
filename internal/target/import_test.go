@@ -71,7 +71,7 @@ func newImportFixture(t *testing.T, sourceName, content string) *importFixture {
 // apply runs a real apply, establishing (or updating) the recorded state.
 func (f *importFixture) apply() *ApplyResult {
 	f.t.Helper()
-	res, err := NewApplier(f.db, nil, nil, false, false, 0).Apply(f.tree)
+	res, err := NewApplier(f.db, nil, nil, false, false, false).Apply(f.tree)
 	if err != nil {
 		f.t.Fatalf("apply failed: %v", err)
 	}
@@ -214,18 +214,18 @@ func TestImport_UnchangedDoesNothing(t *testing.T) {
 // Importing a template would write the rendered output over the template,
 // destroying the source. Reject the combination rather than doing it.
 func TestImport_TemplateCombinationIsRejected(t *testing.T) {
-	f := newImportFixture(t, "settings.json#import#template", `{"a":1}`)
+	f := newImportFixture(t, "settings.json#import#tmpl", `{"a":1}`)
 
 	_, err := ComputeChanges(f.tree, f.db)
 	if err == nil {
-		t.Fatal("expected an error for #import#template")
+		t.Fatal("expected an error for #import#tmpl")
 	}
-	if !strings.Contains(err.Error(), "#template") {
+	if !strings.Contains(err.Error(), "#tmpl") {
 		t.Errorf("error should explain the conflict, got: %v", err)
 	}
 }
 
-// The motivating file (~/.claude/settings.json) is #encrypted, so an import must
+// The motivating file (~/.claude/settings.json) is #enc, so an import must
 // encrypt what it writes back -- otherwise it would leave plaintext in the repo.
 func TestImport_EncryptedSourceStaysEncrypted(t *testing.T) {
 	identity, err := age.GenerateX25519Identity()
@@ -253,7 +253,7 @@ func TestImport_EncryptedSourceStaysEncrypted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sourcePath := filepath.Join(sourceDir, "settings.json#encrypted#import")
+	sourcePath := filepath.Join(sourceDir, "settings.json#enc#import")
 	if err := os.WriteFile(sourcePath, ciphertext, 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestImport_EncryptedSourceStaysEncrypted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	applier := NewApplier(db, nil, enc, false, false, 0)
+	applier := NewApplier(db, nil, enc, false, false, false)
 	if _, err := applier.Apply(tree); err != nil {
 		t.Fatalf("initial apply: %v", err)
 	}
@@ -316,12 +316,12 @@ func TestImport_EncryptedSourceStaysEncrypted(t *testing.T) {
 }
 
 // Without recipients an import cannot re-encrypt, and writing the target back
-// as-is would put plaintext into the repo under an #encrypted name.
+// as-is would put plaintext into the repo under an #enc name.
 func TestImport_EncryptedWithoutRecipientsErrors(t *testing.T) {
-	f := newImportFixture(t, "settings.json#encrypted#import", "ciphertext")
+	f := newImportFixture(t, "settings.json#enc#import", "ciphertext")
 	f.write(f.targetPath, `{"secret":1}`)
 
-	err := NewApplier(f.db, nil, nil, false, false, 0).importFile(f.tree.Files()[0])
+	err := NewApplier(f.db, nil, nil, false, false, false).importFile(f.tree.Files()[0])
 	if err == nil || !strings.Contains(err.Error(), "no age recipients") {
 		t.Fatalf("expected a missing-recipients error, got %v", err)
 	}
@@ -337,7 +337,7 @@ func TestImport_DryRunChangesNothing(t *testing.T) {
 
 	f.write(f.targetPath, `{"a":2}`)
 
-	res, err := NewApplier(f.db, nil, nil, true, false, 0).Apply(f.tree)
+	res, err := NewApplier(f.db, nil, nil, true, false, false).Apply(f.tree)
 	if err != nil {
 		t.Fatalf("dry run failed: %v", err)
 	}

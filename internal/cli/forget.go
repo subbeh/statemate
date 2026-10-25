@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -68,6 +69,7 @@ func runForget(cmd *cobra.Command, args []string) error {
 		if err := db.DeleteFile(path); err != nil {
 			return fmt.Errorf("removing %s from database: %w", path, err)
 		}
+		slog.Info("forgot", "target", path)
 		fmt.Printf("Forgot %s (target file unchanged)\n", path)
 	}
 

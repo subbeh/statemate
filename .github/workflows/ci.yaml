@@ -41,7 +41,8 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.6
+          # Must be built with at least go.mod's Go version, or it refuses to load.
+          version: v2.15
 
   # docs/commands/ is generated from the cobra command tree and committed, so a
   # help-text change must be regenerated in the same commit. Without this, the

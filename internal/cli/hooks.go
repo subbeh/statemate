@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 	"slices"
-	"strconv"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
@@ -15,10 +15,11 @@ import (
 
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/hooks"
-	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/template"
 )
 
 var hooksCmd = &cobra.Command{
@@ -41,7 +42,7 @@ auto-confirms them and --no-scripts skips them.
 
 Hooks declared in a source's .mate.yaml are named <source>/<name> and match
 only that source's files. Patterns match target paths; source attributes such
-as #template and #perm:600 are ignored when included in a pattern.`,
+as #tmpl and #perm:600 are ignored when included in a pattern.`,
 }
 
 var hooksListCmd = &cobra.Command{
@@ -75,7 +76,6 @@ func init() {
 	hooksCmd.AddCommand(hooksRunCmd)
 
 	hooksRunCmd.Flags().Bool("dry-run", false, "show what would be done without running")
-	hooksRunCmd.Flags().BoolP("verbose", "v", false, "verbose output")
 }
 
 // hookEnv is what the hooks subcommands share: the config, the active profile,
@@ -87,54 +87,39 @@ type hookEnv struct {
 	sourcePaths  []string
 	set          hooks.Set
 	files        []*source.Entry
+	tmplCtx      *template.Context
 }
 
 func loadHookEnv(cmd *cobra.Command) (*hookEnv, error) {
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+		return nil, err
 	}
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
-	}
+	cfg, sourcePaths := env.Config, env.SourcePaths
 
-	profileName, _ := cmd.Flags().GetString("profile")
-	if profileName == "" {
-		profileName = profile.Detect(cfg)
-	}
-	sourcePaths := cfg.ResolveSourcePaths(profile.ResolveSources(cfg, profileName))
-
-	scanner, err := newScanner(cfg, profileName)
-	if err != nil {
-		return nil, fmt.Errorf("creating scanner: %w", err)
-	}
 	// Scanning is what loads each source's .mate.yaml.
-	tree, err := scanner.Scan(sourcePaths)
+	p, err := env.Plan()
 	if err != nil {
-		return nil, fmt.Errorf("scanning sources: %w", err)
-	}
-	profileChain := profile.InheritanceChain(cfg, profileName)
-	if profileName != "" {
-		tree = tree.FilterByProfile(profileChain)
+		return nil, err
 	}
 
 	all, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover()
 	if err != nil {
 		return nil, fmt.Errorf("discovering scripts: %w", err)
 	}
-	set, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, all)
+	set, err := hooks.Collect(cfg, sourcePaths, env.Scanner.DirConfig, all)
 	if err != nil {
 		return nil, fmt.Errorf("invalid hooks: %w", err)
 	}
 
 	return &hookEnv{
 		cfg:          cfg,
-		profileName:  profileName,
-		profileChain: profileChain,
+		profileName:  env.Profile,
+		profileChain: env.Chain,
 		sourcePaths:  sourcePaths,
 		set:          set,
-		files:        tree.Files(),
+		files:        p.Tree.Files(),
+		tmplCtx:      env.TmplCtx,
 	}, nil
 }
 
@@ -156,13 +141,14 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 			status = "disabled"
 		case !h.ActiveFor(env.profileChain):
 			status = "n/a"
+		case !h.Confirms():
+			status = "noconfirm"
 		}
 		data = append(data, []string{
 			h.Name,
 			h.Scope(),
 			strings.Join(h.Match, ", "),
 			h.Profile,
-			strconv.Itoa(len(h.Do)),
 			status,
 			h.Description,
 		})
@@ -170,7 +156,7 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 
 	// Same layout rules as 'mate scripts list': the description is trimmed to
 	// the terminal and printed in full when piped.
-	headers := []string{"NAME", "SCOPE", "MATCH", "PROFILE", "STEPS", "STATUS", "DESCRIPTION"}
+	headers := []string{"NAME", "SCOPE", "MATCH", "PROFILE", "STATUS", "DESCRIPTION"}
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
 			truncateDescriptions(data, descriptionBudget(data, headers, w))
@@ -182,7 +168,7 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 		tablewriter.WithRowAutoWrap(tw.WrapTruncate),
 		tablewriter.WithAlignment(tw.Alignment{
 			tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
-			tw.AlignRight, tw.AlignLeft, tw.AlignLeft,
+			tw.AlignLeft, tw.AlignLeft,
 		}),
 		tablewriter.WithRendition(tw.Rendition{
 			Borders: tw.BorderNone,
@@ -199,7 +185,6 @@ func runHooksList(cmd *cobra.Command, args []string) error {
 
 func runHooksRun(cmd *cobra.Command, args []string) error {
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
-	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	env, err := loadHookEnv(cmd)
 	if err != nil {
@@ -216,21 +201,16 @@ func runHooksRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("hook %s requires profile %q", h.Name, h.Profile)
 	}
 
-	db, err := openState(env.cfg)
+	db, err := plan.OpenState(env.cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
 	}
 	defer func() { _ = db.Close() }()
 
-	tmplCtx, err := newTemplateContext(env.cfg, env.profileName)
-	if err != nil {
-		return fmt.Errorf("creating template context: %w", err)
-	}
-
-	executor := scripts.NewExecutor(db, tmplCtx, dryRun, verbose).WithConfirmation(true, false)
+	tmplCtx := env.tmplCtx
+	executor := scripts.NewExecutor(db, tmplCtx, dryRun).WithConfirmation(true, false)
 	runner := hooks.NewRunner(executor, tmplCtx, hooks.Options{
 		DryRun:       dryRun,
-		Verbose:      verbose,
 		Force:        true,
 		ProfileChain: env.profileChain,
 	})
@@ -286,7 +266,7 @@ func runTriggeredHooks(runner *hooks.Runner, triggered []*hooks.Triggered, db *s
 		return nil, nil
 	}
 	if announce {
-		fmt.Println("Running hooks...")
+		fmt.Println(bold("Running hooks..."))
 	}
 
 	// Report what was skipped even when the user quit part-way.
@@ -302,7 +282,7 @@ func runTriggeredHooks(runner *hooks.Runner, triggered []*hooks.Triggered, db *s
 		fmt.Printf("  skipped hook %s; run it later with 'mate hooks run %s'\n", name, name)
 	}
 	if len(res.SkippedNoTTY) > 0 {
-		fmt.Fprintf(os.Stderr, "\nWarning: %d hook(s) skipped (no terminal to confirm on):\n", len(res.SkippedNoTTY))
+		fmt.Fprintf(os.Stderr, "\n%s %d hook(s) skipped (no terminal to confirm on):\n", color.YellowString("Warning:"), len(res.SkippedNoTTY))
 		for _, s := range res.SkippedNoTTY {
 			fmt.Fprintf(os.Stderr, "  - %s\n", s)
 		}
@@ -319,27 +299,23 @@ func runTriggeredHooks(runner *hooks.Runner, triggered []*hooks.Triggered, db *s
 // runRemovalHooks runs the hooks triggered by files that clean, delete, or
 // rename changed on disk. Those commands have no --no-scripts, so --force alone
 // decides whether hooks are confirmed.
-func runRemovalHooks(cfg *config.Config, profileName string, sourcePaths []string, scanner *source.Scanner, db *state.DB, changes []hooks.Change, force bool) error {
+func runRemovalHooks(env *plan.Env, db *state.DB, changes []hooks.Change, force bool) error {
 	if len(changes) == 0 {
 		return nil
 	}
+	cfg, sourcePaths := env.Config, env.SourcePaths
 
 	all, err := scripts.NewDiscoverer(cfg.SourceDir(), sourcePaths).Discover()
 	if err != nil {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
-	set, err := hooks.Collect(cfg, sourcePaths, scanner.DirConfig, all)
+	set, err := hooks.Collect(cfg, sourcePaths, env.Scanner.DirConfig, all)
 	if err != nil {
 		return fmt.Errorf("invalid hooks: %w", err)
 	}
 
-	tmplCtx, err := newTemplateContext(cfg, profileName)
-	if err != nil {
-		return fmt.Errorf("creating template context: %w", err)
-	}
-
-	chain := profile.InheritanceChain(cfg, profileName)
-	executor := scripts.NewExecutor(db, tmplCtx, false, false).WithConfirmation(force, false)
+	tmplCtx, chain := env.TmplCtx, env.Chain
+	executor := scripts.NewExecutor(db, tmplCtx, false).WithConfirmation(force, false)
 	runner := hooks.NewRunner(executor, tmplCtx, hooks.Options{Force: force, ProfileChain: chain})
 
 	res, err := runTriggeredHooks(runner, set.Trigger(changes, chain), nil, false)

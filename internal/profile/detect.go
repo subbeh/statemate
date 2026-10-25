@@ -1,14 +1,15 @@
 package profile
 
 import (
+	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 
 	"github.com/subbeh/statemate/internal/config"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 // How a profile was chosen, as reported by DetectWithSource.
@@ -27,6 +28,12 @@ func Detect(cfg *config.Config) string {
 // of the Source constants, or "" when none matched). `mate profile` reports it,
 // and must go through the same precedence as every other command.
 func DetectWithSource(cfg *config.Config) (string, string) {
+	name, source := detect(cfg)
+	slog.Debug("profile", "name", name, "source", source)
+	return name, source
+}
+
+func detect(cfg *config.Config) (string, string) {
 	if cfg.Profile != "" {
 		return cfg.Profile, SourceConfig
 	}
@@ -148,7 +155,7 @@ func runCommand(command string) bool {
 		command = filepath.Join(home, command[2:])
 	}
 
-	cmd := exec.Command("sh", "-c", command)
+	cmd := util.Command("sh", "-c", command)
 	err := cmd.Run()
 	return err == nil
 }

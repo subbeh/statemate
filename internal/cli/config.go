@@ -24,7 +24,7 @@ The path is printed bare, with no label, so it can be used directly:
 
 Resolution order matches the rest of mate: the --config flag, then the
 STATEMATE_DIR environment variable, then source_dir in the local config
-(~/.config/statemate/mate.yaml), then the current directory.`,
+(~/.config/statemate/config.yaml), then the current directory.`,
 	Args: cobra.NoArgs,
 	RunE: runConfigSourceDir,
 }

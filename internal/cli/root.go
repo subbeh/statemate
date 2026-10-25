@@ -3,12 +3,18 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/secrets"
 )
 
 var version = "dev"
+
+// bold marks section headers. Like every color, it is dropped when stdout is
+// not a terminal, NO_COLOR is set, or --no-color is passed.
+var bold = color.New(color.Bold).SprintFunc()
 
 var rootCmd = &cobra.Command{
 	Use:     "mate",
@@ -32,9 +38,13 @@ Use "mate [command] --help" for more information about a command.`,
 	//
 	// Runtime errors are printed by Execute rather than cobra, so they can be
 	// shortened first.
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
 		cmd.SilenceErrors = true
+		if noColor, _ := cmd.Flags().GetBool("no-color"); noColor {
+			color.NoColor = true
+		}
+		return openLog(cmd)
 	},
 }
 
@@ -54,7 +64,8 @@ func SetVersion(v string) {
 func Execute() error {
 	cmd, err := rootCmd.ExecuteC()
 	if err != nil && cmd.SilenceErrors {
-		cmd.PrintErrln("Error:", errorMessage(err))
+		slog.Error("failed", "err", err)
+		cmd.PrintErrln(color.RedString("Error:"), errorMessage(err))
 	}
 	return err
 }
@@ -82,6 +93,10 @@ func RootCmd() *cobra.Command {
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)")
 	rootCmd.PersistentFlags().StringP("profile", "p", "", "override auto-detected profile")
+	rootCmd.PersistentFlags().CountP("verbose", "v", "print log records to stderr: -v for info (what changed), -vv for debug")
+	rootCmd.PersistentFlags().Bool("no-color", false, "disable colored output (also off when stdout is not a terminal or NO_COLOR is set)")
+	rootCmd.PersistentFlags().String("log-file", "", "append a log of what mate changes to this file, and at debug what it decides and runs (also STATEMATE_LOG_FILE, or log_file in the config)")
+	rootCmd.PersistentFlags().String("log-level", "", "log level: debug, info, warn or error (default info; also STATEMATE_LOG_LEVEL, or log_level in the config)")
 	rootCmd.AddCommand(versionCmd)
 	// --version (which the Homebrew formula test runs) prints exactly what
 	// `mate version` does.

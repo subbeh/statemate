@@ -6,8 +6,12 @@ Delete file from source and target
 
 Delete a managed file from the source and the target, and stop tracking it.
 
-Give the target path, meaning the deployed file. The target is deleted as well
-unless --keep-target is given, and the deletion is confirmed unless --force (or --noconfirm) is.
+Give the target path, meaning the deployed file, or the source file. It is a
+path like any other: absolute, under ~, or relative to the current directory,
+and a relative path that is not there is also looked up in the source
+directory. The file may come from any source, not only the current profile's.
+The target is deleted as well unless --keep-target is given, and the deletion
+is confirmed unless --force (or --noconfirm) is.
 
 Hooks matching the removed target run afterwards (see 'mate hooks'); --force
 also confirms them. Nothing runs with --keep-target.
@@ -35,8 +39,12 @@ mate delete <path> [flags]
 ## Options inherited from parent commands
 
 ```
-  -c, --config string    config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
-  -p, --profile string   override auto-detected profile
+  -c, --config string      config file (default: mate.yaml in $STATEMATE_DIR if set, else in the local config's source_dir, else in the current directory)
+      --log-file string    append a log of what mate changes to this file, and at debug what it decides and runs (also STATEMATE_LOG_FILE, or log_file in the config)
+      --log-level string   log level: debug, info, warn or error (default info; also STATEMATE_LOG_LEVEL, or log_level in the config)
+      --no-color           disable colored output (also off when stdout is not a terminal or NO_COLOR is set)
+  -p, --profile string     override auto-detected profile
+  -v, --verbose count      print log records to stderr: -v for info (what changed), -vv for debug
 ```
 
 ## SEE ALSO

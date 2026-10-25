@@ -109,7 +109,7 @@ func runSecretsFetch(cmd *cobra.Command, args []string) error {
 		if errors.Is(err, secrets.ErrNoIdentity) {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%s %v\n", color.RedString("Error:"), err)
 		if ok, _ := util.Confirm("Continue with cached secrets? [y/n]: ", false); !ok {
 			return err
 		}
@@ -199,11 +199,11 @@ func runSecretsStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(missing) == 0 {
-		fmt.Println("All secrets are cached")
+		fmt.Println(color.GreenString("All secrets are cached"))
 		return nil
 	}
 
-	fmt.Println("Secrets needing fetch:")
+	fmt.Println(bold("Secrets needing fetch:"))
 	for _, item := range missing {
 		fmt.Printf("  %s/%s/%s\n", item.Item, item.Type, item.Field)
 	}

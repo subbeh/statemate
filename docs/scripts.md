@@ -18,7 +18,7 @@ a source:
 ## Naming
 
 ```
-<order>-<name>.<ext>#<frequency>#<timing>[#template][#profile:<name>]
+<order>-<name>.<ext>#<frequency>#<timing>[#tmpl][#noconfirm][#profile:<name>]
 ```
 
 The order prefix is optional and controls execution order. Scripts are sorted by
@@ -31,8 +31,8 @@ README, so keep documentation elsewhere.
 
 ```
 01-setup.sh#once#before
-02-secrets.sh#onchange#before#template
-50-fonts.sh#weekly#after
+02-secrets.sh#onchange#before#tmpl
+50-fonts.sh#weekly#after#noconfirm
 99-cleanup.sh#always#after
 bootstrap.sh                          ← manual only
 migrate.sh#once#before#profile:arch
@@ -43,7 +43,7 @@ migrate.sh#once#before#profile:arch
 | Frequency | Runs |
 |-----------|------|
 | `once` | The first time only, on this machine |
-| `onchange` | When the script's own source has pending changes, or its last run failed |
+| `onchange` | When the script's own source has pending changes, or what its [`# Onchange:`](#choosing-the-triggers) comment names changed, or its last run failed |
 | `always` | On every apply |
 | `daily` | At most once in 24 hours |
 | `weekly` | At most once in 7 days |
@@ -62,8 +62,8 @@ An `onchange` script runs when **its source** has pending changes: the files
 imports and conflicts. A script in the repository root `.matescripts/` has no
 owning source, so any pending change triggers it.
 
-Editing the script itself does *not* trigger it. Use `mate scripts run <name>` to
-run one on demand.
+Editing the script itself does *not* trigger it, unless its `# Onchange:`
+comment says so. Use `mate scripts run <name>` to run one on demand.
 
 Pending changes are computed before any file is written, so an `onchange` script
 sees the same set whether its timing is `before` or `after`.
@@ -72,8 +72,39 @@ A run that fails keeps the script due on later applies, even though the changes
 that triggered it have since been written, until it succeeds or you answer `s` to
 mark it done.
 
-To react to specific files rather than a whole source — `*.service`, say — use a
-[hook](hooks.md).
+#### Choosing the triggers
+
+A comment in the script's first 10 lines narrows what triggers it, matched like
+the [description](#descriptions):
+
+```bash
+#!/usr/bin/env bash
+# Description: Restart keyd after its configuration changes
+# Onchange: self /etc/keyd/*.conf
+```
+
+The comment lists triggers separated by whitespace, and any one of them makes
+the script due:
+
+| Trigger | Due when |
+|---------|----------|
+| `self` | The script differs from what it was at its last recorded run, or it has never run. Answering `s` at the prompt records it as run |
+| A pattern | A pending change in the script's source has a target path the pattern matches. A repository-root script matches changes in every source |
+
+Patterns follow the [hook pattern rules](hooks.md#patterns): they match where a
+file is deployed, so `*.conf`, `.config/keyd/*.conf` and `/etc/keyd/*.conf` all
+work. A pattern cannot contain whitespace.
+
+With the comment, only the listed triggers count: `# Onchange: self` runs the
+script when you edit it, not when anything else in the source changes. A failed
+run is still retried. Like an attribute, the comment is checked when scripts are
+discovered: `mate apply` refuses to start when it is empty, has a pattern that
+does not parse, or is on a script that is not `#onchange`. For a `#tmpl` script,
+the comment and `self` both use the script as it is in the repository, not the
+rendered copy.
+
+For a follow-up that depends on *which* files changed, or that is a single
+command, use a [hook](hooks.md).
 
 ## Timing
 
@@ -127,6 +158,10 @@ is no meaningful "never ask again" for a script that opted into running every ti
 Answering with EOF (no terminal input available) aborts rather than assuming
 consent.
 
+A script marked `#noconfirm` runs without asking, even when there is no
+terminal. Use it for scripts that are safe to run unattended, such as rebuilding
+a font cache. `--no-scripts` still skips it.
+
 A script marked as done still appears in `mate scripts list` and can be run
 manually.
 
@@ -164,9 +199,9 @@ A failing script aborts the apply.
 
 The parent environment is inherited as well.
 
-### `#template`
+### `#tmpl`
 
-A script marked `#template` is rendered before execution, giving it access to
+A script marked `#tmpl` is rendered before execution, giving it access to
 [variables and secrets](templates.md):
 
 ```bash
@@ -176,7 +211,7 @@ echo "{{ bitwarden "api" "field" "token" }}" > ~/.config/app/token
 ```
 
 The rendered copy is what runs; the script in the repository is left alone. It
-is written to a temporary executable file and run directly, so a `#template`
+is written to a temporary executable file and run directly, so a `#tmpl`
 script **must** start with a shebang.
 
 ## Commands
@@ -207,7 +242,8 @@ repository-root `.matescripts/`.
 
 An empty `SOURCE` means the script lives in the repository-root `.matescripts/`.
 A profile-scoped script's name is followed by its profile, such as
-`migrate.sh [arch]`, and a templated one by `[T]`.
+`migrate.sh [arch]`, a templated one by `[T]`, and a `#noconfirm` one by
+`[noconfirm]`.
 
 `STATUS` depends on frequency:
 

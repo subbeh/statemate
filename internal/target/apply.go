@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/fatih/color"
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
@@ -19,12 +21,15 @@ import (
 )
 
 type Applier struct {
-	db       *state.DB
-	tmplCtx  *template.Context
-	enc      *encrypt.AgeEncryptor
-	dryRun   bool
-	force    bool
-	verbose  int
+	// DiffTool is the external tool a conflict's [d]iff runs, empty for diff -u.
+	DiffTool string
+
+	db      *state.DB
+	tmplCtx *template.Context
+	enc     *encrypt.AgeEncryptor
+	dryRun  bool
+	force   bool
+	list    bool
 }
 
 type ApplyResult struct {
@@ -38,7 +43,6 @@ type ApplyResult struct {
 	// hook would need to react to.
 	Written []*source.Entry
 }
-
 
 type ChangeStatus int
 
@@ -73,14 +77,31 @@ func (s ChangeStatus) String() string {
 	}
 }
 
-func NewApplier(db *state.DB, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, dryRun, force bool, verbose int) *Applier {
+// Marker is the colored one-character prefix that lists a change.
+func (s ChangeStatus) Marker() string {
+	switch s {
+	case StatusNew:
+		return color.GreenString("+")
+	case StatusModified:
+		return color.YellowString("~")
+	case StatusConflict:
+		return color.RedString("!")
+	case StatusImport:
+		// Points back at the source: this file moves the other way.
+		return color.CyanString("<")
+	default:
+		return ""
+	}
+}
+
+func NewApplier(db *state.DB, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, dryRun, force, list bool) *Applier {
 	return &Applier{
-		db:       db,
-		tmplCtx:  tmplCtx,
-		enc:      enc,
-		dryRun:   dryRun,
-		force:    force,
-		verbose:  verbose,
+		db:      db,
+		tmplCtx: tmplCtx,
+		enc:     enc,
+		dryRun:  dryRun,
+		force:   force,
+		list:    list,
 	}
 }
 
@@ -94,7 +115,7 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			// Only an empty directory is worth reporting: the rest come along with
 			// the files inside them, which are listed separately.
 			if _, err := os.Stat(dir.TargetPath); os.IsNotExist(err) && emptyDirs[dir.TargetPath] {
-				fmt.Printf("+ %s\n", dir.TargetPath)
+				fmt.Printf("%s %s\n", StatusNew.Marker(), dir.TargetPath)
 				result.Applied++
 			}
 			continue
@@ -133,8 +154,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				}
 			}
 			if created {
-				if a.verbose > 0 {
-					fmt.Printf("+ %s\n", dir.TargetPath)
+				slog.Info("wrote", "target", dir.TargetPath, "status", StatusNew)
+				if a.list {
+					fmt.Printf("%s %s\n", StatusNew.Marker(), dir.TargetPath)
 				}
 				result.Applied++
 			}
@@ -155,8 +177,9 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 			}
 		}
 		if created {
-			if a.verbose > 0 {
-				fmt.Printf("+ %s\n", dir.TargetPath)
+			slog.Info("wrote", "target", dir.TargetPath, "status", StatusNew)
+			if a.list {
+				fmt.Printf("%s %s\n", StatusNew.Marker(), dir.TargetPath)
 			}
 			result.Applied++
 		}
@@ -192,7 +215,7 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				if err := a.importFile(entry); err != nil {
 					return nil, fmt.Errorf("importing %s: %w", entry.TargetPath, err)
 				}
-				fmt.Printf("← %s (imported)\n", util.ShortenPath(entry.TargetPath))
+				fmt.Printf("%s %s (imported)\n", color.CyanString("←"), util.ShortenPath(entry.TargetPath))
 			}
 			result.Imported++
 			continue
@@ -203,6 +226,7 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 				if err != nil {
 					return nil, err
 				}
+				slog.Debug("conflict", "target", entry.TargetPath, "action", action)
 				switch action {
 				case "skip":
 					result.Skipped++
@@ -236,7 +260,8 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 		if err := a.applyFile(entry, change.NewHash); err != nil {
 			return nil, fmt.Errorf("applying %s: %w", entry.SourcePath, err)
 		}
-		if a.verbose > 0 {
+		slog.Info("wrote", "target", entry.TargetPath, "status", change.Status)
+		if a.list {
 			a.printChange(change)
 		}
 		result.Applied++
@@ -247,7 +272,6 @@ func (a *Applier) Apply(tree *source.Tree) (*ApplyResult, error) {
 
 	return result, nil
 }
-
 
 func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 	if entry.Attrs.Symlink {
@@ -280,34 +304,9 @@ func (a *Applier) applyFile(entry *source.Entry, sourceHash string) error {
 		mode = os.FileMode(entry.Attrs.Perm)
 	}
 
-	var content []byte
-	var err error
-
-	if entry.Generated {
-		content = []byte(entry.GeneratedContent)
-	} else {
-		content, err = os.ReadFile(entry.SourcePath)
-		if err != nil {
-			return err
-		}
-
-		if entry.Attrs.Encrypted {
-			// Never fall through to writing the ciphertext as the target.
-			if a.enc == nil {
-				return errNoIdentity(entry)
-			}
-			content, err = a.enc.Decrypt(content)
-			if err != nil {
-				return fmt.Errorf("decrypting: %w", err)
-			}
-		}
-
-		if entry.Attrs.Template && a.tmplCtx != nil {
-			content, err = template.Render(content, a.tmplCtx)
-			if err != nil {
-				return fmt.Errorf("rendering template: %w", err)
-			}
-		}
+	content, err := render(entry, a.tmplCtx, a.enc)
+	if err != nil {
+		return err
 	}
 
 	// Remove existing symlink if target should be a regular file
@@ -394,10 +393,10 @@ func dirAttrsMatch(info os.FileInfo, attrs source.Attrs) bool {
 }
 
 func (a *Applier) promptConflict(change *Change) (string, error) {
-	fmt.Printf("\nConflict: %s\n", change.Entry.TargetPath)
+	fmt.Printf("\n%s %s\n", color.RedString("Conflict:"), change.Entry.TargetPath)
 	fmt.Printf("  Target has been modified since last apply\n")
 
-	// Importing a #symlink would write the target's content through the source
+	// Importing a #link would write the target's content through the source
 	// link, into whatever it points at.
 	canImport := !change.Entry.Attrs.Template && !change.Entry.Attrs.Symlink
 	var prompt string
@@ -436,56 +435,20 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 		case "a":
 			return "abort", nil
 		case "d":
-			if err := a.showConflictDiff(change.Entry); err != nil {
+			diff, err := Diff(change, a.tmplCtx, a.enc, a.DiffTool)
+			switch {
+			case err != nil:
 				fmt.Printf("Error showing diff: %v\n", err)
+			case diff == "":
+				fmt.Println("  (no differences)")
+			default:
+				fmt.Println(diff)
 			}
 			fmt.Print(prompt)
 		default:
 			fmt.Print("\n" + prompt)
 		}
 	}
-}
-
-func (a *Applier) showConflictDiff(entry *source.Entry) error {
-	if entry.Attrs.Encrypted || entry.Attrs.Template {
-		content, err := os.ReadFile(entry.SourcePath)
-		if err != nil {
-			return err
-		}
-
-		if entry.Attrs.Encrypted {
-			if a.enc == nil || !a.enc.CanDecrypt() {
-				return fmt.Errorf("cannot show diff: file is encrypted and no decryption key available")
-			}
-			content, err = a.enc.Decrypt(content)
-			if err != nil {
-				return fmt.Errorf("decrypting source: %w", err)
-			}
-		}
-
-		if entry.Attrs.Template && a.tmplCtx != nil {
-			content, err = template.Render(content, a.tmplCtx)
-			if err != nil {
-				return fmt.Errorf("rendering template: %w", err)
-			}
-		}
-
-		tmpFile, err := os.CreateTemp("", "mate-diff-*")
-		if err != nil {
-			return err
-		}
-		defer func() { _ = os.Remove(tmpFile.Name()) }()
-
-		if _, err := tmpFile.Write(content); err != nil {
-			_ = tmpFile.Close()
-			return err
-		}
-		_ = tmpFile.Close()
-
-		return showDiff(tmpFile.Name(), entry.TargetPath)
-	}
-
-	return showDiff(entry.SourcePath, entry.TargetPath)
 }
 
 func (a *Applier) importFile(entry *source.Entry) error {
@@ -496,9 +459,9 @@ func (a *Applier) importFile(entry *source.Entry) error {
 
 	if entry.Attrs.Encrypted {
 		// Writing the target back unencrypted would put plaintext into the repo
-		// under an #encrypted name.
+		// under an #enc name.
 		if a.enc == nil || !a.enc.CanEncrypt() {
-			return fmt.Errorf("%s is #encrypted but no age recipients are configured to re-encrypt it", entry.SourcePath)
+			return fmt.Errorf("%s is #enc but no age recipients are configured to re-encrypt it", entry.SourcePath)
 		}
 		content, err = a.enc.Encrypt(content)
 		if err != nil {
@@ -509,6 +472,7 @@ func (a *Applier) importFile(entry *source.Entry) error {
 	if err := os.WriteFile(entry.SourcePath, content, entry.Mode.Perm()); err != nil {
 		return fmt.Errorf("writing source: %w", err)
 	}
+	slog.Info("source", "action", "import", "path", entry.SourcePath, "from", entry.TargetPath)
 
 	sourceHash, err := state.HashFile(entry.SourcePath)
 	if err != nil {
@@ -528,7 +492,6 @@ func (a *Applier) importFile(entry *source.Entry) error {
 		Mode:        entry.Mode.Perm(),
 	})
 }
-
 
 // readTarget reads a deployed file, falling back to elevated access when it is
 // unreadable as the invoking user -- the same reason hashTarget does.
@@ -604,16 +567,5 @@ func (a *Applier) recordState(entry *source.Entry, sourceHash string) error {
 }
 
 func (a *Applier) printChange(change *Change) {
-	var prefix string
-	switch change.Status {
-	case StatusNew:
-		prefix = "+"
-	case StatusModified:
-		prefix = "~"
-	case StatusConflict:
-		prefix = "!"
-	case StatusImport:
-		prefix = "<"
-	}
-	fmt.Printf("%s %s\n", prefix, change.Entry.TargetPath)
+	fmt.Printf("%s %s\n", change.Status.Marker(), change.Entry.TargetPath)
 }

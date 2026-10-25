@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/subbeh/statemate/internal/util"
 )
 
 type AURManager struct {
@@ -46,7 +48,7 @@ func (a *AURManager) IsAvailable() bool {
 
 func (a *AURManager) ListInstalled() ([]Package, error) {
 	// -Qmtt lists foreign (AUR) packages that are unrequired and not optdeps
-	cmd := exec.Command(a.helper, "-Qmtt")
+	cmd := util.Command(a.helper, "-Qmtt")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -83,7 +85,7 @@ func (a *AURManager) QueryInstalled(pkgs []string) ([]Package, error) {
 
 	// Bulk query first (fast path)
 	args := append([]string{"-Qm"}, pkgs...)
-	cmd := exec.Command("pacman", args...)
+	cmd := util.Command("pacman", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	_ = cmd.Run()
@@ -112,7 +114,7 @@ func (a *AURManager) QueryInstalled(pkgs []string) ([]Package, error) {
 			packages = append(packages, pkg)
 			continue
 		}
-		cmd := exec.Command("pacman", "-Qm", name)
+		cmd := util.Command("pacman", "-Qm", name)
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		if err := cmd.Run(); err != nil {
@@ -140,7 +142,7 @@ func (a *AURManager) Describe(pkgs []string) (Descriptions, error) {
 		return Descriptions{}, nil
 	}
 	args := append([]string{"-Qi"}, pkgs...)
-	cmd := exec.Command("pacman", args...)
+	cmd := util.Command("pacman", args...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	// Not-installed packages make pacman -Qi exit non-zero while still printing
@@ -169,7 +171,7 @@ func (a *AURManager) Install(pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"-S", "--noconfirm"}, pkgs...)
-	cmd := exec.Command(a.helper, args...)
+	cmd := util.Command(a.helper, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -181,7 +183,7 @@ func (a *AURManager) Uninstall(pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"-R", "--noconfirm"}, pkgs...)
-	cmd := exec.Command(a.helper, args...)
+	cmd := util.Command(a.helper, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

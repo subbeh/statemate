@@ -1,6 +1,8 @@
 package profile
 
 import (
+	"slices"
+
 	"github.com/subbeh/statemate/internal/config"
 )
 
@@ -27,7 +29,7 @@ func Resolve(cfg *config.Config, profileName string) *config.Profile {
 
 	for _, p := range chain {
 		if p.Packages != nil {
-			resolved.Packages = mergePackages(resolved.Packages, p.Packages)
+			resolved.Packages = slices.Concat(resolved.Packages, p.Packages)
 		}
 		for k, v := range p.Variables {
 			resolved.Variables[k] = v
@@ -57,33 +59,4 @@ func resolveChain(cfg *config.Config, profileName string) []*config.Profile {
 	}
 
 	return chain
-}
-
-func mergePackages(base, overlay *config.PackageList) *config.PackageList {
-	if base == nil {
-		return overlay
-	}
-	if overlay == nil {
-		return base
-	}
-
-	result := &config.PackageList{
-		Common: uniqueStrings(append(base.Common, overlay.Common...)),
-		Brew:   uniqueStrings(append(base.Brew, overlay.Brew...)),
-		Pacman: uniqueStrings(append(base.Pacman, overlay.Pacman...)),
-		AUR:    uniqueStrings(append(base.AUR, overlay.AUR...)),
-	}
-	return result
-}
-
-func uniqueStrings(s []string) []string {
-	seen := make(map[string]bool)
-	var result []string
-	for _, v := range s {
-		if !seen[v] {
-			seen[v] = true
-			result = append(result, v)
-		}
-	}
-	return result
 }

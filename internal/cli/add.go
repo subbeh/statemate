@@ -3,17 +3,21 @@ package cli
 import (
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/fatih/color"
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/profile"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/template"
+	"github.com/subbeh/statemate/internal/util"
 )
 
 var addCmd = &cobra.Command{
@@ -31,7 +35,9 @@ Unreadable files, broken symlinks, and special files stop the command.
 
 The source is the one named with --source, else 'default_source' from the
 config, else one you pick from a list of the configured sources. The source must
-already be listed under 'sources:' and exist as a directory.
+already be listed under 'sources:' and exist as a directory. A named source
+whose directory does not exist yet is offered for creation: mate creates the
+directory and adds the file, but you still list it under 'sources:' yourself.
 
 A file outside your home directory, such as one under /etc, needs a source that
 maps that location (see 'targets:' in a source's .mate.yaml); for a source
@@ -95,10 +101,11 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("file not found: %s", targetPath)
 	}
 
-	scanner, err := newScanner(cfg, profileName)
+	env, err := plan.FromConfig(cfg, profileName)
 	if err != nil {
-		return fmt.Errorf("creating scanner: %w", err)
+		return err
 	}
+	scanner := env.Scanner
 	tree, err := scanner.Scan(absSources)
 	if err != nil {
 		return fmt.Errorf("scanning sources: %w", err)
@@ -132,7 +139,14 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("source %q not in configured sources", sourceName)
+			notConfigured := fmt.Errorf("source %q not in configured sources", sourceName)
+			if _, err := os.Stat(sourceDir); !os.IsNotExist(err) {
+				return notConfigured
+			}
+			if err := promptCreateSource(sourceDir, notConfigured); err != nil {
+				return err
+			}
+			fmt.Fprintf(os.Stderr, "%s source %q is not in the config; add it to 'sources:' so mate deploys it\n", color.YellowString("Warning:"), sourceName)
 		}
 	} else {
 		// Must offer the same list that absSources is indexed from: cfg.Sources
@@ -244,10 +258,7 @@ func unmanagedAddFiles(files []addFile, sourceDir string, tree *source.Tree) ([]
 	for _, file := range files {
 		owners := managed[file.path]
 		for _, owner := range owners {
-			ownerDir := owner.SourcePath
-			if !owner.Generated {
-				ownerDir = strings.TrimSuffix(owner.SourcePath, string(filepath.Separator)+owner.RelPath)
-			}
+			ownerDir := owner.SourceDir
 			if filepath.Clean(ownerDir) != filepath.Clean(sourceDir) {
 				return nil, fmt.Errorf("file already managed by another source: %s (in %s)", file.path, ownerDir)
 			}
@@ -280,10 +291,10 @@ func addFileToSource(targetPath string, info os.FileInfo, sourceDir string, cfg 
 		destName = destName + "#profile:" + addForProfile
 	}
 	if addEncrypt {
-		destName = destName + "#encrypted"
+		destName = destName + "#enc"
 	}
 	if addTemplate {
-		destName = destName + "#template"
+		destName = destName + "#tmpl"
 	}
 
 	destPath := filepath.Join(resolveAttrsPath(sourceDir, filepath.Dir(relPath)), destName)
@@ -317,6 +328,7 @@ func addFileToSource(targetPath string, info os.FileInfo, sourceDir string, cfg 
 		return fmt.Errorf("writing file: %w", err)
 	}
 
+	slog.Info("source", "action", "add", "path", destPath, "from", targetPath)
 	fmt.Printf("Added %s -> %s\n", targetPath, destPath)
 	return nil
 }
@@ -410,10 +422,12 @@ func resolveTargetBaseForAdd(sourceDir, targetPath, globalTargetBase string, tre
 			return globalBase, nil
 		}
 		// Check if file falls under a targets mapping
-		for _, mappedBase := range dirCfg.Targets {
-			mappedBase = expandPath(mappedBase)
-			if strings.HasPrefix(targetPath, mappedBase+string(filepath.Separator)) || targetPath == mappedBase {
-				return filepath.Dir(mappedBase), nil
+		for _, mappedBases := range dirCfg.Targets {
+			for _, mappedBase := range mappedBases {
+				mappedBase = expandPath(mappedBase)
+				if strings.HasPrefix(targetPath, mappedBase+string(filepath.Separator)) || targetPath == mappedBase {
+					return filepath.Dir(mappedBase), nil
+				}
 			}
 		}
 		// Check if source already has files
@@ -502,8 +516,28 @@ func promptCreateDirConfig(sourceDir, targetPath string) (string, error) {
 		return "", fmt.Errorf("creating .mate.yaml: %w", err)
 	}
 
+	slog.Info("source", "action", "create", "path", filepath.Join(sourceDir, ".mate.yaml"))
 	fmt.Printf("Created %s/.mate.yaml\n", sourceDir)
 	return targetBase, nil
+}
+
+// Only the directory is created; the config is left for the user to edit.
+func promptCreateSource(sourceDir string, declined error) error {
+	ok, err := util.Confirm(fmt.Sprintf("Create source directory %s? [y/N] ", util.ShortenPath(sourceDir)), false)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return declined
+	}
+
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		return fmt.Errorf("creating source directory: %w", err)
+	}
+
+	slog.Info("source", "action", "create", "path", sourceDir)
+	fmt.Printf("Created %s\n", sourceDir)
+	return nil
 }
 
 func promptAddTargetBase(sourceDir, targetPath string) (string, error) {
@@ -526,6 +560,7 @@ func promptAddTargetBase(sourceDir, targetPath string) (string, error) {
 		return "", fmt.Errorf("updating .mate.yaml: %w", err)
 	}
 
+	slog.Info("source", "action", "edit", "path", filepath.Join(sourceDir, ".mate.yaml"))
 	fmt.Printf("Updated %s/.mate.yaml\n", sourceDir)
 	return targetBase, nil
 }

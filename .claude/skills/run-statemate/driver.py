@@ -109,7 +109,7 @@ def scaffold() -> Path:
     # A plain source, a templated file, and a per-source .mate.yaml.
     (repo / "app" / ".config" / "app").mkdir(parents=True)
     (repo / "app" / ".config" / "app" / "settings.conf").write_text("mode=plain\n")
-    (repo / "app" / ".config" / "app" / "rendered.conf#template").write_text(
+    (repo / "app" / ".config" / "app" / "rendered.conf#tmpl").write_text(
         "greeting={{ .Vars.greeting }}\n"
     )
     # A deliberately non-existent package, so `status` always has something to
@@ -120,7 +120,7 @@ def scaffold() -> Path:
     # "missing", and `mate apply --force` would try to install it and abort the
     # apply when that fails. Never pass bare --force here; see apply below.
     (repo / "app" / ".mate.yaml").write_text(
-        "packages:\n  common:\n    - statemate-no-such-package\n"
+        "packages:\n  - statemate-no-such-package\n"
     )
 
     # A source whose files need executable permissions via a recursive attr.
@@ -307,7 +307,7 @@ def smoke() -> None:
     # --- interactive apply under a PTY --------------------------------------
     # 'y' runs the before-script, 'y' again for the after-script.
     code, out = run_pty(["apply"], keys="y\ny\n", root=root)
-    expect(out, "[y]es", "apply prompts for script confirmation")
+    expect(out, "[Y]es", "apply prompts for script confirmation")
     if not (root / "ran-setup").exists():
         die(f"answering 'y' should have run the script:\n{out}")
     log("ok: PTY prompt ran the script")

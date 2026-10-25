@@ -16,6 +16,7 @@ type Hook struct {
 	Profile     string     `yaml:"profile" toml:"profile"`
 	Description string     `yaml:"description" toml:"description"`
 	Enabled     *bool      `yaml:"enabled" toml:"enabled"`
+	Confirm     *bool      `yaml:"confirm" toml:"confirm"`
 
 	// dir is the directory of the config file that declared the hook: steps run
 	// there, and relative paths resolve against it.
@@ -79,6 +80,10 @@ func (h *Hook) IsLocal() bool { return h.local }
 // otherwise.
 func (h *Hook) IsEnabled() bool { return h.Enabled == nil || *h.Enabled }
 
+// Confirms reports whether the hook asks before running. Hooks ask unless they
+// set `confirm: false`.
+func (h *Hook) Confirms() bool { return h.Confirm == nil || *h.Confirm }
+
 // Validate checks the hook's structure. A disabled hook needs nothing else, so
 // that a local override can switch a hook off with `enabled: false` alone.
 func (h *Hook) Validate() error {
@@ -89,7 +94,7 @@ func (h *Hook) Validate() error {
 		return fmt.Errorf("match is required")
 	}
 	for _, p := range h.Match {
-		if err := validatePattern(p); err != nil {
+		if err := ValidatePattern(p); err != nil {
 			return fmt.Errorf("invalid match pattern %q: %w", p, err)
 		}
 	}
@@ -104,7 +109,9 @@ func (h *Hook) Validate() error {
 	return nil
 }
 
-func validatePattern(p string) error {
+// ValidatePattern reports a target pattern, as hooks and #onchange scripts use,
+// that is empty or does not parse.
+func ValidatePattern(p string) error {
 	if strings.TrimSpace(p) == "" {
 		return fmt.Errorf("pattern is empty")
 	}

@@ -3,8 +3,10 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -13,7 +15,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func Load(path string) (*Config, error) {
+// parseFile finds and reads mate.yaml, without the local config, includes or
+// defaults.
+func parseFile(path string) (*Config, error) {
 	if path == "" {
 		var err error
 		path, err = FindConfig()
@@ -51,10 +55,19 @@ func Load(path string) (*Config, error) {
 	default:
 		return nil, fmt.Errorf("unsupported config format: %s", filepath.Ext(path))
 	}
+	return cfg, nil
+}
+
+func Load(path string) (*Config, error) {
+	cfg, err := parseFile(path)
+	if err != nil {
+		return nil, err
+	}
 	setHookOrigin(cfg.Hooks, cfg.sourceDir, false)
 
 	localCfg := loadLocalConfig()
 	cfg.ApplyOverrides(localCfg)
+	slog.Debug("config loaded", "dir", cfg.sourceDir, "local_config", localCfg != nil)
 
 	// STATEMATE_KEY_FILE wins over identity and identity_command in either
 	// config, as STATEMATE_DIR wins over source_dir. Applied before includes,
@@ -76,6 +89,19 @@ func Load(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// LogSettings returns log_file and log_level from mate.yaml, as overridden by
+// the local config. Logging starts before any command loads its config, so it
+// reads just these; a config that fails to load leaves them empty, and the
+// command reports the error itself.
+func LogSettings(path string) (file, level string) {
+	cfg, err := parseFile(path)
+	if err != nil {
+		cfg = &Config{}
+	}
+	cfg.ApplyOverrides(loadLocalConfig())
+	return expandHome(cfg.LogFile), cfg.LogLevel
 }
 
 func FindConfig() (string, error) {
@@ -100,13 +126,21 @@ func LocalSourceDir() string {
 	return ""
 }
 
+// LocalConfigPath returns statemate/config.yaml in the XDG config dir, or
+// config.yml when only that one exists.
 func LocalConfigPath() string {
 	configDir := os.Getenv("XDG_CONFIG_HOME")
 	if configDir == "" {
 		home, _ := os.UserHomeDir()
 		configDir = filepath.Join(home, ".config")
 	}
-	return filepath.Join(configDir, "statemate", "mate.yaml")
+	dir := filepath.Join(configDir, "statemate")
+	if _, err := os.Stat(filepath.Join(dir, "config.yaml")); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(dir, "config.yml")); err == nil {
+			return filepath.Join(dir, "config.yml")
+		}
+	}
+	return filepath.Join(dir, "config.yaml")
 }
 
 func loadLocalConfig() *Config {
@@ -243,7 +277,7 @@ func LoadDirConfigRaw(dir string, render TemplateRenderer) (*DirConfig, error) {
 	}
 	setHookOrigin(cfg.Hooks, dir, false)
 
-	// ponytail: no age identity here, so an #encrypted source include fails; pass the encryptor in if that's needed.
+	// ponytail: no age identity here, so an #enc source include fails; pass the encryptor in if that's needed.
 	src := &Config{sourceDir: dir}
 	for _, f := range cfg.Include {
 		inc, err := src.loadInclude(f, nil)
@@ -251,7 +285,7 @@ func LoadDirConfigRaw(dir string, render TemplateRenderer) (*DirConfig, error) {
 			return nil, fmt.Errorf("loading include %s: %w", f, err)
 		}
 		if inc != nil {
-			cfg.Packages = mergePackageLists(cfg.Packages, inc.Packages)
+			cfg.Packages = slices.Concat(cfg.Packages, inc.Packages)
 			cfg.Variables = mergeVariables(cfg.Variables, inc.Variables)
 		}
 	}
@@ -295,9 +329,6 @@ func (c *Config) setDefaults() error {
 
 	if c.Variables == nil {
 		c.Variables = make(map[string]any)
-	}
-	if c.VarCmds == nil {
-		c.VarCmds = make(map[string]string)
 	}
 
 	return nil
@@ -345,21 +376,17 @@ func (c *Config) loadIncludes() error {
 
 func (c *Config) loadInclude(f string, dec *encrypt.AgeEncryptor) (*includeFile, error) {
 	path := c.resolveRelPath(f)
-	isEncrypted := strings.HasSuffix(path, "#encrypted")
+	plainPath, isEncrypted := util.TrimEncryptedSuffix(path)
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		// Try #encrypted variant
-		if !isEncrypted {
-			encPath := path + "#encrypted"
-			if _, err := os.Stat(encPath); err == nil {
-				path = encPath
-				isEncrypted = true
-			} else {
-				return nil, nil
-			}
-		} else {
+		// Try the #enc variant
+		if isEncrypted {
 			return nil, nil
 		}
+		if path = util.EncryptedVariant(path); path == "" {
+			return nil, nil
+		}
+		isEncrypted = true
 	}
 
 	data, err := os.ReadFile(path)
@@ -375,7 +402,7 @@ func (c *Config) loadInclude(f string, dec *encrypt.AgeEncryptor) (*includeFile,
 		if err != nil {
 			return nil, fmt.Errorf("decrypting: %w", err)
 		}
-		path = strings.TrimSuffix(path, "#encrypted")
+		path = plainPath
 	}
 
 	var inc includeFile
@@ -396,18 +423,18 @@ func (c *Config) loadInclude(f string, dec *encrypt.AgeEncryptor) (*includeFile,
 }
 
 type includeFile struct {
-	Packages  *PackageList   `yaml:"packages" toml:"packages"`
+	Packages  PackageList    `yaml:"packages" toml:"packages"`
 	Variables map[string]any `yaml:"variables" toml:"variables"`
 }
 
 
 func (c *Config) mergePartial(inc *includeFile) {
-	c.Packages = mergePackageLists(c.Packages, inc.Packages)
+	c.Packages = slices.Concat(c.Packages, inc.Packages)
 	c.Variables = mergeVariables(c.Variables, inc.Variables)
 }
 
 func (p *Profile) mergePartial(inc *includeFile) {
-	p.Packages = mergePackageLists(p.Packages, inc.Packages)
+	p.Packages = slices.Concat(p.Packages, inc.Packages)
 	p.Variables = mergeVariables(p.Variables, inc.Variables)
 }
 
@@ -423,22 +450,6 @@ func (c *Config) ResolveRelPath(path string) string {
 	return c.resolveRelPath(path)
 }
 
-func mergePackageLists(base, add *PackageList) *PackageList {
-	if add == nil {
-		return base
-	}
-	if base == nil {
-		return add
-	}
-
-	return &PackageList{
-		Common: appendUniqueStrings(base.Common, add.Common...),
-		Brew:   appendUniqueStrings(base.Brew, add.Brew...),
-		Pacman: appendUniqueStrings(base.Pacman, add.Pacman...),
-		AUR:    appendUniqueStrings(base.AUR, add.AUR...),
-	}
-}
-
 func mergeVariables(base, add map[string]any) map[string]any {
 	if add == nil {
 		return base
@@ -450,19 +461,4 @@ func mergeVariables(base, add map[string]any) map[string]any {
 		base[k] = v
 	}
 	return base
-}
-
-func appendUniqueStrings(slice []string, items ...string) []string {
-	seen := make(map[string]bool)
-	for _, s := range slice {
-		seen[s] = true
-	}
-	result := slice
-	for _, item := range items {
-		if !seen[item] {
-			seen[item] = true
-			result = append(result, item)
-		}
-	}
-	return result
 }

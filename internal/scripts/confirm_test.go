@@ -90,7 +90,7 @@ func TestDiscoverPopulatesDescription(t *testing.T) {
 	if err := os.MkdirAll(scriptsDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeScript(t, scriptsDir, "01-setup#once#before.sh",
+	writeScript(t, scriptsDir, "01-setup.sh#once#before",
 		"#!/usr/bin/env bash\n# Description: Set things up\n")
 
 	found, err := NewDiscoverer(repo, nil).Discover()
@@ -113,7 +113,7 @@ func newTestExecutor(t *testing.T, dryRun bool) *Executor {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	return NewExecutor(db, nil, dryRun, false)
+	return NewExecutor(db, nil, dryRun)
 }
 
 func TestCanMarkSkipped(t *testing.T) {
@@ -301,11 +301,10 @@ func TestExecute_DryRunDoesNotPrompt(t *testing.T) {
 	}
 }
 
-// Scripts that are not due are skipped silently, even under --verbose: listing
-// every one on each apply buried the files that actually changed.
-func TestExecute_VerboseDoesNotListSkippedScripts(t *testing.T) {
+// Scripts that are not due are skipped silently: listing every one on each
+// apply buried the files that actually changed.
+func TestExecute_DoesNotListSkippedScripts(t *testing.T) {
 	e := newTestExecutor(t, false)
-	e.verbose = true
 
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -344,5 +343,32 @@ func TestConfirm_EnterRuns(t *testing.T) {
 	ok, err := newTestExecutor(t, false).Confirm("hook x", nil)
 	if err != nil || !ok {
 		t.Fatalf("Enter should confirm, got ok=%v err=%v", ok, err)
+	}
+}
+
+// A #noconfirm script needs no answer, so it runs even without a terminal.
+func TestExecute_NoConfirmRunsWithoutTTY(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker")
+	name := "01-x.sh#always#before#noconfirm"
+	path := writeScript(t, dir, name, "#!/bin/bash\ntouch "+marker+"\n")
+
+	if err := CheckScriptName(name); err != nil {
+		t.Fatalf("#noconfirm should be a known attribute: %v", err)
+	}
+	if !HasNoConfirm(name) || HasNoConfirm("01-x.sh#always#before") {
+		t.Fatal("HasNoConfirm should report only names carrying #noconfirm")
+	}
+
+	script := &Script{Path: path, Name: "x", Frequency: FreqAlways, Timing: TimingBefore, NoConfirm: true}
+	result, err := newTestExecutor(t, false).WithConfirmation(false, false).Execute(Scripts{script})
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if result.Executed != 1 || len(result.SkippedNoTTY) != 0 {
+		t.Errorf("expected the script to run without prompting, got %+v", result)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Error("#noconfirm script should have run")
 	}
 }

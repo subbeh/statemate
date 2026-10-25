@@ -80,7 +80,7 @@ export STATEMATE_SCRATCH=$(mktemp -d)/sm
 python3 .claude/skills/run-statemate/driver.py scaffold
 ```
 
-The scaffold covers a plain file, a `#template` file, a `#perm-r:755` directory,
+The scaffold covers a plain file, a `#tmpl` file, a `#perm-r:755` directory,
 a per-source `.mate.yaml` with packages, and two scripts (`#once#before` with a
 `# Description:`, `#always#after`).
 
@@ -110,9 +110,9 @@ Verified prompt output — note `once` offers `[s]kip` and `always` does not:
 ```
 Run setup.sh (before, once)?
   Create a marker proving the script ran
-[y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit: n
+[Y]es / [n]o / [s]kip (mark as done) / [a]ll / [q]uit: n
 Run after.sh (after, always)?
-[y]es / [n]o / [a]ll / [q]uit:
+[Y]es / [n]o / [a]ll / [q]uit:
 ```
 
 ## Direct invocation (for PRs touching internals)
@@ -164,7 +164,7 @@ Use the driver.
 - **A source's packages ignore its `profile:` key.** `internal/packages/sync.go`
   collects `dirCfg.Packages` unconditionally; `profile:` in `.mate.yaml` gates
   *files* only. You cannot hide a package behind a non-matching profile.
-- **`mate` resolves the repo from config, not cwd.** `~/.config/statemate/mate.yaml`
+- **`mate` resolves the repo from config, not cwd.** `~/.config/statemate/config.yaml`
   sets `source_dir`, which beats the current directory. `cd`-ing into a scratch
   repo is **not** enough — you must set `STATEMATE_DIR` (the driver does).
 - **Resolve symlinks in scratch paths.** On macOS `mktemp -d` returns
@@ -172,8 +172,8 @@ Use the driver.
   `mate managed <path>` compare resolved paths, so an unresolved path yields
   `... is not managed by mate`. The driver calls `.resolve()`.
 - **`#` in filenames.** Safe as a mid-word shell argument in bash and zsh
-  (`file.conf#template` needs no quoting). But it *is* nvim's alternate-file
-  token, so `:edit path#encrypted` fails with `E194` — use `:edit path\#encrypted`
+  (`file.conf#tmpl` needs no quoting). But it *is* nvim's alternate-file
+  token, so `:edit path#enc` fails with `E194` — use `:edit path\#enc`
   or `vim.fn.fnameescape`.
 - **`make build-all` skips linux/arm64.** Only darwin-arm64 and linux-amd64.
 

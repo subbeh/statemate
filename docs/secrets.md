@@ -125,8 +125,8 @@ existing cache.
 ## Discovery
 
 `mate secrets fetch` finds references by **rendering every template** with the
-`bitwarden` function replaced by a recorder: `#template` files in active sources,
-`#template` scripts in any `.matescripts/`, and every source's `.mate.yaml`. This means a reference inside a
+`bitwarden` function replaced by a recorder: `#tmpl` files in active sources,
+`#tmpl` scripts in any `.matescripts/`, and every source's `.mate.yaml`. This means a reference inside a
 conditional is only discovered when that branch is taken under the current
 profile — which is usually what you want, since the other branch's secret is not
 needed on this machine.
@@ -147,9 +147,9 @@ Two mechanisms, for different needs:
 
 - **`bitwarden` references** — the value lives in your vault, and only a reference
   is committed. Best for credentials that already belong in a password manager.
-- **[`#encrypted` files](attributes.md#encrypted)** — the value is committed as
+- **[`#enc` files](attributes.md#enc)** — the value is committed as
   age ciphertext. Best for files that are wholly secret, like a private key, and
   for machines that must apply without vault access.
 
-They compose: an `#encrypted#template` file is decrypted, then rendered, so it can
+They compose: an `#enc#tmpl` file is decrypted, then rendered, so it can
 hold `bitwarden` references too.

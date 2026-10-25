@@ -3,6 +3,7 @@ package scripts
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,7 +19,7 @@ func TestParseScriptName(t *testing.T) {
 	}{
 		{"01-setup.sh#once#before", "setup.sh", FreqOnce, TimingBefore, false, "", 1},
 		{"02-cleanup.sh#always#after", "cleanup.sh", FreqAlways, TimingAfter, false, "", 2},
-		{"03-render.sh#onchange#before#template", "render.sh", FreqOnchange, TimingBefore, true, "", 3},
+		{"03-render.sh#onchange#before#tmpl", "render.sh", FreqOnchange, TimingBefore, true, "", 3},
 		{"10-install.sh#once#after", "install.sh", FreqOnce, TimingAfter, false, "", 10},
 		{"05-prep.sh#always#before", "prep.sh", FreqAlways, TimingBefore, false, "", 5},
 		{"manual-task.sh", "manual-task.sh", FreqManual, TimingBefore, false, "", 0},
@@ -242,5 +243,21 @@ func TestScriptIsExecutable(t *testing.T) {
 	nonExecScript := &Script{Path: nonExecPath}
 	if nonExecScript.IsExecutable() {
 		t.Error("expected non-executable script to not be executable")
+	}
+}
+
+func TestCheckScriptName(t *testing.T) {
+	for name, wantErr := range map[string]string{
+		"01-a.sh#once#before":         "",
+		"01-a.sh#Monthly#after#tmpl":  "",
+		"01-a.sh#once#profile:linux":  "",
+		"manual.sh":                   "",
+		"01-a.sh#once#after#template": "#template was renamed to #tmpl",
+		"01-a.sh#onchnage#after":      "unknown attribute #onchnage",
+	} {
+		err := CheckScriptName(name)
+		if (wantErr == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), wantErr)) {
+			t.Errorf("CheckScriptName(%q) = %v, want %q", name, err, wantErr)
+		}
 	}
 }

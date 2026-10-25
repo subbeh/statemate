@@ -91,18 +91,18 @@ func TestAgeStatus(t *testing.T) {
 	}
 }
 
-// mate doctor flags #encrypted files holding plaintext in any source, including
+// mate doctor flags #enc files holding plaintext in any source, including
 // one only a profile uses, and accepts armored and binary age files alike.
 func TestCheckEncrypted_FlagsPlaintext(t *testing.T) {
 	root := isolateHome(t)
 	repo := filepath.Join(root, "repo")
 	files := map[string]string{
 		"mate.yaml":                     "sources: [app]\nprofiles:\n  work:\n    sources: [work]\n",
-		"app/armored#encrypted":         "-----BEGIN AGE ENCRYPTED FILE-----\n",
-		"app/binary#encrypted":          "age-encryption.org/v1\n",
-		"app/leaked#encrypted":          "password=hunter2\n",
+		"app/armored#enc":         "-----BEGIN AGE ENCRYPTED FILE-----\n",
+		"app/binary#enc":          "age-encryption.org/v1\n",
+		"app/leaked#enc":          "password=hunter2\n",
 		"app/plain.conf":                "not marked, not checked\n",
-		"work/leaked-at-work#encrypted": "token=abc\n",
+		"work/leaked-at-work#enc": "token=abc\n",
 	}
 	for name, content := range files {
 		path := filepath.Join(repo, name)
@@ -133,7 +133,7 @@ func TestCheckEncrypted_FlagsPlaintext(t *testing.T) {
 	if issues != 2 {
 		t.Errorf("expected 2 issues, got %d:\n%s", issues, out)
 	}
-	for _, want := range []string{"leaked#encrypted is marked", "leaked-at-work#encrypted is marked"} {
+	for _, want := range []string{"leaked#enc is marked", "leaked-at-work#enc is marked"} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("expected %q in output:\n%s", want, out)
 		}

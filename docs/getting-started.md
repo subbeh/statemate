@@ -42,7 +42,7 @@ mate init
 
 ```
 Register this directory as your dotfiles location? [Y/n]: y
-Saved to ~/.config/statemate/mate.yaml
+Saved to ~/.config/statemate/config.yaml
 ```
 
 Registering writes `source_dir: "~/dotfiles"` to the
@@ -89,8 +89,9 @@ the arrow keys, or press `/` to search:
 
 Skip the question with `--source zsh`, or set
 [`default_source`](configuration.md#keys) in `mate.yaml`. The source must
-already exist as a directory and be listed under `sources:`. `mate add` will
-not create one.
+be listed under `sources:`. If `--source` names one whose directory does not
+exist yet, `mate add` offers to create the directory and adds the file to it;
+it does not edit `mate.yaml`, so list the new source under `sources:` yourself.
 
 To add all files in a directory, including hidden files and nested directories:
 
@@ -151,7 +152,7 @@ applied 1
 ```
 
 `mate apply --dry-run` walks the whole run, including scripts and packages,
-without writing anything, and `-V` lists every file written.
+without writing anything, and `-l` lists every file written.
 
 If a deployed file was changed behind statemate's back, apply stops and asks what
 to do:

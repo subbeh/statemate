@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -13,6 +13,8 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/fatih/color"
+	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -43,7 +45,10 @@ func readShebang(path string) string {
 // comment, so listing scripts never requires reading whole files.
 const descriptionScanLines = 10
 
-var descriptionPattern = regexp.MustCompile(`(?i)^#\s*description:\s*(.*)$`)
+var (
+	descriptionPattern = regexp.MustCompile(`(?i)^#\s*description:\s*(.*)$`)
+	onchangePattern    = regexp.MustCompile(`(?i)^#\s*onchange:\s*(.*)$`)
+)
 
 // ReadDescription returns the script's "# Description: ..." comment, if any.
 // Matching is case-insensitive with flexible whitespace and is limited to the
@@ -51,27 +56,60 @@ var descriptionPattern = regexp.MustCompile(`(?i)^#\s*description:\s*(.*)$`)
 // are not rendered, since a description is metadata about the script rather than
 // part of its output.
 func ReadDescription(path string) string {
+	desc, _ := readHeader(path, descriptionPattern)
+	return desc
+}
+
+// ReadOnchange returns the triggers in a script's "# Onchange: ..." comment, read
+// like the description: "self" and target patterns, separated by whitespace. It
+// returns nil when there is no such comment, and an error when the comment is
+// empty, has an invalid pattern, or is on a script that is not #onchange.
+func ReadOnchange(path string, freq Frequency) ([]string, error) {
+	value, ok := readHeader(path, onchangePattern)
+	if !ok {
+		return nil, nil
+	}
+	if freq != FreqOnchange {
+		return nil, fmt.Errorf("# Onchange: needs the #onchange attribute")
+	}
+	triggers := strings.Fields(value)
+	if len(triggers) == 0 {
+		return nil, fmt.Errorf("# Onchange: names no triggers")
+	}
+	for _, t := range triggers {
+		if t == OnchangeSelf {
+			continue
+		}
+		if err := config.ValidatePattern(t); err != nil {
+			return nil, fmt.Errorf("# Onchange: invalid pattern %q: %w", t, err)
+		}
+	}
+	return triggers, nil
+}
+
+// readHeader returns the first match of pattern in the script's first
+// descriptionScanLines lines.
+func readHeader(path string, pattern *regexp.Regexp) (string, bool) {
 	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for i := 0; i < descriptionScanLines && scanner.Scan(); i++ {
-		matches := descriptionPattern.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
+		matches := pattern.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
 		if matches != nil {
-			return strings.TrimSpace(matches[1])
+			return strings.TrimSpace(matches[1]), true
 		}
 	}
-	return ""
+	return "", false
 }
 
 type Executor struct {
 	db      *state.DB
 	tmplCtx *template.Context
 	dryRun  bool
-	verbose bool
 
 	// force auto-confirms every script; noScripts skips them all silently.
 	force     bool
@@ -92,12 +130,11 @@ func (e *Executor) WithChangedSources(changed ChangedSources) *Executor {
 	return e
 }
 
-func NewExecutor(db *state.DB, tmplCtx *template.Context, dryRun, verbose bool) *Executor {
+func NewExecutor(db *state.DB, tmplCtx *template.Context, dryRun bool) *Executor {
 	return &Executor{
 		db:      db,
 		tmplCtx: tmplCtx,
 		dryRun:  dryRun,
-		verbose: verbose,
 	}
 }
 
@@ -152,6 +189,9 @@ func describe(script *Script) string {
 
 // confirm asks whether a single script should run, honouring force/confirmAll.
 func (e *Executor) confirm(script *Script) (scriptAction, error) {
+	if script.NoConfirm {
+		return actionRun, nil
+	}
 	var details []string
 	if script.Description != "" {
 		details = append(details, script.Description)
@@ -246,6 +286,7 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 		if shouldRun && e.ranAsHook[script.Path] {
 			shouldRun = false // already ran as a hook step
 		}
+		slog.Debug("script", "name", script.Name, "due", shouldRun)
 
 		if !shouldRun {
 			result.Skipped++
@@ -264,8 +305,9 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 		}
 
 		// Without a terminal we cannot ask, so skip rather than run unreviewed
-		// code unattended. Callers warn about this.
-		if !e.force && !isInteractive() {
+		// code unattended. Callers warn about this. A #noconfirm script needs no
+		// answer, so it runs anyway.
+		if !e.force && !script.NoConfirm && !isInteractive() {
 			result.SkippedNoTTY = append(result.SkippedNoTTY, describe(script))
 			result.Skipped++
 			continue
@@ -294,10 +336,6 @@ func (e *Executor) Execute(scripts Scripts) (*ExecuteResult, error) {
 			return result, fmt.Errorf("aborted by user")
 		}
 
-		if e.verbose {
-			fmt.Printf("  run: %s\n", script.Path)
-		}
-
 		if err := e.run(script); err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf("%s: %w", script.Name, err))
 			result.Failed++
@@ -317,10 +355,6 @@ func (e *Executor) ExecuteOne(script *Script) error {
 	if e.dryRun {
 		fmt.Printf("would run: %s\n", script.Path)
 		return nil
-	}
-
-	if e.verbose {
-		fmt.Printf("run: %s\n", script.Path)
 	}
 
 	if err := e.run(script); err != nil {
@@ -378,6 +412,9 @@ func ShouldRun(script *Script, db *state.DB, changed ChangedSources) (bool, stri
 		if failed {
 			return true, "", nil
 		}
+		if script.Onchange != nil {
+			return shouldRunTriggers(script, db, changed)
+		}
 		// Triggered by changes to the script's own source, not to the script
 		// itself. A repo-root script has no owning source, so any change counts.
 		if script.SourceDir == "" {
@@ -406,6 +443,28 @@ func ShouldRun(script *Script, db *state.DB, changed ChangedSources) (bool, stri
 	default:
 		return false, "unknown frequency", nil
 	}
+}
+
+// shouldRunTriggers decides an #onchange script with a "# Onchange:" comment:
+// "self" is due when the script differs from its last recorded run, or never
+// ran, and a pattern when a pending change in the script's source matches it.
+func shouldRunTriggers(script *Script, db *state.DB, changed ChangedSources) (bool, string, error) {
+	for _, t := range script.Onchange {
+		if t != OnchangeSelf {
+			if changed.Matches(script.SourceDir, t) {
+				return true, "", nil
+			}
+			continue
+		}
+		ran, err := db.HasScriptRunWithHash(script.Path, script.ContentHash)
+		if err != nil {
+			return false, "", err
+		}
+		if !ran {
+			return true, "", nil
+		}
+	}
+	return false, "no matching changes", nil
 }
 
 func shouldRunInterval(script *Script, db *state.DB, interval time.Duration) (bool, string, error) {
@@ -478,12 +537,12 @@ func (e *Executor) run(script *Script, extraEnv ...string) (err error) {
 		scriptPath = tmpFile.Name()
 	}
 
-	var cmd *exec.Cmd
+	var cmd *util.Cmd
 	if script.IsExecutable() || scriptPath != script.Path {
-		cmd = exec.Command(scriptPath)
+		cmd = util.Command(scriptPath)
 	} else {
 		interpreter := readShebang(scriptPath)
-		cmd = exec.Command(interpreter, scriptPath)
+		cmd = util.Command(interpreter, scriptPath)
 	}
 	cmd.Dir = filepath.Dir(script.Path)
 	cmd.Stdout = os.Stdout
@@ -502,13 +561,16 @@ func (e *Executor) run(script *Script, extraEnv ...string) (err error) {
 	}
 	cmd.Env = append(cmd.Env, extraEnv...)
 
-	fmt.Printf(">>> running: %s (%s/%s)\n", script.Name, script.Frequency, script.Timing)
+	fmt.Printf("%s %s (%s/%s)\n", color.CyanString(">>> running:"), script.Name, script.Frequency, script.Timing)
 	err = cmd.Run()
+	attrs := []any{"name", script.Name, "path", script.Path}
 	if err != nil {
-		fmt.Printf("<<< failed:  %s (%v)\n", script.Name, err)
+		fmt.Printf("%s  %s (%v)\n", color.RedString("<<< failed:"), script.Name, err)
+		attrs = append(attrs, "err", err)
 	} else {
-		fmt.Printf("<<< done:    %s\n", script.Name)
+		fmt.Printf("%s    %s\n", color.GreenString("<<< done:"), script.Name)
 	}
+	slog.Info("ran script", attrs...)
 	return err
 }
 

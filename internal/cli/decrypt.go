@@ -1,15 +1,15 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/encrypt"
-	"github.com/subbeh/statemate/internal/profile"
+	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/util"
 )
@@ -20,19 +20,20 @@ var decryptCmd = &cobra.Command{
 	Long: `Decrypt a file in place.
 
 This reads the encrypted file, decrypts it using the configured age identity,
-writes it back, and removes the #encrypted attribute from the filename
-wherever it appears among the attributes (config#encrypted#template becomes
-config#template).
+writes it back, and removes the #enc attribute from the filename
+wherever it appears among the attributes (config#enc#tmpl becomes
+config#tmpl).
 
-The file can be a managed source file or any file path (e.g. a var_file
-in .matedata/). Paths are resolved relative to the current directory,
-falling back to the source directory. The #encrypted suffix is optional.
+The file can be a managed file, named by its source or its target, or any
+other file (e.g. a var_file in .matedata/). Paths are resolved relative to the
+current directory, falling back to the source directory. The #enc suffix is
+optional. A bare file name is not searched for.
 
 The age identity must be configured in mate.yaml:
 
   age:
     identity: "~/.config/statemate/key.txt"`,
-	Example: `  mate decrypt nvim/secrets.yaml#encrypted
+	Example: `  mate decrypt nvim/secrets.yaml#enc
   mate decrypt .matedata/secrets.yaml`,
 	Args:              cobra.ExactArgs(1),
 	RunE:              runDecrypt,
@@ -44,16 +45,11 @@ func init() {
 }
 
 func runDecrypt(cmd *cobra.Command, args []string) error {
-	cfgPath, _ := cmd.Flags().GetString("config")
-
-	cfg, err := config.Load(cfgPath)
+	env, err := newEnv(cmd)
 	if err != nil {
-		return fmt.Errorf("loading config: %w", err)
+		return err
 	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
-	}
+	cfg := env.Config
 
 	if cfg.Age == nil || (cfg.Age.Identity == "" && cfg.Age.IdentityCommand == "") {
 		return fmt.Errorf("no age identity configured in mate.yaml")
@@ -64,38 +60,19 @@ func runDecrypt(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("setting up decryption: %w", err)
 	}
 
-	allSources := profile.AllSources(cfg)
-	allSourcePaths := cfg.ResolveSourcePaths(allSources)
-
-	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
-	tree, err := scanner.Scan(allSourcePaths)
-	if err != nil {
-		return fmt.Errorf("scanning sources: %w", err)
-	}
-
 	srcPattern := args[0]
-
-	var entry *source.Entry
-	for _, e := range tree.Files() {
-		srcDir := strings.TrimSuffix(e.SourcePath, "/"+e.RelPath)
-		relPath := filepath.Join(filepath.Base(srcDir), e.RelPath)
-		if relPath == srcPattern || e.SourcePath == srcPattern || e.TargetPath == srcPattern ||
-			strings.HasSuffix(relPath, "/"+srcPattern) ||
-			strings.HasSuffix(e.SourcePath, "/"+srcPattern) ||
-			strings.HasSuffix(e.TargetPath, "/"+srcPattern) {
-			entry = e
-			break
-		}
-	}
-
-	if entry != nil {
+	entry, err := env.Resolve(srcPattern)
+	switch {
+	case err == nil:
 		if !entry.Attrs.Encrypted {
 			return fmt.Errorf("file is not encrypted: %s", srcPattern)
 		}
 		return decryptFileAt(entry.SourcePath, entry.Mode.Perm(), enc)
+	case !errors.As(err, new(*plan.NotManagedError)):
+		return err
 	}
 
-	// Fall back to resolving as a path (try with #encrypted suffix too)
+	// Not a managed file, such as a var_file in .matedata/ (try with #enc suffix too)
 	filePath := resolveEncryptedFilePath(srcPattern, cfg.SourceDir())
 	if filePath == "" {
 		return fmt.Errorf("file not found: %s", srcPattern)
@@ -122,11 +99,11 @@ func decryptFileAt(path string, perm os.FileMode, enc *encrypt.AgeEncryptor) err
 		return fmt.Errorf("decrypting: %w", err)
 	}
 
-	newPath := filepath.Join(filepath.Dir(path), source.RemoveAttr(filepath.Base(path), "encrypted"))
-	// Without an #encrypted attribute to drop, the plaintext would overwrite the
+	newPath := filepath.Join(filepath.Dir(path), source.RemoveAttr(filepath.Base(path), "enc"))
+	// Without an #enc attribute to drop, the plaintext would overwrite the
 	// ciphertext and the removal below would then delete it.
 	if newPath == path {
-		return fmt.Errorf("%s has no #encrypted attribute to remove", util.ShortenPath(path))
+		return fmt.Errorf("%s has no #enc attribute to remove", util.ShortenPath(path))
 	}
 
 	if err := os.WriteFile(newPath, plaintext, perm); err != nil {
@@ -137,14 +114,15 @@ func decryptFileAt(path string, perm os.FileMode, enc *encrypt.AgeEncryptor) err
 		return fmt.Errorf("removing encrypted file: %w", err)
 	}
 
+	slog.Info("source", "action", "decrypt", "path", path, "to", newPath)
 	fmt.Printf("Decrypted: %s -> %s\n", util.ShortenPath(path), util.ShortenPath(newPath))
 	return nil
 }
 
-// hasEncryptedAttr reports whether the file's own name carries the #encrypted
+// hasEncryptedAttr reports whether the file's own name carries the #enc
 // attribute, in any position among its attributes. A suffix test misses
-// x#encrypted#template; a substring test also matches x#encrypted-backup, or a
-// file inside a directory whose name contains "#encrypted".
+// x#enc#tmpl; a substring test also matches x#enc-backup, or a
+// file inside a directory whose name contains "#enc".
 func hasEncryptedAttr(path string) bool {
 	_, attrs := source.ParseAttrs(filepath.Base(path))
 	return attrs.Encrypted

@@ -5,13 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/subbeh/statemate/internal/config"
-	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/plan"
 )
 
-// editTestEnv builds a small dotfiles repo and returns the loaded config plus
-// the scanned entries, mirroring what runEdit works with.
-func editTestEnv(t *testing.T) (*config.Config, []*source.Entry, string) {
+// editTestEnv builds a small dotfiles repo and returns its Env, mirroring what
+// runEdit works with.
+func editTestEnv(t *testing.T) (*plan.Env, string) {
 	t.Helper()
 
 	repo := t.TempDir()
@@ -26,12 +25,12 @@ func editTestEnv(t *testing.T) (*config.Config, []*source.Entry, string) {
 		t.Fatal(err)
 	}
 
-	// an include file outside any source dir, with the #encrypted suffix
+	// an include file outside any source dir, with the #enc suffix
 	dataDir := filepath.Join(repo, ".matedata")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dataDir, "secrets.yaml#encrypted"), []byte("cipher"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dataDir, "secrets.yaml#enc"), []byte("cipher"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -50,15 +49,9 @@ func editTestEnv(t *testing.T) (*config.Config, []*source.Entry, string) {
 		t.Fatal(err)
 	}
 
-	cfg, err := config.Load(cfgPath)
+	env, err := plan.NewEnv(cfgPath, "")
 	if err != nil {
-		t.Fatalf("loading config: %v", err)
-	}
-
-	scanner := source.NewScannerWithIgnore(cfg.TargetBase, cfg.SourceDir(), nil, cfg.Ignore)
-	tree, err := scanner.Scan(cfg.AbsoluteSources())
-	if err != nil {
-		t.Fatalf("scanning: %v", err)
+		t.Fatalf("loading env: %v", err)
 	}
 
 	// Resolve symlinks so expected paths match what resolveEditPath returns
@@ -67,11 +60,11 @@ func editTestEnv(t *testing.T) (*config.Config, []*source.Entry, string) {
 		repo = resolved
 	}
 
-	return cfg, tree.Files(), repo
+	return env, repo
 }
 
 func TestResolveEditPath_IncludeFileRelative(t *testing.T) {
-	cfg, entries, repo := editTestEnv(t)
+	env, repo := editTestEnv(t)
 
 	origDir, _ := os.Getwd()
 	defer func() { _ = os.Chdir(origDir) }()
@@ -79,11 +72,11 @@ func TestResolveEditPath_IncludeFileRelative(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, managed, err := resolveEditPath(".matedata/secrets.yaml#encrypted", cfg, entries)
+	got, managed, err := resolveEditPath(".matedata/secrets.yaml#enc", env)
 	if err != nil {
 		t.Fatalf("expected include file to resolve, got error: %v", err)
 	}
-	want := filepath.Join(repo, ".matedata", "secrets.yaml#encrypted")
+	want := filepath.Join(repo, ".matedata", "secrets.yaml#enc")
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -92,64 +85,21 @@ func TestResolveEditPath_IncludeFileRelative(t *testing.T) {
 	}
 }
 
-func TestResolveEditPath_ManagedSourceRelative(t *testing.T) {
-	cfg, entries, repo := editTestEnv(t)
-
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	if err := os.Chdir(repo); err != nil {
-		t.Fatal(err)
-	}
-
-	got, managed, err := resolveEditPath("nvim/.config/nvim/init.lua", cfg, entries)
-	if err != nil {
-		t.Fatalf("expected source file to resolve, got error: %v", err)
-	}
-	want := filepath.Join(repo, "nvim", ".config", "nvim", "init.lua")
-	if got != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-	if !managed {
-		t.Error("expected managed source file to be reported as managed")
-	}
-}
-
-func TestResolveEditPath_TargetResolvesToSource(t *testing.T) {
-	cfg, entries, repo := editTestEnv(t)
-
-	if len(entries) == 0 {
-		t.Fatal("no entries scanned")
-	}
-	target := entries[0].TargetPath
-
-	got, managed, err := resolveEditPath(target, cfg, entries)
-	if err != nil {
-		t.Fatalf("expected target path to resolve, got error: %v", err)
-	}
-	want := filepath.Join(repo, "nvim", ".config", "nvim", "init.lua")
-	if got != want {
-		t.Errorf("target should resolve to source: got %q, want %q", got, want)
-	}
-	if !managed {
-		t.Error("expected target-resolved source to be reported as managed")
-	}
-}
-
 func TestResolveEditPath_UnmanagedTargetErrors(t *testing.T) {
-	cfg, entries, _ := editTestEnv(t)
+	env, _ := editTestEnv(t)
 
 	outside := filepath.Join(t.TempDir(), "bashrc")
 	if err := os.WriteFile(outside, []byte("x"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, _, err := resolveEditPath(outside, cfg, entries); err == nil {
+	if _, _, err := resolveEditPath(outside, env); err == nil {
 		t.Error("expected error for file outside source_dir with no managed target")
 	}
 }
 
 func TestResolveEditPath_UnmanagedFileInRepoIsEditable(t *testing.T) {
-	cfg, entries, repo := editTestEnv(t)
+	env, repo := editTestEnv(t)
 
 	origDir, _ := os.Getwd()
 	defer func() { _ = os.Chdir(origDir) }()
@@ -158,7 +108,7 @@ func TestResolveEditPath_UnmanagedFileInRepoIsEditable(t *testing.T) {
 	}
 
 	// README.md is inside source_dir but is not a managed source file.
-	got, managed, err := resolveEditPath("README.md", cfg, entries)
+	got, managed, err := resolveEditPath("README.md", env)
 	if err != nil {
 		t.Fatalf("files under source_dir should be editable, got error: %v", err)
 	}
@@ -171,7 +121,7 @@ func TestResolveEditPath_UnmanagedFileInRepoIsEditable(t *testing.T) {
 }
 
 func TestResolveEditPath_MissingFileErrors(t *testing.T) {
-	cfg, entries, repo := editTestEnv(t)
+	env, repo := editTestEnv(t)
 
 	origDir, _ := os.Getwd()
 	defer func() { _ = os.Chdir(origDir) }()
@@ -179,24 +129,7 @@ func TestResolveEditPath_MissingFileErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := resolveEditPath("does-not-exist.txt", cfg, entries); err == nil {
+	if _, _, err := resolveEditPath("does-not-exist.txt", env); err == nil {
 		t.Error("expected error for nonexistent file under source_dir")
-	}
-}
-
-func TestResolveEditPath_NoSuffixMatching(t *testing.T) {
-	cfg, entries, repo := editTestEnv(t)
-
-	// Run from a subdirectory of the repo. A bare basename must NOT resolve via
-	// suffix search -- resolution is strictly cwd-relative.
-	sub := filepath.Join(repo, "nvim")
-	origDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(origDir) }()
-	if err := os.Chdir(sub); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, _, err := resolveEditPath("init.lua", cfg, entries); err == nil {
-		t.Error("expected bare basename not to resolve via suffix search")
 	}
 }

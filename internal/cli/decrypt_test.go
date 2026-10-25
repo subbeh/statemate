@@ -22,13 +22,13 @@ func testEncryptor(t *testing.T) *encrypt.AgeEncryptor {
 	return enc
 }
 
-// #encrypted need not be the last attribute. Trimming it only as a suffix left
-// the path unchanged for x#encrypted#template, so the plaintext was written over
+// #enc need not be the last attribute. Trimming it only as a suffix left
+// the path unchanged for x#enc#tmpl, so the plaintext was written over
 // the ciphertext and then the file was deleted.
 func TestDecryptFileAt_EncryptedNotLastAttribute(t *testing.T) {
 	enc := testEncryptor(t)
 	dir := t.TempDir()
-	path := filepath.Join(dir, "config#encrypted#template")
+	path := filepath.Join(dir, "config#enc#tmpl")
 
 	ciphertext, err := enc.Encrypt([]byte("secret"))
 	if err != nil {
@@ -42,7 +42,7 @@ func TestDecryptFileAt_EncryptedNotLastAttribute(t *testing.T) {
 		t.Fatalf("decryptFileAt: %v", err)
 	}
 
-	got, err := os.ReadFile(filepath.Join(dir, "config#template"))
+	got, err := os.ReadFile(filepath.Join(dir, "config#tmpl"))
 	if err != nil {
 		t.Fatalf("decrypted file missing: %v", err)
 	}
@@ -54,12 +54,12 @@ func TestDecryptFileAt_EncryptedNotLastAttribute(t *testing.T) {
 	}
 }
 
-// A file without the #encrypted attribute has no other name to decrypt to, and
+// A file without the #enc attribute has no other name to decrypt to, and
 // must never be deleted.
 func TestDecryptFileAt_KeepsFileWithoutEncryptedAttribute(t *testing.T) {
 	enc := testEncryptor(t)
 	dir := t.TempDir()
-	path := filepath.Join(dir, "config#template")
+	path := filepath.Join(dir, "config#tmpl")
 
 	ciphertext, err := enc.Encrypt([]byte("secret"))
 	if err != nil {
@@ -70,7 +70,7 @@ func TestDecryptFileAt_KeepsFileWithoutEncryptedAttribute(t *testing.T) {
 	}
 
 	if err := decryptFileAt(path, 0600, enc); err == nil {
-		t.Fatal("expected an error for a file without the #encrypted attribute")
+		t.Fatal("expected an error for a file without the #enc attribute")
 	}
 	got, err := os.ReadFile(path)
 	if err != nil {
@@ -86,11 +86,11 @@ func TestHasEncryptedAttr(t *testing.T) {
 		path string
 		want bool
 	}{
-		{"/repo/.matedata/secrets.yaml#encrypted", true},
-		{"/repo/nvim/config#encrypted#template", true},
-		{"/repo/nvim/config#template", false},
-		{"/repo/nvim/config#encrypted-backup", false},
-		{"/repo/dir#encrypted/config", false},
+		{"/repo/.matedata/secrets.yaml#enc", true},
+		{"/repo/nvim/config#enc#tmpl", true},
+		{"/repo/nvim/config#tmpl", false},
+		{"/repo/nvim/config#enc-backup", false},
+		{"/repo/dir#enc/config", false},
 	}
 	for _, tc := range tests {
 		if got := hasEncryptedAttr(tc.path); got != tc.want {

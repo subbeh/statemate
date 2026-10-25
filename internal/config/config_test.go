@@ -23,9 +23,8 @@ target_base: "~"
 profiles:
   base:
     packages:
-      brew:
-        - git
-        - neovim
+      - git: brew
+      - neovim: brew
   work:
     extends: base
     detection:
@@ -37,8 +36,7 @@ variables:
   email: test@example.com
 
 packages:
-  brew:
-    - ripgrep
+  - ripgrep: brew
 `
 	if err := os.WriteFile(filepath.Join(dir, "mate.yaml"), []byte(yamlContent), 0644); err != nil {
 		t.Fatal(err)
@@ -65,8 +63,8 @@ packages:
 		t.Errorf("expected email=test@example.com, got %v", cfg.Variables["email"])
 	}
 
-	if len(cfg.Packages.Brew) != 1 || cfg.Packages.Brew[0] != "ripgrep" {
-		t.Errorf("expected packages.brew=[ripgrep], got %v", cfg.Packages.Brew)
+	if len(cfg.Packages) != 1 || cfg.Packages[0].Managers["brew"] != "ripgrep" {
+		t.Errorf("expected packages=[ripgrep: brew], got %v", cfg.Packages)
 	}
 }
 
@@ -80,12 +78,10 @@ func TestLoadTOML(t *testing.T) {
 	tomlContent := `
 sources = ["zsh"]
 target_base = "~"
+packages = [{fd = "brew"}, {ripgrep = "brew"}]
 
 [variables]
 editor = "nvim"
-
-[packages]
-brew = ["fd", "ripgrep"]
 `
 	if err := os.WriteFile(filepath.Join(dir, "mate.toml"), []byte(tomlContent), 0644); err != nil {
 		t.Fatal(err)
@@ -113,8 +109,7 @@ targets:
   etc: /etc
 
 packages:
-  brew:
-    - neovim
+  - neovim: brew
 `
 	if err := os.WriteFile(filepath.Join(dir, ".mate.yaml"), []byte(yamlContent), 0644); err != nil {
 		t.Fatal(err)
@@ -125,12 +120,12 @@ packages:
 		t.Fatalf("LoadDirConfig failed: %v", err)
 	}
 
-	if cfg.Targets["etc"] != "/etc" {
+	if got := cfg.Targets["etc"]; len(got) != 1 || got[0] != "/etc" {
 		t.Errorf("expected targets[etc]=/etc, got %v", cfg.Targets["etc"])
 	}
 
-	if len(cfg.Packages.Brew) != 1 || cfg.Packages.Brew[0] != "neovim" {
-		t.Errorf("expected packages.brew=[neovim], got %v", cfg.Packages.Brew)
+	if len(cfg.Packages) != 1 || cfg.Packages[0].Managers["brew"] != "neovim" {
+		t.Errorf("expected packages=[neovim: brew], got %v", cfg.Packages)
 	}
 }
 
@@ -138,8 +133,8 @@ packages:
 // that still has it must keep loading, since unknown keys are ignored.
 func TestLoadDirConfig_IgnoresRemovedScriptsKey(t *testing.T) {
 	for name, content := range map[string]string{
-		".mate.yaml": "scripts:\n  before_apply: [bin/prepare.sh]\npackages:\n  brew: [neovim]\n",
-		".mate.toml": "[scripts]\nbefore_apply = [\"bin/prepare.sh\"]\n\n[packages]\nbrew = [\"neovim\"]\n",
+		".mate.yaml": "scripts:\n  before_apply: [bin/prepare.sh]\npackages:\n  - neovim: brew\n",
+		".mate.toml": "packages = [{neovim = \"brew\"}]\n\n[scripts]\nbefore_apply = [\"bin/prepare.sh\"]\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -151,7 +146,7 @@ func TestLoadDirConfig_IgnoresRemovedScriptsKey(t *testing.T) {
 			if err != nil {
 				t.Fatalf("LoadDirConfig failed: %v", err)
 			}
-			if cfg.Packages == nil || len(cfg.Packages.Brew) != 1 {
+			if len(cfg.Packages) != 1 {
 				t.Errorf("rest of the file should still load, got packages %+v", cfg.Packages)
 			}
 		})
@@ -297,7 +292,7 @@ hooks:
 	if err := os.MkdirAll(filepath.Join(xdg, "statemate"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(xdg, "statemate", "mate.yaml"), []byte(local), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(xdg, "statemate", "config.yaml"), []byte(local), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -427,6 +422,37 @@ func TestSaveLocalSourceDirAddsKey(t *testing.T) {
 	lc := loadLocalConfig()
 	if lc == nil || lc.SourceDirPath != "/b/dotfiles" || lc.Profile != "home" {
 		t.Errorf("got %+v, want source_dir /b/dotfiles and profile home", lc)
+	}
+}
+
+// The local config is config.yaml, or config.yml when only that exists. The
+// old mate.yaml name is not read.
+func TestLocalConfigPathNames(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	dir := filepath.Join(xdg, "statemate")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	write := func(name, sourceDir string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("source_dir: "+sourceDir+"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	write("mate.yaml", "/old")
+	if got := LocalSourceDir(); got != "" {
+		t.Errorf("mate.yaml was read: source_dir %q", got)
+	}
+	write("config.yml", "/yml")
+	if got := LocalSourceDir(); got != "/yml" {
+		t.Errorf("with config.yml: source_dir %q, want /yml", got)
+	}
+	write("config.yaml", "/yaml")
+	if got := LocalSourceDir(); got != "/yaml" {
+		t.Errorf("with config.yaml and config.yml: source_dir %q, want /yaml", got)
 	}
 }
 

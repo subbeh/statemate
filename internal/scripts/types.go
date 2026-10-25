@@ -1,12 +1,16 @@
 package scripts
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/subbeh/statemate/internal/source"
 )
 
 type Frequency int
@@ -66,12 +70,19 @@ type Script struct {
 	Frequency   Frequency
 	Timing      Timing
 	Template    bool
+	NoConfirm   bool
 	Profile     string
 	Order       int
 	SourceDir   string
 	ContentHash string
 	Description string
+	// Onchange holds the triggers from a "# Onchange:" comment, or nil to run on
+	// any change in the script's source.
+	Onchange []string
 }
+
+// OnchangeSelf is the "# Onchange:" trigger for a change to the script itself.
+const OnchangeSelf = "self"
 
 func (s *Script) IsExecutable() bool {
 	info, err := os.Stat(s.Path)
@@ -81,14 +92,45 @@ func (s *Script) IsExecutable() bool {
 	return info.Mode()&0111 != 0
 }
 
-// Script naming format: <order>-<name>.<ext>#<freq>#<timing>[#template][#profile:<name>]
+// Script naming format: <order>-<name>.<ext>#<freq>#<timing>[#tmpl][#noconfirm][#profile:<name>]
 // Examples:
 //   01-setup.sh#once#before
 //   02-cleanup.sh#always#after
-//   03-render.sh#onchange#before#template
+//   03-render.sh#onchange#before#tmpl
 //   04-init.sh#once#before#profile:arch
 //   manual-task.sh (no attributes = manual)
 var orderPattern = regexp.MustCompile(`^(\d+)-(.+)$`)
+
+// scriptAttrs are the attributes a script name may carry; profile: takes a value.
+var scriptAttrs = []string{"once", "onchange", "always", "daily", "weekly", "monthly", "before", "after", "tmpl", "noconfirm"}
+
+// CheckScriptName reports the first attribute in a script name that is not
+// recognised. Like a file's, an unknown attribute was dropped silently, so a typo
+// in #onchange left the script manual.
+func CheckScriptName(filename string) error {
+	for _, attr := range strings.Split(filename, "#")[1:] {
+		lower := strings.ToLower(attr)
+		switch {
+		case lower == "", slices.Contains(scriptAttrs, lower), strings.HasPrefix(lower, "profile:"):
+		case lower == "template":
+			return fmt.Errorf("#template was renamed to #tmpl")
+		default:
+			return fmt.Errorf("unknown attribute #%s", attr)
+		}
+	}
+	return nil
+}
+
+// HasNoConfirm reports whether a script name carries #noconfirm, which runs the
+// script during an apply without asking.
+func HasNoConfirm(filename string) bool {
+	for _, attr := range strings.Split(filename, "#")[1:] {
+		if strings.EqualFold(attr, "noconfirm") {
+			return true
+		}
+	}
+	return false
+}
 
 func ParseScriptName(filename string) (name string, freq Frequency, timing Timing, template bool, profile string, order int) {
 	parts := strings.Split(filename, "#")
@@ -126,7 +168,7 @@ func ParseScriptName(filename string) (name string, freq Frequency, timing Timin
 			timing = TimingBefore
 		case lower == "after":
 			timing = TimingAfter
-		case lower == "template":
+		case lower == "tmpl":
 			template = true
 		case strings.HasPrefix(lower, "profile:"):
 			profile = strings.TrimPrefix(attr, "profile:")
@@ -136,40 +178,71 @@ func ParseScriptName(filename string) (name string, freq Frequency, timing Timin
 	return name, freq, timing, template, profile, order
 }
 
-// ChangedSources names the source directories that have pending changes, and is
-// what decides whether an #onchange script runs.
+// ChangedSources names the source directories that have pending changes, and the
+// target paths of those changes, and is what decides whether an #onchange script
+// runs.
 //
 // Callers build this from the change set they already compute (mate status and
 // mate apply both call ComputeChanges), so ShouldRun does not have to rescan the
 // tree once per script.
 type ChangedSources struct {
-	// names holds the base name of each source directory with pending changes.
-	names map[string]bool
+	// targets maps the base name of each source directory with pending changes
+	// to their target paths.
+	targets map[string][]string
 }
 
 // NewChangedSources builds a set from source directory paths or names.
 func NewChangedSources(sources ...string) ChangedSources {
-	c := ChangedSources{names: make(map[string]bool, len(sources))}
+	var c ChangedSources
 	for _, s := range sources {
-		if s != "" {
-			c.names[filepath.Base(s)] = true
-		}
+		c.Add(s, "")
 	}
 	return c
 }
 
+// Add records a pending change in sourceDir; target may be empty when only the
+// source is known.
+func (c *ChangedSources) Add(sourceDir, target string) {
+	if sourceDir == "" {
+		return
+	}
+	if c.targets == nil {
+		c.targets = make(map[string][]string)
+	}
+	name := filepath.Base(sourceDir)
+	c.targets[name] = append(c.targets[name], target)
+}
+
 // Has reports whether the given source directory has pending changes.
 func (c ChangedSources) Has(sourceDir string) bool {
-	if c.names == nil || sourceDir == "" {
+	if sourceDir == "" {
 		return false
 	}
-	return c.names[filepath.Base(sourceDir)]
+	_, ok := c.targets[filepath.Base(sourceDir)]
+	return ok
 }
 
 // Any reports whether any source has pending changes. Repo-root scripts, which
 // have no owning source, use this.
 func (c ChangedSources) Any() bool {
-	return len(c.names) > 0
+	return len(c.targets) > 0
+}
+
+// Matches reports whether a pending change in sourceDir has a target path that
+// matches pattern. A repo-root script passes an empty sourceDir to match the
+// changes in every source.
+func (c ChangedSources) Matches(sourceDir, pattern string) bool {
+	for name, targets := range c.targets {
+		if sourceDir != "" && name != filepath.Base(sourceDir) {
+			continue
+		}
+		for _, t := range targets {
+			if t != "" && source.MatchTarget(pattern, t) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type Scripts []*Script

@@ -25,7 +25,7 @@ func isolateHome(t *testing.T) string {
 	return root
 }
 
-// A #template script run by hand renders with the same context mate apply gives
+// A #tmpl script run by hand renders with the same context mate apply gives
 // it: cached secrets and encrypted var_files both resolve.
 func TestRunScript_TemplateSeesSecretsAndEncryptedVars(t *testing.T) {
 	root := isolateHome(t)
@@ -58,7 +58,7 @@ func TestRunScript_TemplateSeesSecretsAndEncryptedVars(t *testing.T) {
 	if err := toKey.EncryptToFile(cache, cachePath); err != nil {
 		t.Fatal(err)
 	}
-	if err := toKey.EncryptToFile([]byte("greeting: hello\n"), filepath.Join(repo, "vars.yaml#encrypted")); err != nil {
+	if err := toKey.EncryptToFile([]byte("greeting: hello\n"), filepath.Join(repo, "vars.yaml#enc")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,7 +73,7 @@ func TestRunScript_TemplateSeesSecretsAndEncryptedVars(t *testing.T) {
 
 	out := filepath.Join(root, "out.txt")
 	script := "#!/bin/sh\necho '{{ .Vars.greeting }} {{ bitwarden \"github\" \"field\" \"token\" }}' > " + out + "\n"
-	if err := os.WriteFile(filepath.Join(repo, ".matescripts", "show.sh#template"), []byte(script), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(repo, ".matescripts", "show.sh#tmpl"), []byte(script), 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,9 +81,8 @@ func TestRunScript_TemplateSeesSecretsAndEncryptedVars(t *testing.T) {
 	cmd.Flags().String("config", cfgPath, "")
 	cmd.Flags().String("profile", "", "")
 	cmd.Flags().Bool("dry-run", false, "")
-	cmd.Flags().Bool("verbose", false, "")
 
-	if err := runScript(cmd, []string{"show.sh#template"}); err != nil {
+	if err := runScript(cmd, []string{"show.sh#tmpl"}); err != nil {
 		t.Fatalf("runScript: %v", err)
 	}
 

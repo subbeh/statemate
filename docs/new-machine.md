@@ -44,7 +44,7 @@ matches, `#profile:` files are not filtered and every variant is deployed (see
 for this machine in the local config:
 
 ```yaml
-# ~/.config/statemate/mate.yaml (written by mate init)
+# ~/.config/statemate/config.yaml (written by mate init)
 source_dir: "~/dotfiles"
 profile: work
 ```
