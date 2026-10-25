@@ -94,7 +94,7 @@ func (h *Hook) Validate() error {
 		return fmt.Errorf("match is required")
 	}
 	for _, p := range h.Match {
-		if err := validatePattern(p); err != nil {
+		if err := ValidatePattern(p); err != nil {
 			return fmt.Errorf("invalid match pattern %q: %w", p, err)
 		}
 	}
@@ -109,7 +109,9 @@ func (h *Hook) Validate() error {
 	return nil
 }
 
-func validatePattern(p string) error {
+// ValidatePattern reports a target pattern, as hooks and #onchange scripts use,
+// that is empty or does not parse.
+func ValidatePattern(p string) error {
 	if strings.TrimSpace(p) == "" {
 		return fmt.Errorf("pattern is empty")
 	}

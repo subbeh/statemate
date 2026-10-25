@@ -12,6 +12,7 @@ import (
 
 	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/scripts"
+	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/template"
 )
 
@@ -62,7 +63,7 @@ func (h *Hook) ActiveFor(profileChain []string) bool {
 // Matches reports whether a target path matches any of the hook's patterns.
 func (h *Hook) Matches(target string) bool {
 	for _, p := range h.Match {
-		if Match(p, target) {
+		if source.MatchTarget(p, target) {
 			return true
 		}
 	}

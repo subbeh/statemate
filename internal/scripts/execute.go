@@ -14,6 +14,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/fatih/color"
+	"github.com/subbeh/statemate/internal/config"
 	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -44,7 +45,10 @@ func readShebang(path string) string {
 // comment, so listing scripts never requires reading whole files.
 const descriptionScanLines = 10
 
-var descriptionPattern = regexp.MustCompile(`(?i)^#\s*description:\s*(.*)$`)
+var (
+	descriptionPattern = regexp.MustCompile(`(?i)^#\s*description:\s*(.*)$`)
+	onchangePattern    = regexp.MustCompile(`(?i)^#\s*onchange:\s*(.*)$`)
+)
 
 // ReadDescription returns the script's "# Description: ..." comment, if any.
 // Matching is case-insensitive with flexible whitespace and is limited to the
@@ -52,20 +56,54 @@ var descriptionPattern = regexp.MustCompile(`(?i)^#\s*description:\s*(.*)$`)
 // are not rendered, since a description is metadata about the script rather than
 // part of its output.
 func ReadDescription(path string) string {
+	desc, _ := readHeader(path, descriptionPattern)
+	return desc
+}
+
+// ReadOnchange returns the triggers in a script's "# Onchange: ..." comment, read
+// like the description: "self" and target patterns, separated by whitespace. It
+// returns nil when there is no such comment, and an error when the comment is
+// empty, has an invalid pattern, or is on a script that is not #onchange.
+func ReadOnchange(path string, freq Frequency) ([]string, error) {
+	value, ok := readHeader(path, onchangePattern)
+	if !ok {
+		return nil, nil
+	}
+	if freq != FreqOnchange {
+		return nil, fmt.Errorf("# Onchange: needs the #onchange attribute")
+	}
+	triggers := strings.Fields(value)
+	if len(triggers) == 0 {
+		return nil, fmt.Errorf("# Onchange: names no triggers")
+	}
+	for _, t := range triggers {
+		if t == OnchangeSelf {
+			continue
+		}
+		if err := config.ValidatePattern(t); err != nil {
+			return nil, fmt.Errorf("# Onchange: invalid pattern %q: %w", t, err)
+		}
+	}
+	return triggers, nil
+}
+
+// readHeader returns the first match of pattern in the script's first
+// descriptionScanLines lines.
+func readHeader(path string, pattern *regexp.Regexp) (string, bool) {
 	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return "", false
 	}
 	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	for i := 0; i < descriptionScanLines && scanner.Scan(); i++ {
-		matches := descriptionPattern.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
+		matches := pattern.FindStringSubmatch(strings.TrimSpace(scanner.Text()))
 		if matches != nil {
-			return strings.TrimSpace(matches[1])
+			return strings.TrimSpace(matches[1]), true
 		}
 	}
-	return ""
+	return "", false
 }
 
 type Executor struct {
@@ -374,6 +412,9 @@ func ShouldRun(script *Script, db *state.DB, changed ChangedSources) (bool, stri
 		if failed {
 			return true, "", nil
 		}
+		if script.Onchange != nil {
+			return shouldRunTriggers(script, db, changed)
+		}
 		// Triggered by changes to the script's own source, not to the script
 		// itself. A repo-root script has no owning source, so any change counts.
 		if script.SourceDir == "" {
@@ -402,6 +443,28 @@ func ShouldRun(script *Script, db *state.DB, changed ChangedSources) (bool, stri
 	default:
 		return false, "unknown frequency", nil
 	}
+}
+
+// shouldRunTriggers decides an #onchange script with a "# Onchange:" comment:
+// "self" is due when the script differs from its last recorded run, or never
+// ran, and a pattern when a pending change in the script's source matches it.
+func shouldRunTriggers(script *Script, db *state.DB, changed ChangedSources) (bool, string, error) {
+	for _, t := range script.Onchange {
+		if t != OnchangeSelf {
+			if changed.Matches(script.SourceDir, t) {
+				return true, "", nil
+			}
+			continue
+		}
+		ran, err := db.HasScriptRunWithHash(script.Path, script.ContentHash)
+		if err != nil {
+			return false, "", err
+		}
+		if !ran {
+			return true, "", nil
+		}
+	}
+	return false, "no matching changes", nil
 }
 
 func shouldRunInterval(script *Script, db *state.DB, interval time.Duration) (bool, string, error) {

@@ -269,7 +269,9 @@ active.
 ## Hooks or `#onchange` scripts
 
 An [`onchange`](scripts.md#onchange) script runs when anything in its source
-changes and needs a file of its own. Use a hook when the follow-up depends on
-*which* files changed, or when it is a single command. Use an `onchange` script
-for longer logic tied to a whole source, or call that script from a hook with
+changes, or what its [`# Onchange:`](scripts.md#choosing-the-triggers) comment
+names, and needs a file of its own. Use a hook when the follow-up needs the
+changed files (`.Files`), runs after `mate clean` or `mate delete`, or is a single
+command. Use an `onchange` script for longer logic, for one that should also run
+when the script itself is edited, or call that script from a hook with
 `script:`.

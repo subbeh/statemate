@@ -339,3 +339,95 @@ func TestExecutor_OnchangeRetriesAfterFailure(t *testing.T) {
 		t.Error("script should not be due again after succeeding")
 	}
 }
+
+// "# Onchange: self" runs when the script differs from its last recorded run,
+// and only then: changes elsewhere in its source no longer trigger it.
+func TestShouldRun_OnchangeSelf(t *testing.T) {
+	tmpDir := t.TempDir()
+	db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	script := &Script{
+		Path:        filepath.Join(tmpDir, "01-x#onchange#before.sh"),
+		Frequency:   FreqOnchange,
+		SourceDir:   filepath.Join(tmpDir, "mysrc"),
+		ContentHash: "v1",
+		Onchange:    []string{OnchangeSelf},
+	}
+
+	if due, _, err := ShouldRun(script, db, ChangedSources{}); err != nil || !due {
+		t.Fatalf("a script that never ran should be due, got due=%v err=%v", due, err)
+	}
+	if err := db.RecordScriptRun(script.Path, "v1"); err != nil {
+		t.Fatal(err)
+	}
+	if due, _, _ := ShouldRun(script, db, NewChangedSources("mysrc")); due {
+		t.Error("an unchanged script must not run on source changes")
+	}
+	script.ContentHash = "v2"
+	if due, _, _ := ShouldRun(script, db, ChangedSources{}); !due {
+		t.Error("an edited script should be due")
+	}
+}
+
+// Patterns match the target paths of pending changes in the script's own source,
+// or in every source for a repo-root script.
+func TestShouldRun_OnchangePatterns(t *testing.T) {
+	db, err := state.Open(filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var changed ChangedSources
+	changed.Add("/repo/arch", "/etc/keyd/default.conf")
+	changed.Add("/repo/base", "/etc/systemd/system/a.service")
+
+	tests := []struct {
+		sourceDir, pattern string
+		want               bool
+	}{
+		{"/repo/arch", "/etc/keyd/*.conf", true},
+		{"/repo/arch", "*.service", false}, // only in another source
+		{"/repo/base", "/etc/keyd/*.conf", false},
+		{"", "*.service", true}, // a repo-root script sees every source
+		{"", "*.timer", false},
+	}
+	for _, tc := range tests {
+		script := &Script{Path: "/s", Frequency: FreqOnchange, SourceDir: tc.sourceDir, Onchange: []string{tc.pattern}}
+		if due, _, err := ShouldRun(script, db, changed); err != nil || due != tc.want {
+			t.Errorf("source %q pattern %q: due=%v err=%v, want %v", tc.sourceDir, tc.pattern, due, err, tc.want)
+		}
+	}
+}
+
+func TestReadOnchange(t *testing.T) {
+	dir := t.TempDir()
+	write := func(header string) string {
+		p := filepath.Join(dir, "s.sh")
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+header+"\necho hi\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	got, err := ReadOnchange(write("#  onchange:  self /etc/keyd/*.conf "), FreqOnchange)
+	if err != nil || len(got) != 2 || got[0] != "self" || got[1] != "/etc/keyd/*.conf" {
+		t.Errorf("got %q, %v", got, err)
+	}
+	if got, err := ReadOnchange(write("# Description: none"), FreqOnchange); got != nil || err != nil {
+		t.Errorf("no comment: got %q, %v", got, err)
+	}
+	for header, freq := range map[string]Frequency{
+		"# Onchange:":      FreqOnchange,
+		"# Onchange: [bad": FreqOnchange,
+		"# Onchange: self": FreqDaily,
+	} {
+		if _, err := ReadOnchange(write(header), freq); err == nil {
+			t.Errorf("%q (%s): expected an error", header, freq)
+		}
+	}
+}

@@ -1,15 +1,14 @@
-package hooks
+package source
 
 import (
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-
-	"github.com/subbeh/statemate/internal/source"
 )
 
-// Match reports whether a hook pattern matches an absolute target path.
+// MatchTarget reports whether a hook or #onchange pattern matches an absolute
+// target path.
 //
 // Patterns follow gitignore conventions, applied to target paths:
 //
@@ -23,7 +22,7 @@ import (
 // A pattern that matches a directory matches everything under it, so
 // `.config/tmux` covers `.config/tmux/tmux.conf`.
 // Source attributes in pattern components are ignored; target paths are literal.
-func Match(pattern, target string) bool {
+func MatchTarget(pattern, target string) bool {
 	home, _ := os.UserHomeDir()
 	return match(pattern, target, home)
 }
@@ -101,7 +100,7 @@ func stripPatternAttrs(pattern string) string {
 					}
 					attr := part[j+1 : end]
 					stripped := false
-					for _, name := range source.AttrNames {
+					for _, name := range AttrNames {
 						if attr == name || (strings.HasSuffix(name, ":") && strings.HasPrefix(attr, name)) {
 							j = end - 1
 							stripped = true

@@ -76,6 +76,10 @@ func (d *Discoverer) discoverDir(dir, sourceDir string) (Scripts, error) {
 		if err != nil {
 			return err
 		}
+		onchange, err := ReadOnchange(path, freq)
+		if err != nil {
+			return fmt.Errorf("%s: %w", path, err)
+		}
 
 		scripts = append(scripts, &Script{
 			Path:        path,
@@ -89,6 +93,7 @@ func (d *Discoverer) discoverDir(dir, sourceDir string) (Scripts, error) {
 			SourceDir:   sourceDir,
 			ContentHash: contentHash,
 			Description: ReadDescription(path),
+			Onchange:    onchange,
 		})
 		return nil
 	})

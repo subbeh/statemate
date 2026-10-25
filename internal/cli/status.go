@@ -335,12 +335,12 @@ func extractSourceDir(entry *source.Entry) string {
 	return filepath.Base(entry.SourceDir)
 }
 
-// changedSources collects the sources with pending changes, which is what
-// schedules #onchange scripts.
+// changedSources collects the sources with pending changes, and their targets,
+// which is what schedules #onchange scripts.
 func changedSources(changes []*target.Change) scripts.ChangedSources {
-	names := make([]string, 0, len(changes))
+	var changed scripts.ChangedSources
 	for _, c := range changes {
-		names = append(names, extractSourceDir(c.Entry))
+		changed.Add(c.Entry.SourceDir, c.Entry.TargetPath)
 	}
-	return scripts.NewChangedSources(names...)
+	return changed
 }
