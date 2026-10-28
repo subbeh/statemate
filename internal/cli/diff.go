@@ -2,11 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/target"
+	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
 )
 
@@ -90,11 +93,16 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		diffTool = cfg.DiffTool
 	}
 
+	return writeDiffs(os.Stdout, changes, tmplCtx, enc, diffTool)
+}
+
+// writeDiffs writes the diff of each change to w, under a header naming its target.
+func writeDiffs(w io.Writer, changes []*target.Change, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, diffTool string) error {
 	for _, change := range changes {
-		fmt.Println(bold("=== " + util.ShortenPath(change.Entry.TargetPath) + " ==="))
+		_, _ = fmt.Fprintln(w, bold("=== "+util.ShortenPath(change.Entry.TargetPath)+" ==="))
 		if change.Entry.IsDir {
 			// Directories have no content to compare; status reports them.
-			fmt.Println("(directory)")
+			_, _ = fmt.Fprintln(w, "(directory)")
 			continue
 		}
 
@@ -103,11 +111,10 @@ func runDiff(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("generating diff for %s: %w", util.ShortenPath(change.Entry.TargetPath), err)
 		}
 		if diff == "" {
-			fmt.Println("(no content difference, state mismatch only)")
+			_, _ = fmt.Fprintln(w, "(no content difference, state mismatch only)")
 		} else {
-			fmt.Println(diff)
+			_, _ = fmt.Fprintln(w, diff)
 		}
 	}
-
 	return nil
 }

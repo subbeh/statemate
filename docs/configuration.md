@@ -83,7 +83,7 @@ secrets_cache: "~/.local/state/statemate/secrets.age"
 | `profile` | string | Force a profile, skipping detection |
 | `source_dir` | string | Where to find `mate.yaml`. Only meaningful in the local config |
 | `editor` | string | Editor for `mate edit`, with any arguments (`code --wait`). Overrides `$VISUAL` and `$EDITOR`; falls back to `vi` |
-| `diff_tool` | string | External diff tool for `mate diff` and the `[d]iff` answer to a conflict during `mate apply`, with any arguments. Run as `<tool> <old> <new>` |
+| `diff_tool` | string | External diff tool for `mate diff`, and for the `[d]iff` answers to `mate apply`'s confirmation and to a conflict, with any arguments. Run as `<tool> <old> <new>` |
 | `age` | map | Encryption settings — see [age](#age) |
 | `variables` | map | Values available to templates as `.Vars`. Values may be templates — see [variables](#variables) |
 | `var_files` | list | YAML/TOML files to load variables from |

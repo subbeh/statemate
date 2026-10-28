@@ -21,8 +21,10 @@ is the only way to select a source. Repo-root scripts are not run under --source
 they apply to the whole repository.
 
 Before anything runs, the files about to change are listed (with the markers
-of 'mate status') and the apply asks to proceed. --noconfirm skips the list and
-the question; --force and --dry-run do too. Without a terminal to ask on, the
+of 'mate status') and the apply asks to proceed: [Y]es (Enter also applies),
+[n]o, or [d]iff, which shows the diff of the listed files through $PAGER (less
+by default, using 'diff_tool' when set) and asks again. --noconfirm skips the
+list and the question; --force and --dry-run do too. Without a terminal to ask on, the
 apply stops: pass --noconfirm for automated runs.
 
 Scripts due to run are confirmed individually before executing:

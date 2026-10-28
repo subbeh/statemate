@@ -247,6 +247,59 @@ hooks:
 	}
 }
 
+// d at the apply prompt shows the diff of the listed files and asks again;
+// the answer after it still decides whether the files are written.
+func TestApply_DiffAtConfirmPrompt(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		input   string
+		applied bool
+	}{
+		{name: "enter applies", input: "d\n\n", applied: true},
+		{name: "n cancels", input: "d\nn\n", applied: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newHookRepo(t, "sources: [other]\n")
+			withStdin(t, tc.input)
+
+			origNoScripts := noScripts
+			noScripts = true
+			defer func() { noScripts = origNoScripts }()
+
+			cmd := &cobra.Command{Use: "apply", RunE: runApply}
+			cmd.Flags().String("config", "", "")
+			cmd.Flags().String("profile", "", "")
+			addScopeFlag(cmd)
+
+			stdoutR, stdoutW, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			origOut := os.Stdout
+			os.Stdout = stdoutW
+			runErr := runApply(cmd, nil)
+			os.Stdout = origOut
+			_ = stdoutW.Close()
+			out, _ := io.ReadAll(stdoutR)
+
+			if runErr != nil {
+				t.Fatalf("apply failed: %v", runErr)
+			}
+			got := string(out)
+			if n := strings.Count(got, "Apply these changes?"); n != 2 {
+				t.Errorf("want the prompt twice, got %d:\n%s", n, got)
+			}
+			if !strings.Contains(got, "=== ~/.config/other/other.txt ===") || !strings.Contains(got, "+y") {
+				t.Errorf("diff of other.txt missing:\n%s", got)
+			}
+			_, err = os.Stat(filepath.Join(r.home, ".config", "other", "other.txt"))
+			if applied := err == nil; applied != tc.applied {
+				t.Errorf("other.txt written = %v, want %v", applied, tc.applied)
+			}
+		})
+	}
+}
+
 // With nothing to read an answer from (cron, CI, `< /dev/null`), the install
 // prompt cannot be confirmed. Every manager with missing packages has to be
 // named in a warning, as skipped scripts are, instead of the first failed

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
+	"golang.org/x/term"
 )
 
 var applyCmd = &cobra.Command{
@@ -39,8 +41,10 @@ is the only way to select a source. Repo-root scripts are not run under --source
 they apply to the whole repository.
 
 Before anything runs, the files about to change are listed (with the markers
-of 'mate status') and the apply asks to proceed. --noconfirm skips the list and
-the question; --force and --dry-run do too. Without a terminal to ask on, the
+of 'mate status') and the apply asks to proceed: [Y]es (Enter also applies),
+[n]o, or [d]iff, which shows the diff of the listed files through $PAGER (less
+by default, using 'diff_tool' when set) and asks again. --noconfirm skips the
+list and the question; --force and --dry-run do too. Without a terminal to ask on, the
 apply stops: pass --noconfirm for automated runs.
 
 Scripts due to run are confirmed individually before executing:
@@ -185,7 +189,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	if !dryRun && !noConfirm && !force && len(pending.Changes) > 0 {
 		printChanges(pending.Changes)
-		ok, err := util.Confirm("\nApply these changes? [Y/n] ", true)
+		ok, err := confirmApply(pending.Changes, tmplCtx, enc, cfg.DiffTool)
 		if errors.Is(err, util.ErrInterrupted) {
 			return nil
 		}
@@ -365,6 +369,58 @@ func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.
 	}
 
 	return nil
+}
+
+// confirmApply asks whether to apply the listed changes. [d]iff pages their
+// diff and asks again; Enter applies, any other key cancels.
+func confirmApply(changes []*target.Change, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, diffTool string) (bool, error) {
+	for {
+		fmt.Print("\nApply these changes? [Y/n/d] ")
+		key, err := util.ReadKey()
+		if err != nil {
+			fmt.Println()
+			return false, err
+		}
+		switch key {
+		case 'y', 'Y':
+			fmt.Println("y")
+			return true, nil
+		case '\n':
+			fmt.Println()
+			return true, nil
+		case 'd', 'D':
+			fmt.Println("d")
+			if err := pageDiffs(changes, tmplCtx, enc, diffTool); err != nil {
+				fmt.Fprintf(os.Stderr, "%s %v\n", color.RedString("Error:"), err)
+			}
+		default:
+			fmt.Println("n")
+			return false, nil
+		}
+	}
+}
+
+// pageDiffs shows the diffs through $PAGER (less by default) when stdout is a
+// terminal, and prints them otherwise.
+func pageDiffs(changes []*target.Change, tmplCtx *template.Context, enc *encrypt.AgeEncryptor, diffTool string) error {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return writeDiffs(os.Stdout, changes, tmplCtx, enc, diffTool)
+	}
+	var buf bytes.Buffer
+	if err := writeDiffs(&buf, changes, tmplCtx, enc, diffTool); err != nil {
+		return err
+	}
+	pager := os.Getenv("PAGER")
+	if pager == "" {
+		pager = "less"
+	}
+	cmd := util.UserCommand(pager)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = &buf, os.Stdout, os.Stderr
+	// As git does: keep colors, and print a diff that fits the screen without paging.
+	if _, ok := os.LookupEnv("LESS"); !ok {
+		cmd.Env = append(os.Environ(), "LESS=FRX")
+	}
+	return cmd.Run()
 }
 
 // warnSkippedScripts reports scripts that were due but could not be confirmed
