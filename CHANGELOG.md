@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `mate apply`'s conflict prompt says why `[i]mport` is missing for a `#tmpl` or `#link` source, and where to make the change instead: `mate edit <target>` for a template, the source link for a `#link`
 
+### Fixed
+- `mate scripts list` shows when a script last ran in local time; it showed UTC
+
 ## [0.7.0] - 2026-10-25
 
 ### Added

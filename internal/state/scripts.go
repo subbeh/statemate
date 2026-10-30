@@ -29,7 +29,9 @@ func (d *DB) GetScriptRun(scriptPath string) (*ScriptRun, error) {
 		return nil, err
 	}
 
+	// SQLite's CURRENT_TIMESTAMP is UTC; callers display it, so hand back local time.
 	r.RunAt, _ = time.Parse(time.RFC3339, runAt)
+	r.RunAt = r.RunAt.Local()
 	return &r, nil
 }
 

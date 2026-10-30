@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDBOpenClose(t *testing.T) {
@@ -250,5 +251,30 @@ func TestResolveRelativePaths(t *testing.T) {
 	fe, _ = db.GetFile("/home/u/.zshrc")
 	if fe == nil || fe.SourcePath != "/elsewhere/zsh/.zshrc" {
 		t.Errorf("absolute source path changed: %+v", fe)
+	}
+}
+
+// SQLite stores run_at in UTC; a run read back must be in local time, or
+// 'mate scripts list' shows the UTC clock time.
+func TestGetScriptRun_LocalTime(t *testing.T) {
+	orig := time.Local
+	time.Local = time.FixedZone("UTC+11", 11*60*60)
+	t.Cleanup(func() { time.Local = orig })
+
+	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if err := db.RecordScriptRun("/s.sh", "h"); err != nil {
+		t.Fatal(err)
+	}
+	run, err := db.GetScriptRun("/s.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := run.RunAt.Format("2006-01-02 15:04"), time.Now().Format("2006-01-02 15:04"); got != want {
+		t.Errorf("RunAt shows %s, want local %s", got, want)
 	}
 }
