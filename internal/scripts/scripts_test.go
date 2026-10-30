@@ -280,3 +280,27 @@ func TestReadTags(t *testing.T) {
 		t.Errorf("ReadTags without a comment = %q", got)
 	}
 }
+
+func TestScriptsByTags(t *testing.T) {
+	s := Scripts{
+		{Name: "a", Tags: []string{"update", "brew"}},
+		{Name: "b", Tags: []string{"other"}},
+		{Name: "c"},
+	}
+	for _, tc := range []struct {
+		tags []string
+		want []string
+	}{
+		{[]string{"update"}, []string{"a"}},
+		{[]string{"brew", "other"}, []string{"a", "b"}},
+		{[]string{"missing"}, nil},
+	} {
+		var got []string
+		for _, script := range s.ByTags(tc.tags) {
+			got = append(got, script.Name)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("ByTags(%q) = %q, want %q", tc.tags, got, tc.want)
+		}
+	}
+}

@@ -143,8 +143,10 @@ separated by whitespace:
 ```
 
 `mate scripts run --tags update` then runs every script tagged `update` in one
-go. `mate scripts list` shows the tags in a `TAGS` column once any script has
-them.
+go, and `mate scripts list --tags update` lists them. Both take several tags,
+comma-separated or with the flag repeated, and match scripts with any of them:
+`--tags update,brew`. `mate scripts list` shows the tags in a `TAGS` column once
+any script has them.
 
 ## Confirmation
 
@@ -235,6 +237,7 @@ script **must** start with a shebang.
 mate scripts list              # every script, its status, and description
 mate scripts run <name>        # run one manually, ignoring frequency
 mate scripts run <name> --dry-run
+mate scripts list --tags <tag> # only the scripts with the tag
 mate scripts run --tags <tag>  # run every script with the tag
 mate apply --no-scripts        # apply files without any scripts
 ```
@@ -243,7 +246,8 @@ mate apply --no-scripts        # apply files without any scripts
 not prompt, ignores the script's `#profile:`, and records the run, so running a
 `#once` script by hand marks it done.
 
-`mate scripts run --tags <tag>` runs every script with that [tag](#tags):
+`mate scripts run --tags <tag>` runs every script with that [tag](#tags), or
+with any of several:
 `before` scripts, then `after` scripts, each in order, whatever their
 frequency. Unlike a run by name, it skips scripts whose `#profile:` does not
 match the active profile. It does not prompt, records each run, and stops at the

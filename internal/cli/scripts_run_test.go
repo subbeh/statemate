@@ -123,13 +123,17 @@ func TestRunScript_Tags(t *testing.T) {
 		}
 	}
 
-	cmd := &cobra.Command{Use: "run", RunE: runScript}
-	cmd.Flags().String("config", cfgPath, "")
-	cmd.Flags().String("profile", "", "")
-	cmd.Flags().Bool("dry-run", false, "")
-	cmd.Flags().String("tags", "update", "")
+	// A fresh command per run: a second Set on a slice flag appends.
+	withTags := func(tags ...string) *cobra.Command {
+		cmd := &cobra.Command{Use: "run", RunE: runScript}
+		cmd.Flags().String("config", cfgPath, "")
+		cmd.Flags().String("profile", "", "")
+		cmd.Flags().Bool("dry-run", false, "")
+		cmd.Flags().StringSlice("tags", tags, "")
+		return cmd
+	}
 
-	if err := runScript(cmd, nil); err != nil {
+	if err := runScript(withTags("update"), nil); err != nil {
 		t.Fatalf("runScript: %v", err)
 	}
 	got, err := os.ReadFile(log)
@@ -140,28 +144,36 @@ func TestRunScript_Tags(t *testing.T) {
 		t.Errorf("ran %q, want %q", got, want)
 	}
 
-	_ = cmd.Flags().Set("tags", "missing")
-	if err := runScript(cmd, nil); err == nil || !strings.Contains(err.Error(), `"missing"`) {
+	// Several tags run the scripts with any of them, each once.
+	_ = os.Remove(log)
+	if err := runScript(withTags("brew", "other"), nil); err != nil {
+		t.Fatalf("runScript: %v", err)
+	}
+	if got, _ := os.ReadFile(log); string(got) != "02-early.sh\n03-other.sh\n" {
+		t.Errorf("ran %q with two tags", got)
+	}
+
+	if err := runScript(withTags("missing"), nil); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Errorf("expected an error naming the unknown tag, got %v", err)
 	}
 }
 
 func TestScriptsRunArgs(t *testing.T) {
 	for _, tc := range []struct {
-		tag  string
+		tags []string
 		args []string
 		ok   bool
 	}{
-		{"", []string{"a.sh"}, true},
-		{"update", nil, true},
-		{"", nil, false},
-		{"update", []string{"a.sh"}, false},
-		{"", []string{"a.sh", "b.sh"}, false},
+		{nil, []string{"a.sh"}, true},
+		{[]string{"update"}, nil, true},
+		{nil, nil, false},
+		{[]string{"update"}, []string{"a.sh"}, false},
+		{nil, []string{"a.sh", "b.sh"}, false},
 	} {
 		cmd := &cobra.Command{}
-		cmd.Flags().String("tags", tc.tag, "")
+		cmd.Flags().StringSlice("tags", tc.tags, "")
 		if err := scriptsRunCmd.Args(cmd, tc.args); (err == nil) != tc.ok {
-			t.Errorf("tags %q args %v: err = %v", tc.tag, tc.args, err)
+			t.Errorf("tags %q args %v: err = %v", tc.tags, tc.args, err)
 		}
 	}
 }

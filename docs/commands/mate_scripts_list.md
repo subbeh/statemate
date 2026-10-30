@@ -4,16 +4,26 @@ List all scripts
 
 ## Synopsis
 
-List all discovered scripts and their status, including tags and descriptions
+List all discovered scripts and their status, including tags and descriptions.
+
+With --tags, list only the scripts whose "# Tags:" comment names any of the tags.
 
 ```
 mate scripts list [flags]
 ```
 
+## Examples
+
+```
+  mate scripts list
+  mate scripts list --tags update,brew
+```
+
 ## Options
 
 ```
-  -h, --help   help for list
+  -h, --help           help for list
+      --tags strings   list only scripts whose # Tags: comment names any of these tags
 ```
 
 ## Options inherited from parent commands

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `mate apply` confirmation offers `[d]iff`: it shows the diff of the listed files through `$PAGER` (`less` by default), using `diff_tool` when set, then asks again. Enter still applies
-- Script tags: a `# Tags: update brew` comment near the top of a script tags it, and `mate scripts run --tags update` runs every script with that tag for the active profile, `before` scripts first, in order. `mate scripts list` shows a `TAGS` column once a script has tags
+- Script tags: a `# Tags: update brew` comment near the top of a script tags it, and `mate scripts run --tags update` runs every script with that tag for the active profile, `before` scripts first, in order. `mate scripts list --tags update` lists only those scripts, and shows a `TAGS` column once a script has tags. Both take several tags (`--tags update,brew`) and match any of them
 
 ### Changed
 - `mate apply`'s conflict prompt says why `[i]mport` is missing for a `#tmpl` or `#link` source, and where to make the change instead: `mate edit <target>` for a template, the source link for a `#link`

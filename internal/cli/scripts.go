@@ -44,27 +44,32 @@ triggers it. Editing the script itself does not trigger it; use
 var scriptsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all scripts",
-	Long:  "List all discovered scripts and their status, including tags and descriptions",
+	Long: `List all discovered scripts and their status, including tags and descriptions.
+
+With --tags, list only the scripts whose "# Tags:" comment names any of the tags.`,
+	Example: `  mate scripts list
+  mate scripts list --tags update,brew`,
 	RunE:  runScriptsList,
 }
 
 var scriptsRunCmd = &cobra.Command{
-	Use:   "run <script> | --tags <tag>",
+	Use:   "run <script> | --tags <tag>[,<tag>...]",
 	Short: "Run a script, or every script with a tag",
 	Long: `Run a script now, by the name 'mate scripts list' shows or by path, whatever
 its frequency, timing or #profile:.
 
-With --tags, run every script whose "# Tags:" comment names the tag instead:
+With --tags, run every script whose "# Tags:" comment names any of the tags:
 before scripts then after scripts, in order, whatever their frequency. Scripts
 whose #profile: does not match the active profile are skipped.
 
 There is no confirmation prompt. The run is recorded, so running a #once
 script this way marks it done.`,
 	Example: `  mate scripts run setup.sh
-  mate scripts run --tags update`,
+  mate scripts run --tags update
+  mate scripts run --tags update,brew`,
 	Args: func(cmd *cobra.Command, args []string) error {
-		tag, _ := cmd.Flags().GetString("tags")
-		if (tag == "") == (len(args) == 0) || len(args) > 1 {
+		tags, _ := cmd.Flags().GetStringSlice("tags")
+		if (len(tags) == 0) == (len(args) == 0) || len(args) > 1 {
 			return fmt.Errorf("give either one script or --tags")
 		}
 		return nil
@@ -79,7 +84,8 @@ func init() {
 	scriptsCmd.AddCommand(scriptsRunCmd)
 
 	scriptsRunCmd.Flags().Bool("dry-run", false, "show what would be done without running")
-	scriptsRunCmd.Flags().String("tags", "", "run every script whose # Tags: comment names this tag")
+	scriptsRunCmd.Flags().StringSlice("tags", nil, "run every script whose # Tags: comment names any of these tags")
+	scriptsListCmd.Flags().StringSlice("tags", nil, "list only scripts whose # Tags: comment names any of these tags")
 }
 
 func runScriptsList(cmd *cobra.Command, args []string) error {
@@ -102,6 +108,10 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 	allScripts, err := discoverer.Discover()
 	if err != nil {
 		return fmt.Errorf("discovering scripts: %w", err)
+	}
+
+	if tags, _ := cmd.Flags().GetStringSlice("tags"); len(tags) > 0 {
+		allScripts = allScripts.ByTags(tags)
 	}
 
 	if len(allScripts) == 0 {
@@ -332,10 +342,10 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
 
-	if tag, _ := cmd.Flags().GetString("tags"); tag != "" {
-		tagged := allScripts.ByProfile(profile.InheritanceChain(cfg, profileName)).ByTag(tag)
+	if tags, _ := cmd.Flags().GetStringSlice("tags"); len(tags) > 0 {
+		tagged := allScripts.ByProfile(profile.InheritanceChain(cfg, profileName)).ByTags(tags)
 		if len(tagged) == 0 {
-			return fmt.Errorf("no script for the active profile has tag %q", tag)
+			return fmt.Errorf("no script for the active profile is tagged %s", strings.Join(tags, " or "))
 		}
 		return executeScripts(cfg, profileName, dryRun,
 			append(tagged.ByTiming(scripts.TimingBefore), tagged.ByTiming(scripts.TimingAfter)...))

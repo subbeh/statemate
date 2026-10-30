@@ -79,7 +79,7 @@ type Script struct {
 	// Onchange holds the triggers from a "# Onchange:" comment, or nil to run on
 	// any change in the script's source.
 	Onchange []string
-	// Tags holds the names from a "# Tags:" comment, for 'mate scripts run --tags'.
+	// Tags holds the names from a "# Tags:" comment, for 'mate scripts --tags'.
 	Tags []string
 }
 
@@ -292,10 +292,11 @@ func (s Scripts) Automatic() Scripts {
 	return result
 }
 
-func (s Scripts) ByTag(tag string) Scripts {
+// ByTags keeps the scripts that carry any of tags.
+func (s Scripts) ByTags(tags []string) Scripts {
 	var result Scripts
 	for _, script := range s {
-		if slices.Contains(script.Tags, tag) {
+		if slices.ContainsFunc(tags, func(t string) bool { return slices.Contains(script.Tags, t) }) {
 			result = append(result, script)
 		}
 	}
