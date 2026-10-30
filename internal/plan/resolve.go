@@ -27,8 +27,8 @@ func (e *NotManagedError) Error() string {
 // an ordinary path: absolute, under ~, or relative to the current directory. A
 // relative path that does not exist there is also tried against the source
 // directory. It names an entry by its source file, with or without the
-// attributes, or by its target. There is no fuzzy matching (see
-// docs/adr/0001-strict-file-arguments.md).
+// attributes, or by its target. There is no fuzzy matching: a bare name
+// that is unique today turns ambiguous once another source adds the same name.
 //
 // When several entries match, as variants of one target for different profiles
 // do, the one the current profile deploys wins.

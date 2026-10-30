@@ -1,5 +1,5 @@
 // Package plan resolves what one run of mate works from (the Env) and what the
-// sources say should be on disk for it (the Plan). See GLOSSARY.md.
+// sources say should be on disk for it (the Plan).
 package plan
 
 import (

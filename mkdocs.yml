@@ -1,5 +1,5 @@
 # Docs site, built by Zensical (which reads this file as-is; mkdocs-material 9.7
-# builds it too). See .specs/docs-site.md. The pages themselves live in docs/ and
+# builds it too). The pages themselves live in docs/ and
 # are the same files GitHub renders, so links between them stay relative.
 site_name: Statemate
 site_description: Declarative dotfiles, system configuration, and packages
