@@ -399,6 +399,12 @@ func (a *Applier) promptConflict(change *Change) (string, error) {
 	// Importing a #link would write the target's content through the source
 	// link, into whatever it points at.
 	canImport := !change.Entry.Attrs.Template && !change.Entry.Attrs.Symlink
+	switch {
+	case change.Entry.Attrs.Template:
+		fmt.Printf("  Source is a template, so it cannot be imported; edit it with 'mate edit %s'\n", util.ShortenPath(change.Entry.TargetPath))
+	case change.Entry.Attrs.Symlink:
+		fmt.Printf("  Source is a #link, so it cannot be imported; re-point %s instead\n", change.Entry.SourcePath)
+	}
 	var prompt string
 	if canImport {
 		prompt = "  [o]verwrite, [i]mport, [s]kip, [d]iff, [a]bort: "

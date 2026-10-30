@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `mate apply` confirmation offers `[d]iff`: it shows the diff of the listed files through `$PAGER` (`less` by default), using `diff_tool` when set, then asks again. Enter still applies
 
+### Changed
+- `mate apply`'s conflict prompt says why `[i]mport` is missing for a `#tmpl` or `#link` source, and where to make the change instead: `mate edit <target>` for a template, the source link for a `#link`
+
 ## [0.7.0] - 2026-10-25
 
 ### Added

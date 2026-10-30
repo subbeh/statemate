@@ -85,7 +85,8 @@ Conflict: /home/you/.zshrc
 ```
 
 `[i]mport` copies the target's content back into the source. It is not offered for
-`#tmpl` files, whose source is not the deployed content. `[d]iff` shows the
+`#tmpl` files, whose source is not the deployed content, or `#link` files; the
+prompt says so and where to make the change instead. `[d]iff` shows the
 difference and asks again. For files where importing is always the right answer,
 mark them [`#import`](attributes.md#import) and statemate stops asking.
 

@@ -793,6 +793,43 @@ func TestPromptConflict_NoTerminalExplainsItself(t *testing.T) {
 	}
 }
 
+// Templates and #link sources drop [i]mport from the conflict prompt; the prompt
+// has to say why, or the option just seems to be missing.
+func TestPromptConflict_ExplainsMissingImport(t *testing.T) {
+	for name, tc := range map[string]struct {
+		attrs source.Attrs
+		want  string
+	}{
+		"template": {source.Attrs{Template: true}, "Source is a template"},
+		"link":     {source.Attrs{Symlink: true}, "Source is a #link"},
+		"plain":    {source.Attrs{}, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, w, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_ = w.Close()
+			orig := os.Stdin
+			os.Stdin = r
+			t.Cleanup(func() { os.Stdin = orig })
+
+			a := &Applier{}
+			entry := &source.Entry{TargetPath: "/home/u/.zshrc", SourcePath: "/src/dot_zshrc", Attrs: tc.attrs}
+			out := captureStdout(t, func() { _, _ = a.promptConflict(&Change{Entry: entry}) })
+			if tc.want == "" {
+				if strings.Contains(out, "cannot be imported") || !strings.Contains(out, "[i]mport") {
+					t.Errorf("plain file prompt changed:\n%s", out)
+				}
+				return
+			}
+			if !strings.Contains(out, tc.want) || strings.Contains(out, "[i]mport") {
+				t.Errorf("output does not explain the missing import:\n%s", out)
+			}
+		})
+	}
+}
+
 func TestChangeStatusMarker(t *testing.T) {
 	saved := color.NoColor
 	t.Cleanup(func() { color.NoColor = saved })
