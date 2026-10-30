@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -42,19 +44,31 @@ triggers it. Editing the script itself does not trigger it; use
 var scriptsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all scripts",
-	Long:  "List all discovered scripts and their status, including descriptions",
+	Long:  "List all discovered scripts and their status, including tags and descriptions",
 	RunE:  runScriptsList,
 }
 
 var scriptsRunCmd = &cobra.Command{
-	Use:   "run <script>",
-	Short: "Run a script",
+	Use:   "run <script> | --tags <tag>",
+	Short: "Run a script, or every script with a tag",
 	Long: `Run a script now, by the name 'mate scripts list' shows or by path, whatever
 its frequency, timing or #profile:.
 
+With --tags, run every script whose "# Tags:" comment names the tag instead:
+before scripts then after scripts, in order, whatever their frequency. Scripts
+whose #profile: does not match the active profile are skipped.
+
 There is no confirmation prompt. The run is recorded, so running a #once
 script this way marks it done.`,
-	Args:              cobra.ExactArgs(1),
+	Example: `  mate scripts run setup.sh
+  mate scripts run --tags update`,
+	Args: func(cmd *cobra.Command, args []string) error {
+		tag, _ := cmd.Flags().GetString("tags")
+		if (tag == "") == (len(args) == 0) || len(args) > 1 {
+			return fmt.Errorf("give either one script or --tags")
+		}
+		return nil
+	},
 	RunE:              runScript,
 	ValidArgsFunction: completeScripts,
 }
@@ -65,6 +79,7 @@ func init() {
 	scriptsCmd.AddCommand(scriptsRunCmd)
 
 	scriptsRunCmd.Flags().Bool("dry-run", false, "show what would be done without running")
+	scriptsRunCmd.Flags().String("tags", "", "run every script whose # Tags: comment names this tag")
 }
 
 func runScriptsList(cmd *cobra.Command, args []string) error {
@@ -114,6 +129,10 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			_ = p.Close()
 		}
 	}
+
+	// The TAGS column only appears once a script has tags, so a listing without
+	// them keeps its width for descriptions.
+	hasTags := slices.ContainsFunc(allScripts, func(s *scripts.Script) bool { return len(s.Tags) > 0 })
 
 	var data [][]string
 
@@ -167,7 +186,7 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			source = filepath.Base(script.SourceDir)
 		}
 
-		data = append(data, []string{
+		row := []string{
 			strconv.Itoa(script.Order),
 			name,
 			source,
@@ -175,7 +194,11 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 			script.Timing.String(),
 			status,
 			script.Description,
-		})
+		}
+		if hasTags {
+			row = append(row, strings.Join(script.Tags, " "))
+		}
+		data = append(data, row)
 	}
 
 	// Fit the description to whatever the terminal leaves after the other
@@ -186,6 +209,9 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 	// With no terminal (piped, redirected, CI) nothing is truncated: descriptions
 	// print in full rather than mangling data the caller is about to process.
 	headers := []string{"ORDER", "NAME", "SOURCE", "FREQUENCY", "TIMING", "STATUS", "DESCRIPTION"}
+	if hasTags {
+		headers = append(headers, "TAGS")
+	}
 
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
@@ -201,7 +227,7 @@ func runScriptsList(cmd *cobra.Command, args []string) error {
 		// ORDER is numeric, so it reads better right-aligned.
 		tablewriter.WithAlignment(tw.Alignment{
 			tw.AlignRight, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
-			tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
+			tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft,
 		}),
 		tablewriter.WithRendition(tw.Rendition{
 			Borders: tw.BorderNone,
@@ -306,6 +332,15 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("discovering scripts: %w", err)
 	}
 
+	if tag, _ := cmd.Flags().GetString("tags"); tag != "" {
+		tagged := allScripts.ByProfile(profile.InheritanceChain(cfg, profileName)).ByTag(tag)
+		if len(tagged) == 0 {
+			return fmt.Errorf("no script for the active profile has tag %q", tag)
+		}
+		return executeScripts(cfg, profileName, dryRun,
+			append(tagged.ByTiming(scripts.TimingBefore), tagged.ByTiming(scripts.TimingAfter)...))
+	}
+
 	scriptArg := args[0]
 	var script *scripts.Script
 
@@ -340,6 +375,12 @@ func runScript(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("script not found: %s", scriptArg)
 	}
 
+	return executeScripts(cfg, profileName, dryRun, scripts.Scripts{script})
+}
+
+// executeScripts runs each script in turn, recording every run, and stops at
+// the first failure.
+func executeScripts(cfg *config.Config, profileName string, dryRun bool, list scripts.Scripts) error {
 	db, err := plan.OpenState(cfg)
 	if err != nil {
 		return fmt.Errorf("opening state database: %w", err)
@@ -349,7 +390,7 @@ func runScript(cmd *cobra.Command, args []string) error {
 	// A template script gets the context mate apply would give it, so cached
 	// secrets and encrypted var_files resolve here too.
 	var tmplCtx *template.Context
-	if script.Template {
+	if slices.ContainsFunc(list, func(s *scripts.Script) bool { return s.Template }) {
 		env, err := plan.FromConfig(cfg, profileName)
 		if err != nil {
 			return err
@@ -358,9 +399,10 @@ func runScript(cmd *cobra.Command, args []string) error {
 	}
 
 	executor := scripts.NewExecutor(db, tmplCtx, dryRun)
-	if err := executor.ExecuteOne(script); err != nil {
-		return fmt.Errorf("running script: %w", err)
+	for _, script := range list {
+		if err := executor.ExecuteOne(script); err != nil {
+			return fmt.Errorf("running script %s: %w", script.Name, err)
+		}
 	}
-
 	return nil
 }

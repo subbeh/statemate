@@ -1,24 +1,36 @@
 # mate scripts run
 
-Run a script
+Run a script, or every script with a tag
 
 ## Synopsis
 
 Run a script now, by the name 'mate scripts list' shows or by path, whatever
 its frequency, timing or #profile:.
 
+With --tags, run every script whose "# Tags:" comment names the tag instead:
+before scripts then after scripts, in order, whatever their frequency. Scripts
+whose #profile: does not match the active profile are skipped.
+
 There is no confirmation prompt. The run is recorded, so running a #once
 script this way marks it done.
 
 ```
-mate scripts run <script> [flags]
+mate scripts run <script> | --tags <tag> [flags]
+```
+
+## Examples
+
+```
+  mate scripts run setup.sh
+  mate scripts run --tags update
 ```
 
 ## Options
 
 ```
-      --dry-run   show what would be done without running
-  -h, --help      help for run
+      --dry-run       show what would be done without running
+  -h, --help          help for run
+      --tags string   run every script whose # Tags: comment names this tag
 ```
 
 ## Options inherited from parent commands

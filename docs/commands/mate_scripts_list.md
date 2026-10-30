@@ -4,7 +4,7 @@ List all scripts
 
 ## Synopsis
 
-List all discovered scripts and their status, including descriptions
+List all discovered scripts and their status, including tags and descriptions
 
 ```
 mate scripts list [flags]

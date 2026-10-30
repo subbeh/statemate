@@ -3,6 +3,7 @@ package scripts
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -259,5 +260,23 @@ func TestCheckScriptName(t *testing.T) {
 		if (wantErr == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), wantErr)) {
 			t.Errorf("CheckScriptName(%q) = %v, want %q", name, err, wantErr)
 		}
+	}
+}
+
+func TestReadTags(t *testing.T) {
+	dir := t.TempDir()
+	tagged := filepath.Join(dir, "tagged.sh")
+	if err := os.WriteFile(tagged, []byte("#!/bin/sh\n#  TAGS:  update  brew \necho\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if got := ReadTags(tagged); !slices.Equal(got, []string{"update", "brew"}) {
+		t.Errorf("ReadTags = %q", got)
+	}
+	plain := filepath.Join(dir, "plain.sh")
+	if err := os.WriteFile(plain, []byte("#!/bin/sh\necho\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if got := ReadTags(plain); len(got) != 0 {
+		t.Errorf("ReadTags without a comment = %q", got)
 	}
 }

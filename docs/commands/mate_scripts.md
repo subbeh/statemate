@@ -43,5 +43,5 @@ triggers it. Editing the script itself does not trigger it; use
 
 * [mate](mate.md)	 - Statemate - system configuration management
 * [mate scripts list](mate_scripts_list.md)	 - List all scripts
-* [mate scripts run](mate_scripts_run.md)	 - Run a script
+* [mate scripts run](mate_scripts_run.md)	 - Run a script, or every script with a tag
 

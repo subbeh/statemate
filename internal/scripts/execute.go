@@ -48,6 +48,7 @@ const descriptionScanLines = 10
 var (
 	descriptionPattern = regexp.MustCompile(`(?i)^#\s*description:\s*(.*)$`)
 	onchangePattern    = regexp.MustCompile(`(?i)^#\s*onchange:\s*(.*)$`)
+	tagsPattern        = regexp.MustCompile(`(?i)^#\s*tags:\s*(.*)$`)
 )
 
 // ReadDescription returns the script's "# Description: ..." comment, if any.
@@ -58,6 +59,13 @@ var (
 func ReadDescription(path string) string {
 	desc, _ := readHeader(path, descriptionPattern)
 	return desc
+}
+
+// ReadTags returns the whitespace-separated tags in a script's "# Tags: ..."
+// comment, read like the description.
+func ReadTags(path string) []string {
+	value, _ := readHeader(path, tagsPattern)
+	return strings.Fields(value)
 }
 
 // ReadOnchange returns the triggers in a script's "# Onchange: ..." comment, read

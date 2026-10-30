@@ -94,6 +94,7 @@ func (d *Discoverer) discoverDir(dir, sourceDir string) (Scripts, error) {
 			ContentHash: contentHash,
 			Description: ReadDescription(path),
 			Onchange:    onchange,
+			Tags:        ReadTags(path),
 		})
 		return nil
 	})

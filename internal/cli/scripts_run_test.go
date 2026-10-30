@@ -94,3 +94,74 @@ func TestRunScript_TemplateSeesSecretsAndEncryptedVars(t *testing.T) {
 		t.Errorf("script rendered %q, want %q", strings.TrimSpace(string(got)), "hello s3cret")
 	}
 }
+
+// --tags runs the active profile's tagged scripts, before ones first, and
+// nothing else.
+func TestRunScript_Tags(t *testing.T) {
+	root := isolateHome(t)
+	repo := filepath.Join(root, "repo")
+	dir := filepath.Join(repo, ".matescripts")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(repo, "mate.yaml")
+	if err := os.WriteFile(cfgPath, []byte("sources: []\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	log := filepath.Join(root, "log")
+	for name, tags := range map[string]string{
+		"01-late.sh#after":        "update",
+		"02-early.sh#before":      "brew update",
+		"03-other.sh":             "other",
+		"04-work.sh#profile:work": "update",
+		"05-untagged.sh#always":   "",
+	} {
+		body := "#!/bin/sh\n# Tags: " + tags + "\necho " + strings.SplitN(name, "#", 2)[0] + " >> " + log + "\n"
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cmd := &cobra.Command{Use: "run", RunE: runScript}
+	cmd.Flags().String("config", cfgPath, "")
+	cmd.Flags().String("profile", "", "")
+	cmd.Flags().Bool("dry-run", false, "")
+	cmd.Flags().String("tags", "update", "")
+
+	if err := runScript(cmd, nil); err != nil {
+		t.Fatalf("runScript: %v", err)
+	}
+	got, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "02-early.sh\n01-late.sh\n"; string(got) != want {
+		t.Errorf("ran %q, want %q", got, want)
+	}
+
+	_ = cmd.Flags().Set("tags", "missing")
+	if err := runScript(cmd, nil); err == nil || !strings.Contains(err.Error(), `"missing"`) {
+		t.Errorf("expected an error naming the unknown tag, got %v", err)
+	}
+}
+
+func TestScriptsRunArgs(t *testing.T) {
+	for _, tc := range []struct {
+		tag  string
+		args []string
+		ok   bool
+	}{
+		{"", []string{"a.sh"}, true},
+		{"update", nil, true},
+		{"", nil, false},
+		{"update", []string{"a.sh"}, false},
+		{"", []string{"a.sh", "b.sh"}, false},
+	} {
+		cmd := &cobra.Command{}
+		cmd.Flags().String("tags", tc.tag, "")
+		if err := scriptsRunCmd.Args(cmd, tc.args); (err == nil) != tc.ok {
+			t.Errorf("tags %q args %v: err = %v", tc.tag, tc.args, err)
+		}
+	}
+}

@@ -131,6 +131,21 @@ A script can describe itself with a comment in its first 10 lines:
 Matching is case-insensitive and tolerant of whitespace. The description appears in
 `mate scripts list`, `mate status`, and the confirmation prompt.
 
+## Tags
+
+A `# Tags:` comment, read the same way, gives a script one or more tags,
+separated by whitespace:
+
+```bash
+#!/usr/bin/env bash
+# Description: Upgrade Homebrew packages
+# Tags: update brew
+```
+
+`mate scripts run --tags update` then runs every script tagged `update` in one
+go. `mate scripts list` shows the tags in a `TAGS` column once any script has
+them.
+
 ## Confirmation
 
 `mate apply` asks before running each script:
@@ -220,12 +235,19 @@ script **must** start with a shebang.
 mate scripts list              # every script, its status, and description
 mate scripts run <name>        # run one manually, ignoring frequency
 mate scripts run <name> --dry-run
+mate scripts run --tags <tag>  # run every script with the tag
 mate apply --no-scripts        # apply files without any scripts
 ```
 
 `mate scripts run` takes the name shown in `mate scripts list` or a path. It does
 not prompt, ignores the script's `#profile:`, and records the run, so running a
 `#once` script by hand marks it done.
+
+`mate scripts run --tags <tag>` runs every script with that [tag](#tags):
+`before` scripts, then `after` scripts, each in order, whatever their
+frequency. Unlike a run by name, it skips scripts whose `#profile:` does not
+match the active profile. It does not prompt, records each run, and stops at the
+first script that fails.
 
 Scoped applies run fewer scripts: `mate apply <path>` runs none, and
 `mate apply --source <name>` runs only that source's scripts, not those in the
