@@ -59,7 +59,8 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("creating state directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", path)
+	// Wait up to 5s for another connection's lock instead of failing with SQLITE_BUSY.
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("opening database: %w", err)
 	}

@@ -278,3 +278,37 @@ func TestGetScriptRun_LocalTime(t *testing.T) {
 		t.Errorf("RunAt shows %s, want local %s", got, want)
 	}
 }
+
+func TestDeleteFile_WaitsForLock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	a, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer func() { _ = a.Close() }()
+	b, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer func() { _ = b.Close() }()
+
+	if err := b.SaveFile(&FileEntry{SourcePath: "s", TargetPath: "/t", SourceHash: "h", AppliedHash: "h"}); err != nil {
+		t.Fatalf("SaveFile failed: %v", err)
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		t.Fatalf("Begin failed: %v", err)
+	}
+	if _, err := tx.Exec(`INSERT INTO script_failures (script_path) VALUES ('x')`); err != nil {
+		t.Fatalf("taking write lock: %v", err)
+	}
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		_ = tx.Commit()
+	}()
+
+	if err := b.DeleteFile("/t"); err != nil {
+		t.Fatalf("DeleteFile did not wait for the lock: %v", err)
+	}
+}
