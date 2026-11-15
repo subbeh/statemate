@@ -273,6 +273,17 @@ func classify(entry *source.Entry, db *state.DB, opts *ComputeOpts) (*Change, er
 		}
 	}
 
+	// The target moved to exactly what apply would write: only the record is stale.
+	if targetHash != existing.AppliedHash && targetHash == renderedHash {
+		if permMismatch(entry, info) {
+			change.Status = StatusModified
+			change.PermOnly = true
+		} else {
+			change.Status = StatusStateOnly
+		}
+		return change, nil
+	}
+
 	if existing.SourceHash == sourceHash {
 		if targetHash == existing.AppliedHash {
 			if renderedHash != targetHash {

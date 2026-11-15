@@ -16,6 +16,7 @@ import (
 	"github.com/subbeh/statemate/internal/encrypt"
 	"github.com/subbeh/statemate/internal/source"
 	"github.com/subbeh/statemate/internal/state"
+	"github.com/subbeh/statemate/internal/template"
 )
 
 func TestApplier_Apply(t *testing.T) {
@@ -868,5 +869,99 @@ func TestApply_LogsWrittenFiles(t *testing.T) {
 	f.apply()
 	if want := "msg=wrote target=" + f.targetPath + " status=new"; !strings.Contains(buf.String(), want) {
 		t.Errorf("log does not contain %q:\n%s", want, buf.String())
+	}
+}
+
+// A target that moved to exactly what apply would write is not a conflict,
+// whichever side changed: the record is stale and only needs updating.
+func TestComputeChanges_TargetMatchingSourceIsNotConflict(t *testing.T) {
+	ctx := &template.Context{Profile: "work"}
+	identity, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, err := encrypt.NewAgeEncryptor(identity.String(), "", []string{identity.Recipient().String()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := enc.Encrypt([]byte("secret"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name, sourceName, source, target string
+		sourceMoved                      bool
+	}{
+		{name: "plain, source unchanged", sourceName: "a.json", source: "new", target: "new"},
+		{name: "plain, both moved", sourceName: "a.json", source: "new", target: "new", sourceMoved: true},
+		{name: "tmpl", sourceName: "a.conf#tmpl", source: "{{ .Profile }}", target: "work", sourceMoved: true},
+		{name: "enc", sourceName: "a.key#enc", source: string(ciphertext), target: "secret", sourceMoved: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			sourceDir := filepath.Join(tmpDir, "source")
+			targetDir := filepath.Join(tmpDir, "target")
+			_ = os.MkdirAll(sourceDir, 0755)
+			_ = os.MkdirAll(targetDir, 0755)
+			srcFile := filepath.Join(sourceDir, tt.sourceName)
+			if err := os.WriteFile(srcFile, []byte(tt.source), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			db, err := state.Open(filepath.Join(tmpDir, "state.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = db.Close() }()
+
+			tree, err := source.NewScanner(targetDir, "").Scan([]string{sourceDir})
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry := tree.Files()[0]
+			if err := os.WriteFile(entry.TargetPath, []byte(tt.target), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			sourceHash, _ := state.HashFile(srcFile)
+			if tt.sourceMoved {
+				sourceHash = state.HashBytes([]byte("old source"))
+			}
+			if err := db.SaveFile(&state.FileEntry{
+				SourcePath:  srcFile,
+				TargetPath:  entry.TargetPath,
+				SourceHash:  sourceHash,
+				AppliedHash: state.HashBytes([]byte("old target")),
+				Mode:        0644,
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			opts := ComputeOpts{TmplCtx: ctx, Enc: enc}
+			change, err := computeChange(entry, db, &opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if change.Status != StatusStateOnly {
+				t.Fatalf("status: got %v, want state-only", change.Status)
+			}
+
+			res, err := NewApplier(db, ctx, enc, false, false, false).Apply(tree)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Applied != 0 {
+				t.Errorf("expected nothing applied, got %d", res.Applied)
+			}
+			result, err := ComputeChanges(tree, db, opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Changes) != 0 {
+				t.Errorf("after apply, expected no changes, got %v", result.Changes[0].Status)
+			}
+		})
 	}
 }

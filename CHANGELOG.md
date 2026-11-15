@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `mate clean`, `mate apply` and other commands wait for the state database when another `mate` holds it, instead of failing with `database is locked (SQLITE_BUSY)`
 - `mate scripts list` shows when a script last ran in local time; it showed UTC
+- `mate apply` no longer reports a conflict, and `mate status` no longer lists one, for a file whose target already holds what the source would deploy (for `#tmpl` and `#enc`, the rendered content): it records the file as applied instead
 
 ## [0.7.0] - 2026-10-25
 
