@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/subbeh/statemate/internal/util"
@@ -72,9 +73,51 @@ func (u *UVManager) QueryInstalled(pkgs []string) ([]Package, error) {
 	return packages, nil
 }
 
-// Describe returns nothing: uv has no way to look up a tool's summary.
+// Describe reads each installed tool's summary from the package metadata in its
+// environment, since uv has no command for it. Like pacman it says nothing about
+// tools that are not installed.
 func (u *UVManager) Describe(pkgs []string) (Descriptions, error) {
-	return Descriptions{}, nil
+	if len(pkgs) == 0 {
+		return Descriptions{}, nil
+	}
+	out, err := util.Command("uv", "tool", "dir").Output()
+	if err != nil {
+		return Descriptions{}, err
+	}
+	return Descriptions{ByName: toolSummaries(strings.TrimSpace(string(out)), pkgs)}, nil
+}
+
+// toolSummaries finds <dir>/<name>/lib/python*/site-packages/<name>-*.dist-info/METADATA,
+// where the dist-info name has - and . turned into _.
+func toolSummaries(dir string, pkgs []string) map[string]string {
+	result := make(map[string]string)
+	for _, name := range pkgs {
+		dist := strings.NewReplacer("-", "_", ".", "_").Replace(name)
+		matches, _ := filepath.Glob(filepath.Join(dir, name, "lib", "python*", "site-packages", dist+"-*.dist-info", "METADATA"))
+		for _, m := range matches {
+			if summary := metadataSummary(m); summary != "" {
+				result[name] = summary
+				break
+			}
+		}
+	}
+	return result
+}
+
+func metadataSummary(path string) string {
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	scanner := bufio.NewScanner(f)
+	// The headers end at the first blank line, before the long description.
+	for scanner.Scan() && scanner.Text() != "" {
+		if s, ok := strings.CutPrefix(scanner.Text(), "Summary:"); ok {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
 }
 
 // Install runs `uv tool install` once per package, since it takes one at a time.

@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate apply`'s conflict prompt says why `[i]mport` is missing for a `#tmpl` or `#link` source, and where to make the change instead: `mate edit <target>` for a template, the source link for a `#link`
 
 ### Fixed
+- `mate packages list --descriptions` shows descriptions for installed `uv` tools, read from each tool's package metadata
 - `mate clean`, `mate apply` and other commands wait for the state database when another `mate` holds it, instead of failing with `database is locked (SQLITE_BUSY)`
 - `mate scripts list` shows when a script last ran in local time; it showed UTC
 - `mate apply` no longer reports a conflict, and `mate status` no longer lists one, for a file whose target already holds what the source would deploy (for `#tmpl` and `#enc`, the rendered content): it records the file as applied instead

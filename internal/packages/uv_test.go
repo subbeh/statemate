@@ -82,3 +82,47 @@ func TestUVManagerUnavailable(t *testing.T) {
 		t.Error("uv not on PATH should be unavailable")
 	}
 }
+
+// uv has no command for a tool's summary, so it comes from the METADATA in the
+// tool's environment, whose dist-info name has - turned into _.
+func TestUVManagerDescribe(t *testing.T) {
+	tools := t.TempDir()
+	write := func(path, content string) {
+		t.Helper()
+		path = filepath.Join(tools, path)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	site := "lib/python3.13/site-packages/"
+	write("ruff/"+site+"ruff-0.6.9.dist-info/METADATA", "Metadata-Version: 2.3\nName: ruff\nSummary: An extremely fast Python linter\n\nSummary: not a header\n")
+	write("pre-commit/"+site+"pre_commit-3.8.0.dist-info/METADATA", "Name: pre-commit\nSummary: A framework for managing pre-commit hooks\n")
+	// A dependency in the same environment must not answer for the tool.
+	write("pre-commit/"+site+"cfgv-3.4.0.dist-info/METADATA", "Name: cfgv\nSummary: wrong\n")
+	write("nosummary/"+site+"nosummary-1.0.dist-info/METADATA", "Name: nosummary\n\nSummary: in the body\n")
+
+	dir := t.TempDir()
+	script := "#!/bin/sh\n[ \"$1 $2\" = \"tool dir\" ] && echo '" + tools + "'\n"
+	if err := os.WriteFile(filepath.Join(dir, "uv"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	descs, err := NewUVManager().Describe([]string{"ruff", "pre-commit", "nosummary", "missing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"ruff":       "An extremely fast Python linter",
+		"pre-commit": "A framework for managing pre-commit hooks",
+	}
+	if !reflect.DeepEqual(descs.ByName, want) {
+		t.Errorf("ByName = %q, want %q", descs.ByName, want)
+	}
+	if _, resolved := descs.Lookup("missing"); !resolved {
+		t.Error("a tool that is not installed must not be reported unknown")
+	}
+}
