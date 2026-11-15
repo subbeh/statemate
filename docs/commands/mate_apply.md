@@ -63,6 +63,11 @@ target is treated as authoritative and copied back into the source. Use it for
 files an application rewrites, such as ~/.claude/settings.json. If the source
 changed too, the conflict prompt still appears.
 
+--clean also removes orphaned files (see 'mate clean'): they are listed with a
+'-' marker before the apply asks to proceed, and removed after the files are
+written, so hooks matching them run with the others. With a path or --source,
+only orphans whose target or recorded source falls inside it are removed.
+
 ```
 mate apply [path] [flags]
 ```
@@ -70,6 +75,7 @@ mate apply [path] [flags]
 ## Options
 
 ```
+      --clean           also remove orphaned files
       --dry-run         show what would be done without making changes
       --force           overwrite conflicting targets and auto-confirm scripts, hooks and package installs
   -h, --help            help for apply

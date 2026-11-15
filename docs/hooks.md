@@ -112,7 +112,7 @@ A hook triggers when at least one matching file was:
 | Event | Command |
 |-------|---------|
 | Written, new or with changed content | `mate apply` |
-| Removed as an orphan | `mate clean` |
+| Removed as an orphan | `mate clean`, `mate apply --clean` |
 | Removed along with its source | `mate delete` (not with `--keep-target`) |
 | Renamed | `mate rename` — the old path and the new path are both matched |
 

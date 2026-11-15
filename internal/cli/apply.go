@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/fatih/color"
@@ -17,6 +18,8 @@ import (
 	"github.com/subbeh/statemate/internal/plan"
 	"github.com/subbeh/statemate/internal/scripts"
 	"github.com/subbeh/statemate/internal/secrets"
+	"github.com/subbeh/statemate/internal/source"
+	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/template"
 	"github.com/subbeh/statemate/internal/util"
@@ -79,7 +82,12 @@ overwrites without asking; --dry-run still asks.
 A file marked '#import' is not prompted about when only its target changed: the
 target is treated as authoritative and copied back into the source. Use it for
 files an application rewrites, such as ~/.claude/settings.json. If the source
-changed too, the conflict prompt still appears.`,
+changed too, the conflict prompt still appears.
+
+--clean also removes orphaned files (see 'mate clean'): they are listed with a
+'-' marker before the apply asks to proceed, and removed after the files are
+written, so hooks matching them run with the others. With a path or --source,
+only orphans whose target or recorded source falls inside it are removed.`,
 	Args:              cobra.MaximumNArgs(1),
 	RunE:              runApply,
 	ValidArgsFunction: completePendingFiles,
@@ -91,6 +99,7 @@ var (
 	noScripts bool
 	noConfirm bool
 	list      bool
+	clean     bool
 )
 
 func init() {
@@ -99,6 +108,7 @@ func init() {
 	applyCmd.Flags().BoolVar(&force, "force", false, "overwrite conflicting targets and auto-confirm scripts, hooks and package installs")
 	applyCmd.Flags().BoolVar(&noScripts, "no-scripts", false, "skip all scripts")
 	applyCmd.Flags().BoolVar(&noConfirm, "noconfirm", false, "apply without listing the changes and asking first")
+	applyCmd.Flags().BoolVar(&clean, "clean", false, "also remove orphaned files")
 	applyCmd.Flags().BoolVarP(&list, "list", "l", false, "list every file written, and with --dry-run the files and steps of each hook")
 	addScopeFlag(applyCmd)
 }
@@ -148,6 +158,15 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("resolve conflicts before applying")
 	}
 
+	// Orphans come from the full tree: once narrowed, every file outside the
+	// scope would look orphaned.
+	var orphans []string
+	if clean {
+		if orphans, err = p.Orphans(); err != nil {
+			return err
+		}
+	}
+
 	if err := p.Narrow(scope); err != nil {
 		return err
 	}
@@ -178,6 +197,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if orphans, err = scopedOrphans(orphans, scope, db, allSourcePaths, cfg.SourceDir()); err != nil {
+		return err
+	}
 
 	// Compute pending changes before applying anything, so #onchange scripts see
 	// the same set whether they run #before or #after -- once apply has written
@@ -187,8 +209,11 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !dryRun && !noConfirm && !force && len(pending.Changes) > 0 {
+	if !dryRun && !noConfirm && !force && (len(pending.Changes) > 0 || len(orphans) > 0) {
 		printChanges(pending.Changes)
+		for _, o := range orphans {
+			fmt.Printf("%s %s\n", color.RedString("-"), util.ShortenPath(o))
+		}
 		ok, err := confirmApply(pending.Changes, tmplCtx, enc, cfg.DiffTool)
 		if errors.Is(err, util.ErrInterrupted) {
 			return nil
@@ -243,7 +268,27 @@ func runApply(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("reading pending hooks: %w", err)
 	}
-	triggered := hookSet.WithPending(hookSet.Trigger(hookChanges(result.Written, allSourcePaths), profileChain), pendingHooks, profileChain)
+	// Orphans go once the files are written, so their hooks run with the
+	// others. A failed removal does not stop the apply, which still fails.
+	changed := hookChanges(result.Written, allSourcePaths)
+	var removed int
+	var cleanErr error
+	for _, o := range orphans {
+		if dryRun {
+			fmt.Printf("Would remove %s\n", util.ShortenPath(o))
+			changed = append(changed, orphanChange(db, o, allSourcePaths))
+			continue
+		}
+		c, err := removeOrphan(db, o, allSourcePaths)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s %v\n", color.RedString("Error:"), err)
+			cleanErr = errors.Join(cleanErr, err)
+			continue
+		}
+		changed = append(changed, c)
+		removed++
+	}
+	triggered := hookSet.WithPending(hookSet.Trigger(changed, profileChain), pendingHooks, profileChain)
 	if !dryRun {
 		for _, t := range triggered {
 			if err := db.SetPendingHook(t.Name, t.Files); err != nil {
@@ -291,6 +336,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 		if result.Imported > 0 {
 			fmt.Printf(", %d imported", result.Imported)
 		}
+		if len(orphans) > 0 {
+			fmt.Printf(", %d removed", len(orphans))
+		}
 		fmt.Printf(", %d unchanged\n", result.Skipped)
 	} else {
 		parts := []string{}
@@ -299,6 +347,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 		}
 		if result.Imported > 0 {
 			parts = append(parts, fmt.Sprintf("imported %d", result.Imported))
+		}
+		if removed > 0 {
+			parts = append(parts, fmt.Sprintf("removed %d", removed))
 		}
 		if result.Skipped > 0 {
 			parts = append(parts, fmt.Sprintf("%d unchanged", result.Skipped))
@@ -312,7 +363,33 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	// A failed hook does not stop the other hooks or the #after scripts, but
 	// the run still fails.
-	return hookRes.Err()
+	return errors.Join(cleanErr, hookRes.Err())
+}
+
+// scopedOrphans keeps the orphans inside the scope, matched by their target and
+// the source the state database recorded for them.
+func scopedOrphans(orphans []string, scope plan.Scope, db *state.DB, sourcePaths []string, sourceDir string) ([]string, error) {
+	if scope.IsZero() {
+		return orphans, nil
+	}
+	var kept []string
+	for _, o := range orphans {
+		fe, err := db.GetFile(o)
+		if err != nil {
+			return nil, err
+		}
+		e := &source.Entry{TargetPath: o}
+		if fe != nil {
+			e.SourcePath = fe.SourcePath
+			if e.SourceDir = hooks.OwningSource(fe.SourcePath, sourcePaths); e.SourceDir != "" {
+				e.RelPath, _ = filepath.Rel(e.SourceDir, fe.SourcePath)
+			}
+		}
+		if scope.Matches(e, sourceDir) {
+			kept = append(kept, o)
+		}
+	}
+	return kept, nil
 }
 
 func fetchMissingSecrets(cfg *config.Config, mgr *secrets.Manager, enc *encrypt.AgeEncryptor, profileName string, sourcePaths []string, dryRun, list bool) error {

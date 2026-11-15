@@ -40,7 +40,7 @@ meant to be committed.
 There is one database per user, keyed by target path, whichever repository you
 run `mate` against. Pointing `mate` at a second repository therefore reports
 every file the first one manages as an orphan. Never run `mate clean --all`
-against a repository other than your usual one.
+or `mate apply --clean` against a repository other than your usual one.
 
 Two hashes rather than one is what lets statemate tell *which side* of a file
 changed. For a plain file they are identical. For a `#tmpl` or `#enc`
@@ -123,7 +123,12 @@ mate clean                  # lists them too
 mate clean ~/.old.conf      # removes one, after asking
 mate clean --all            # removes all, asking for each
 mate clean --all --force    # removes all, without asking
+mate apply --clean          # applies, and removes them in the same run
 ```
+
+`mate apply --clean` lists the orphans it will remove alongside the files it will
+write, under the same confirmation. With a path or `--source` it removes only
+the orphans inside that scope.
 
 `mate forget <path>` drops the tracking but leaves the deployed file alone. That
 only sticks once the file is gone from the source. If it is still there, the next

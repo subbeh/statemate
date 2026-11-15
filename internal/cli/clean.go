@@ -8,6 +8,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/subbeh/statemate/internal/hooks"
+	"github.com/subbeh/statemate/internal/state"
 	"github.com/subbeh/statemate/internal/target"
 	"github.com/subbeh/statemate/internal/util"
 )
@@ -114,31 +115,46 @@ func runClean(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		if err := os.Remove(path); err != nil {
-			if os.IsPermission(err) {
-				if err := target.SudoRemove(path); err != nil {
-					return fmt.Errorf("removing %s: %w", path, err)
-				}
-			} else {
-				return fmt.Errorf("removing %s: %w", path, err)
-			}
+		change, err := removeOrphan(db, path, sourcePaths)
+		if err != nil {
+			return err
 		}
-
-		// Look up the source before the record goes, so the orphan still
-		// triggers hooks declared in the source it came from.
-		change := hooks.Change{Path: path}
-		if fe, _ := db.GetFile(path); fe != nil {
-			change.SourceDir = hooks.OwningSource(fe.SourcePath, sourcePaths)
-		}
-
-		if err := db.DeleteFile(path); err != nil {
-			return fmt.Errorf("removing %s from database: %w", path, err)
-		}
-
-		slog.Info("removed", "target", path)
-		fmt.Printf("Removed %s\n", util.ShortenPath(path))
 		removed = append(removed, change)
 	}
 
 	return runRemovalHooks(env, db, removed, force)
+}
+
+// removeOrphan deletes an orphaned target and its record, and returns the
+// change that triggers its hooks.
+func removeOrphan(db *state.DB, path string, sourcePaths []string) (hooks.Change, error) {
+	if err := os.Remove(path); err != nil {
+		if !os.IsPermission(err) {
+			return hooks.Change{}, fmt.Errorf("removing %s: %w", path, err)
+		}
+		if err := target.SudoRemove(path); err != nil {
+			return hooks.Change{}, fmt.Errorf("removing %s: %w", path, err)
+		}
+	}
+
+	// Look up the source before the record goes, so the orphan still
+	// triggers hooks declared in the source it came from.
+	change := orphanChange(db, path, sourcePaths)
+
+	if err := db.DeleteFile(path); err != nil {
+		return hooks.Change{}, fmt.Errorf("removing %s from database: %w", path, err)
+	}
+
+	slog.Info("removed", "target", path)
+	fmt.Printf("Removed %s\n", util.ShortenPath(path))
+	return change, nil
+}
+
+// orphanChange is the change an orphan's removal makes, for triggering hooks.
+func orphanChange(db *state.DB, path string, sourcePaths []string) hooks.Change {
+	change := hooks.Change{Path: path}
+	if fe, _ := db.GetFile(path); fe != nil {
+		change.SourceDir = hooks.OwningSource(fe.SourcePath, sourcePaths)
+	}
+	return change
 }

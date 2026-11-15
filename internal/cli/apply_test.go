@@ -415,3 +415,68 @@ age:
 		t.Errorf("generated file = %q, want %q", got, "s3cret")
 	}
 }
+
+// --clean removes only the orphans inside the scope, and runs the hooks that
+// match them.
+func TestApply_CleanRemovesInScopeOrphans(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		source   string
+		wantGone []string
+		wantKept []string
+	}{
+		{name: "no scope", wantGone: []string{"app/old.conf", "other/old.txt"}},
+		{name: "source scope", source: "app", wantGone: []string{"app/old.conf"}, wantKept: []string{"other/old.txt"}},
+		{name: "path scope", args: []string{"HOME/.config/other"}, wantGone: []string{"other/old.txt"}, wantKept: []string{"app/old.conf"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newHookRepo(t, "sources: [app, other]\n")
+			writeFile(t, filepath.Join(r.dir, "app", ".config", "app", "old.conf"), "o\n", 0644)
+			writeFile(t, filepath.Join(r.dir, "other", ".config", "other", "old.txt"), "o\n", 0644)
+			if err := r.apply(t, nil, ""); err != nil {
+				t.Fatalf("first apply failed: %v", err)
+			}
+			for _, f := range []string{"app/.config/app/old.conf", "other/.config/other/old.txt"} {
+				if err := os.Remove(filepath.Join(r.dir, f)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.RemoveAll(r.marks); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(r.marks, 0755); err != nil {
+				t.Fatal(err)
+			}
+
+			clean = true
+			defer func() { clean = false }()
+			var args []string
+			for _, a := range tc.args {
+				args = append(args, strings.Replace(a, "HOME", r.home, 1))
+			}
+			if err := r.apply(t, args, tc.source); err != nil {
+				t.Fatalf("apply --clean failed: %v", err)
+			}
+
+			target := func(f string) string {
+				dir, name, _ := strings.Cut(f, "/")
+				return filepath.Join(r.home, ".config", dir, name)
+			}
+			for _, f := range tc.wantGone {
+				if _, err := os.Stat(target(f)); !os.IsNotExist(err) {
+					t.Errorf("orphan %s was not removed", f)
+				}
+			}
+			for _, f := range tc.wantKept {
+				if _, err := os.Stat(target(f)); err != nil {
+					t.Errorf("out-of-scope orphan %s was removed", f)
+				}
+			}
+			// app's own *.conf hook matches the removed old.conf.
+			if got, want := r.ran("app-own"), tc.source != "" || tc.args == nil; got != want {
+				t.Errorf("app-own hook ran = %v, want %v", got, want)
+			}
+		})
+	}
+}
