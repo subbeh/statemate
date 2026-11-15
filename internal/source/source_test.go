@@ -74,6 +74,12 @@ func TestParseAttrs(t *testing.T) {
 			wantName: "settings.json",
 			wantAttr: Attrs{Profile: "work", Encrypted: true, Import: true},
 		},
+		// A leading _ is stripped, so tools that act on their directory do not
+		// pick the file up inside the repository; __ escapes a real leading _.
+		{input: "_mise.toml", wantName: "mise.toml"},
+		{input: "__x", wantName: "_x"},
+		{input: "_.envrc#tmpl", wantName: ".envrc", wantAttr: Attrs{Template: true}},
+		{input: "_", wantName: "_"},
 	}
 
 	for _, tt := range tests {
@@ -256,6 +262,36 @@ func TestScannerConflictDetection(t *testing.T) {
 
 	if tree.Conflicts[0].TargetPath != "/home/testuser/.config/app/config.yaml" {
 		t.Errorf("unexpected conflict target: %s", tree.Conflicts[0].TargetPath)
+	}
+}
+
+// _a deploys as a, so the two compete for one target like any other pair.
+func TestScannerUnderscorePrefix(t *testing.T) {
+	dir := t.TempDir()
+	app := filepath.Join(dir, "app")
+	for _, f := range []string{"_a", "a", "_d/__f"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(app, f)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(app, f), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tree, err := NewScanner("/home/testuser", "").Scan([]string{app})
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+
+	if len(tree.Conflicts) != 1 || tree.Conflicts[0].TargetPath != "/home/testuser/a" {
+		t.Errorf("conflicts = %+v; want one on /home/testuser/a", tree.Conflicts)
+	}
+	var found bool
+	for _, f := range tree.Files() {
+		found = found || f.TargetPath == "/home/testuser/d/_f"
+	}
+	if !found {
+		t.Error("_d/__f should deploy as d/_f")
 	}
 }
 

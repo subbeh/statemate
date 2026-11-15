@@ -19,6 +19,8 @@ func TestRenamedNames(t *testing.T) {
 		{"secret#enc#tmpl", "token#tmpl#enc", "token#tmpl#enc", "token"},
 		// Only the attributes change.
 		{"init.lua", "init.lua#tmpl", "init.lua#tmpl", "init.lua"},
+		// A leading _ belongs to the source only.
+		{"mise.toml", "_mise.toml", "_mise.toml", "mise.toml"},
 	}
 	for _, tc := range tests {
 		gotSource, gotTarget, err := renamedNames(tc.source, tc.newName)

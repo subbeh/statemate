@@ -11,7 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mate apply` confirmation offers `[d]iff`: it shows the diff of the listed files through `$PAGER` (`less` by default), using `diff_tool` when set, then asks again. Enter still applies
 - Script tags: a `# Tags: update brew` comment near the top of a script tags it, and `mate scripts run --tags update` runs every script with that tag for the active profile, `before` scripts first, in order. `mate scripts list --tags update` lists only those scripts, and shows a `TAGS` column once a script has tags. Both take several tags (`--tags update,brew`) and match any of them
 
+- A leading `_` is stripped from a source's name, so a source can hide from tools that load files from whichever directory holds them: `_mise.toml` deploys as `mise.toml`, so mise no longer loads it inside the repository. Directories work too. `mate add` writes a target that starts with `_` as `__name`
+
 ### Changed
+- **Breaking:** a source whose name starts with `_` now deploys without it, so `_mate` deploys as `mate` and `__script` as `_script`. To keep a target's name, add one `_` to its source: rename `_mate` to `__mate` and `__script` to `___script`. Find them with `find <source_dir> -name '_*'`
 - `mate apply`'s conflict prompt says why `[i]mport` is missing for a `#tmpl` or `#link` source, and where to make the change instead: `mate edit <target>` for a template, the source link for a `#link`
 
 ### Fixed

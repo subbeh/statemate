@@ -40,6 +40,24 @@ Attributes are written on directories too. There, only some take effect:
 The source directory's own name counts as well: a source named
 `etc#owner-r:root` makes every file in it root-owned.
 
+## Leading `_`
+
+A leading `_` is also stripped from the name, so a source can hide from tools
+that act on whichever directory holds a file. mise loads `mise.toml` from the
+current directory and its parents, so a `mise.toml` in the repository would
+activate as you move around in it. Name the source `_mise.toml` and it deploys as
+`mise.toml`. The same works for `.envrc`, `.tool-versions` or `.editorconfig`,
+and for directories.
+
+```
+mise/.config/mise/_config.toml  →  ~/.config/mise/config.toml
+zsh/site-functions/__mate       →  ~/…/site-functions/_mate
+```
+
+Only one `_` is stripped, so `__name` is how to deploy a target that really
+starts with `_`, such as a zsh completion. `mate add` writes it that way. `_a`
+and `a` in one source deploy to the same target, and are reported as a conflict.
+
 ## `#tmpl`
 
 Renders the file with Go's `text/template` before writing it. See

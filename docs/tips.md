@@ -235,7 +235,7 @@ The same script can emit JSON for a Waybar custom module, with the full
 
 ```json
 "custom/statemate": {
-  "exec": "__statemate_status waybar",
+  "exec": "_statemate_status waybar",
   "return-type": "json",
   "interval": 10,
   "on-click": "mate apply"

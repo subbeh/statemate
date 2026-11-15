@@ -286,7 +286,7 @@ func addFileToSource(targetPath string, info os.FileInfo, sourceDir string, cfg 
 		return fmt.Errorf("computing relative path: %w", err)
 	}
 
-	destName := filepath.Base(relPath)
+	destName := source.EscapeName(filepath.Base(relPath))
 	if addForProfile != "" {
 		destName = destName + "#profile:" + addForProfile
 	}
@@ -456,7 +456,7 @@ func resolveAttrsPath(baseDir, relPath string) string {
 		if part == "." {
 			continue
 		}
-		exact := filepath.Join(current, part)
+		exact := filepath.Join(current, source.EscapeName(part))
 		if _, err := os.Stat(exact); err == nil {
 			current = exact
 			continue
@@ -473,8 +473,7 @@ func resolveAttrsPath(baseDir, relPath string) string {
 				continue
 			}
 			name := e.Name()
-			baseName := strings.SplitN(name, "#", 2)[0]
-			if baseName == part {
+			if baseName, _ := source.ParseAttrs(name); baseName == part {
 				current = filepath.Join(current, name)
 				found = true
 				break

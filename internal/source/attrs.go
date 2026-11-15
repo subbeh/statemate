@@ -75,9 +75,15 @@ func CheckAttrs(name string) error {
 	return nil
 }
 
+// ParseAttrs splits a source name into its target name and attributes. A
+// leading _ is dropped from the target name, so _mise.toml deploys as mise.toml
+// without mise loading it inside the repository; __x deploys as _x.
 func ParseAttrs(name string) (baseName string, attrs Attrs) {
 	parts := strings.Split(name, "#")
 	baseName = parts[0]
+	if len(baseName) > 1 {
+		baseName = strings.TrimPrefix(baseName, "_")
+	}
 
 	for i := 1; i < len(parts); i++ {
 		part := parts[i]
@@ -123,6 +129,15 @@ func ParseAttrs(name string) (baseName string, attrs Attrs) {
 	}
 
 	return baseName, attrs
+}
+
+// EscapeName returns the source name that deploys as the target name name,
+// undoing the _ that ParseAttrs strips.
+func EscapeName(name string) string {
+	if strings.HasPrefix(name, "_") {
+		return "_" + name
+	}
+	return name
 }
 
 // RemoveAttr returns name without the given flag attribute (e.g. "enc"),

@@ -190,6 +190,24 @@ func TestAddForProfileAddsSuffix(t *testing.T) {
 	}
 }
 
+// A source's leading _ is stripped from its target, so a target that really
+// starts with _ is written with __.
+func TestAddEscapesLeadingUnderscore(t *testing.T) {
+	cfgPath, file := addRepo(t)
+	home := filepath.Dir(file)
+	target := filepath.Join(home, "_d", "_f")
+	writeAddTestFile(t, target, "x\n")
+
+	if err := executeAdd(t, "-c", cfgPath, "-s", "base", target); err != nil {
+		t.Fatal(err)
+	}
+
+	want := filepath.Join(filepath.Dir(cfgPath), "base", "__d", "__f")
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("expected %s: %v", want, err)
+	}
+}
+
 func TestAddDirectoryRecursively(t *testing.T) {
 	cfgPath, file := addRepo(t)
 	home := filepath.Dir(file)
