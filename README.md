@@ -1,7 +1,23 @@
 # Statemate
 
-Declarative system configuration management. Manage dotfiles, configs, packages, and 
-maintenance tasks across machines.
+Declarative system configuration management. Manage dotfiles, configs, packages, and
+maintenance tasks across machines, from one git repository and one binary, `mate`.
+
+## Why statemate
+
+- **Nothing changes unseen.** `mate status` and `mate diff` show what an apply would do,
+  `mate apply` asks before writing, and `mate audit` lists what recent runs changed.
+- **Your edits are safe.** A target you edited outside the tool is detected, and
+  `mate apply` asks before overwriting it. Apps that rewrite their own config flow back
+  into the repository with `#import`.
+- **One repository, many machines.** Profiles detect the machine and inherit from each
+  other; the same repository sets up a Mac, an Arch box and a work laptop.
+- **More than dotfiles.** Packages, scripts, hooks and `/etc` files with owner and sudo
+  live next to your configs, so a new machine is one `mate apply` away.
+- **Removing is as easy as adding.** Drop a file from the repository and
+  `mate apply --clean` removes it from the machine.
+
+See the [comparison](docs/comparison.md) with chezmoi, yadm, GNU Stow and dotbot.
 
 ## Features
 
@@ -81,7 +97,7 @@ built from [`docs/`](docs/README.md):
 | [Secrets](docs/secrets.md) | Bitwarden references and the encrypted cache |
 | [Scripts](docs/scripts.md) | Lifecycle scripts, frequency, timing |
 | [Hooks](docs/hooks.md) | Commands run when files matching a pattern change |
-| [Packages](docs/packages.md) | Declarative packages across brew, pacman, and the AUR |
+| [Packages](docs/packages.md) | Declarative packages across brew, pacman, the AUR, and uv |
 | [Command Reference](docs/commands/mate.md) | Every command and flag |
 
 `mate <command> --help` gives the same reference in the terminal.
@@ -94,7 +110,7 @@ encrypted files, Bitwarden secrets, scripts and hooks, see the author's
 
 ```yaml
 # mate.yaml
-sources: [nvim, zsh, git]
+sources: [nvim, zsh, git, arch]
 
 profiles:
   macos:
@@ -115,7 +131,26 @@ age:
 
 packages:
   - fd
-  - ripgrep
+  - gh: [brew, pacman: github-cli]
+  - ruff: uv
+
+hooks:
+  tmux:
+    match: .config/tmux/**/*.conf
+    do:
+      - run: tmux source-file ~/.config/tmux/tmux.conf
+```
+
+Scripts sit in a `.matescripts/` directory and carry their schedule in the name, and
+a source can deploy outside home, with ownership kept by `#owner-r:root`:
+
+```
+.matescripts/
+  01-bootstrap.sh#once#before          runs once, before the files are written
+  50-update.sh#weekly#after            runs weekly; tag it with "# Tags: update"
+arch/
+  .mate.yaml                           targets: {etc: /etc}
+  etc#owner-r:root/keyd/default.conf   /etc/keyd/default.conf, owned by root
 ```
 
 See [Configuration](docs/configuration.md) for every key.
