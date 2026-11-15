@@ -27,7 +27,7 @@ Features:
   - Profile-based configuration with auto-detection
   - Template rendering with Go text/template
   - Age encryption for sensitive files
-  - Declarative package management (brew, pacman, and the AUR via yay or paru)
+  - Declarative package management (brew, pacman, the AUR via yay or paru, and uv tools)
   - System file management with permission control
 
 Use "mate [command] --help" for more information about a command.`,

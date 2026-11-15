@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `uv` package manager for Python CLI tools: `- ruff: uv` in `packages:` installs ruff with `uv tool install`, and `mate packages list` and `--prune` see what `uv tool list` reports. A bare name never goes to uv
 - `mate apply` confirmation offers `[d]iff`: it shows the diff of the listed files through `$PAGER` (`less` by default), using `diff_tool` when set, then asks again. Enter still applies
 - Script tags: a `# Tags: update brew` comment near the top of a script tags it, and `mate scripts run --tags update` runs every script with that tag for the active profile, `before` scripts first, in order. `mate scripts list --tags update` lists only those scripts, and shows a `TAGS` column once a script has tags. Both take several tags (`--tags update,brew`) and match any of them
 

@@ -113,6 +113,8 @@ func GetManager(name string, aurHelper string) (Manager, error) {
 		return NewPacmanManager(), nil
 	case "aur":
 		return NewAURManager(aurHelper), nil
+	case "uv":
+		return NewUVManager(), nil
 	default:
 		return nil, fmt.Errorf("unknown package manager: %s", name)
 	}
@@ -123,6 +125,7 @@ func GetAvailableManagersWithHelper(aurHelper string) []Manager {
 		NewBrewManager(),
 		NewPacmanManager(),
 		NewAURManager(aurHelper),
+		NewUVManager(),
 	}
 
 	var available []Manager

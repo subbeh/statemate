@@ -10,7 +10,7 @@ maintenance tasks across machines.
 - **Templates** — Go templates with the sprig function library
 - **Encryption** — age encryption for sensitive files
 - **Secrets** — Bitwarden references resolved from an encrypted cache
-- **Packages** — declarative package management (brew, pacman, AUR)
+- **Packages** — declarative package management (brew, pacman, AUR, uv tools)
 - **Scripts and hooks** — run setup once, on a schedule, or when matching files change
 - **System files** — manage `/etc` with ownership and sudo handled for you
 

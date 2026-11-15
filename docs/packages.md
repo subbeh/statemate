@@ -10,11 +10,12 @@ packages:
   - gnu-sed: brew                    # brew only
   - paru: aur                        # the AUR only
   - ripgrep                          # the system manager, on every machine
+  - ruff: uv                         # uv tool install ruff
   - tpack: [brew, aur: tpack-bin]    # brew tpack, and tpack-bin from the AUR
 ```
 
 - **A bare name** goes to the system manager: brew if it is present, otherwise
-  pacman. It never goes to the AUR.
+  pacman. It never goes to the AUR or uv.
 - **A name followed by managers** is installed with exactly those managers: one
   (`gnu-sed: brew`) or a list (`[brew, aur]`). An entry of the list can rename
   the package for that manager (`pacman: github-cli`).
@@ -44,6 +45,7 @@ hint showing the list form.
 | `brew` | Homebrew | `brew` on `$PATH` |
 | `pacman` | Arch's pacman | `pacman` on `$PATH` |
 | `aur` | An AUR helper (`yay` or `paru`) | the helper on `$PATH` |
+| `uv` | `uv tool`, for Python CLI tools | `uv` on `$PATH` |
 
 Homebrew casks are `brew` packages too; there is no separate `cask` manager.
 

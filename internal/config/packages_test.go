@@ -37,6 +37,11 @@ func TestPackageList(t *testing.T) {
 			yaml: "\n  - tpack:\n      - brew\n      - aur: tpack-bin",
 			want: PackageList{{Name: "tpack", Managers: map[string]string{"brew": "tpack", "aur": "tpack-bin"}}},
 		},
+		{
+			name: "uv",
+			yaml: "\n  - ruff: uv", toml: `packages = [{ruff = "uv"}]`,
+			want: PackageList{{Name: "ruff", Managers: map[string]string{"uv": "ruff"}}},
+		},
 		{name: "empty", yaml: "", want: nil},
 		{
 			name: "old format",
