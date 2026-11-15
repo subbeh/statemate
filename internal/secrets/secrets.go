@@ -1,6 +1,7 @@
 package secrets
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -167,7 +168,12 @@ func (m *Manager) Fetch(items []FetchItem) (*FetchResult, error) {
 	}
 
 	result.Unchanged = result.Total - result.Changed
-	slog.Info("secrets fetched", "total", result.Total, "changed", result.Changed)
+	// At info the log records what changed, and a fetch that changed no secret changed nothing.
+	level := slog.LevelInfo
+	if result.Changed == 0 {
+		level = slog.LevelDebug
+	}
+	slog.Log(context.Background(), level, "secrets fetched", "total", result.Total, "changed", result.Changed)
 	return result, nil
 }
 

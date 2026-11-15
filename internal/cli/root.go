@@ -67,6 +67,9 @@ func Execute() error {
 		slog.Error("failed", "err", err)
 		cmd.PrintErrln(color.RedString("Error:"), errorMessage(err))
 	}
+	if err := auditLog.save(); err != nil {
+		cmd.PrintErrln(color.YellowString("Warning:"), "recording audit log:", err)
+	}
 	return err
 }
 

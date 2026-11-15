@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS pending_hooks (
 	name TEXT PRIMARY KEY,
 	files TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS audit_runs (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	run_at DATETIME NOT NULL,
+	args TEXT NOT NULL,
+	changes TEXT NOT NULL
+);
 `
 
 func Open(path string) (*DB, error) {

@@ -33,6 +33,8 @@ files under `/etc` are managed.
 - the **source hash** — the file as it exists in the repository
 - the **applied hash** — the bytes actually written to the target
 
+It also keeps what the newest 100 runs changed, which `mate audit` lists.
+
 The database lives at `~/.local/share/statemate/state.db` (or
 `$XDG_DATA_HOME/statemate/state.db`). It is local to each machine and is not
 meant to be committed.

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `mate audit` lists what recent runs changed, newest first: files written, moved or removed, source edits, forgets, scripts, hooks, packages and the error a run ended with. Every run that changes something is recorded in the state database, with no log file needed; the newest 100 runs are kept. `-n` sets how many runs to list (default 10)
 - `uv` package manager for Python CLI tools: `- ruff: uv` in `packages:` installs ruff with `uv tool install`, and `mate packages list` and `--prune` see what `uv tool list` reports. A bare name never goes to uv
 - `mate apply` confirmation offers `[d]iff`: it shows the diff of the listed files through `$PAGER` (`less` by default), using `diff_tool` when set, then asks again. Enter still applies
 - `mate apply --clean` also removes orphaned files: they are listed with a `-` marker under the apply's confirmation and removed after the files are written, running the hooks that match them. With a path or `--source`, only orphans inside that scope are removed
@@ -16,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A leading `_` is stripped from a source's name, so a source can hide from tools that load files from whichever directory holds them: `_mise.toml` deploys as `mise.toml`, so mise no longer loads it inside the repository. Directories work too. `mate add` writes a target that starts with `_` as `__name`
 
 ### Changed
+- The log file records a secrets fetch that changed no secret at `debug`, not `info`, so an `info` log and `mate audit` list only fetches that changed something
 - **Breaking:** a source whose name starts with `_` now deploys without it, so `_mate` deploys as `mate` and `__script` as `_script`. To keep a target's name, add one `_` to its source: rename `_mate` to `__mate` and `__script` to `___script`. Find them with `find <source_dir> -name '_*'`
 - `mate apply`'s conflict prompt says why `[i]mport` is missing for a `#tmpl` or `#link` source, and where to make the change instead: `mate edit <target>` for a template, the source link for a `#link`
 

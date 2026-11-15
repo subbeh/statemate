@@ -1,8 +1,10 @@
 package secrets
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -190,5 +192,24 @@ func TestGetWithoutCacheReportsNotCached(t *testing.T) {
 	var notCached *NotCachedError
 	if !errors.As(err, &notCached) || notCached.Key != key.String() {
 		t.Fatalf("expected NotCachedError for %s, got %v", key, err)
+	}
+}
+
+// A fetch that changes no secret logs at debug, so the audit log (info) does
+// not record it as a change.
+func TestFetch_UnchangedLogsAtDebug(t *testing.T) {
+	var buf bytes.Buffer
+	orig := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(orig) })
+
+	m, _ := newTestManager(t, identityCommandEncryptor(t), filepath.Join(t.TempDir(), "secrets.age"))
+	for range 2 {
+		if _, err := m.Fetch([]FetchItem{{Key: testKey}}); err != nil {
+			t.Fatalf("Fetch: %v", err)
+		}
+	}
+	if n := strings.Count(buf.String(), `msg="secrets fetched"`); n != 1 {
+		t.Errorf("info log has %d fetches, want 1 (the second changed nothing):\n%s", n, buf.String())
 	}
 }

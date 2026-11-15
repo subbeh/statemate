@@ -20,12 +20,14 @@ func init() {
 	slog.SetDefault(slog.New(slog.DiscardHandler))
 }
 
-// openLog sends log records to stderr at -v (info) or -vv (debug), and to the
-// file named by --log-file, STATEMATE_LOG_FILE or log_file, in that order, at
-// the level named the same way (info when none is). The file is appended to, so
-// it keeps earlier runs; each run's records follow a "run" line.
+// openLog sends log records to the run's audit log, to stderr at -v (info) or
+// -vv (debug), and to the file named by --log-file, STATEMATE_LOG_FILE or
+// log_file, in that order, at the level named the same way (info when none
+// is). The file is appended to, so it keeps earlier runs; each run's records
+// follow a "run" line.
 func openLog(cmd *cobra.Command) error {
-	var handlers []slog.Handler
+	auditLog = newAuditRecorder()
+	handlers := []slog.Handler{auditLog}
 	if v, _ := cmd.Flags().GetCount("verbose"); v > 0 {
 		level := slog.LevelInfo
 		if v > 1 {
@@ -41,9 +43,7 @@ func openLog(cmd *cobra.Command) error {
 	if file != nil {
 		handlers = append(handlers, file)
 	}
-	if len(handlers) > 0 {
-		slog.SetDefault(slog.New(slog.NewMultiHandler(handlers...)))
-	}
+	slog.SetDefault(slog.New(slog.NewMultiHandler(handlers...)))
 	return nil
 }
 

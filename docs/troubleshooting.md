@@ -173,6 +173,15 @@ and check the YAML.
 
 ## Logging
 
+To see what recent runs changed, run `mate audit`. Every run that changes
+something records its changes in the state database, whether or not a log file
+is set; the newest 100 runs are kept:
+
+```bash
+mate audit        # the last 10 runs, newest first
+mate audit -n 3
+```
+
 To watch what mate does as it runs, add `-v`: it prints a log record to stderr
 for each change (`-v`) or for each decision too (`-vv`):
 
@@ -191,8 +200,9 @@ The file is appended to, so it keeps earlier runs. The levels are:
 - `info` (the default): an audit log of what changed -- each target file
   written (`wrote`), moved or removed, each change to the source tree (`source`,
   with `action=add`, `edit`, `rename`, `encrypt`, `decrypt`, `import` or
-  `delete`), each `forget`, each secrets fetch, each script and hook that ran,
-  each package installed or uninstalled, and the error a run ended with. A
+  `delete`), each `forget`, each secrets fetch that changed a secret, each
+  script and hook that ran, each package installed or uninstalled, and the
+  error a run ended with. A
   `--dry-run` changes nothing, so it records nothing. Each run's records follow
   a `msg=run` line giving the version and arguments; a run that changed nothing
   leaves no line at all.

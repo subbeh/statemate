@@ -33,6 +33,7 @@ Use "mate [command] --help" for more information about a command.
 
 * [mate add](mate_add.md)	 - Add a file or directory to source
 * [mate apply](mate_apply.md)	 - Apply configuration to target
+* [mate audit](mate_audit.md)	 - List the changes of recent runs
 * [mate cat](mate_cat.md)	 - Print a file, decrypting it if needed
 * [mate check](mate_check.md)	 - Check if configuration is in sync
 * [mate clean](mate_clean.md)	 - Remove orphaned files
