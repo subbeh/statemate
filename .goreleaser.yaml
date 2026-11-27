@@ -58,8 +58,7 @@ release:
 # tap_migrations.json moves existing formula installs over to this cask.
 #
 # mate is not signed or notarized, so macOS would quarantine it; the hook clears
-# that. It uses `install`, not `install_steps`: the latter needs goreleaser v2.19
-# and older versions reject it. Switch once v2.19 is released.
+# that. `install_steps` needs goreleaser v2.19 or later.
 homebrew_casks:
   - name: statemate
     repository:
@@ -74,9 +73,9 @@ homebrew_casks:
       - mate
     hooks:
       post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/mate"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/mate"]
           end
 
 aurs:
