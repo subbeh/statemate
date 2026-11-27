@@ -26,10 +26,15 @@ With no argument, lists every managed file. With an argument, filters the list:
 
   - A path to an existing file (absolute, or relative to the current directory)
     matches only that file, whether you give its target or its source path.
+  - A path to an existing directory lists every managed file under it, whether
+    you give a target or a source directory ('.' is the current directory).
   - Anything else is treated as a name fragment, so 'mate managed nvim' lists
-    every file in the nvim source.`,
+    every file in the nvim source, and 'mate managed profile.d' every file in
+    any directory of that name.`,
 	Example: `  mate managed                    # all managed files
   mate managed ~/.ssh/config      # just that file
+  mate managed .                  # managed files under the current directory
+  mate managed profile.d          # files in any directory named profile.d
   mate managed config             # that file if it exists here, else all matches
   mate managed nvim               # everything in the nvim source`,
 	Args:              cobra.MaximumNArgs(1),
@@ -118,11 +123,25 @@ func runManaged(cmd *cobra.Command, args []string) error {
 // directory returns exactly that file rather than every target ending in
 // "/config".
 //
+// A filter that resolves to a directory matches every entry under it, by target
+// or source path.
+//
 // Anything else is treated as a name fragment and matched loosely, which keeps
 // "mate managed nvim" listing a whole source.
 func matchesManagedFilter(e *source.Entry, srcPath, filter string) bool {
 	if abs, ok := resolveFilterPath(filter); ok {
-		return resolveSymlinks(e.TargetPath) == abs || resolveSymlinks(e.SourcePath) == abs
+		target, src := resolveSymlinks(e.TargetPath), resolveSymlinks(e.SourcePath)
+		if info, err := os.Stat(abs); err == nil && info.IsDir() {
+			return strings.HasPrefix(target, abs+"/") || strings.HasPrefix(src, abs+"/")
+		}
+		return target == abs || src == abs
+	}
+
+	// A fragment also names a directory (or run of them) anywhere in the path.
+	// Only directories count: a file name stays with the matches below.
+	seg := "/" + strings.Trim(filter, "/") + "/"
+	if strings.Contains(filepath.Dir(e.TargetPath)+"/", seg) || strings.Contains(filepath.Dir(e.SourcePath)+"/", seg) {
+		return true
 	}
 
 	// Match against source relative path

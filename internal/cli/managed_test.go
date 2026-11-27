@@ -133,6 +133,38 @@ func TestManagedFilter_SourcePathMatches(t *testing.T) {
 	}
 }
 
+func TestManagedFilter_Directories(t *testing.T) {
+	targetDir, ssh, git := managedFilterEnv(t)
+
+	origDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(origDir) }()
+
+	cases := []struct {
+		name, cwd, filter string
+		wantSSH, wantGit  bool
+	}{
+		{"target dir", "", filepath.Join(targetDir, ".config"), false, true},
+		{"target dir parent", "", targetDir, true, true},
+		{"source dir", "", filepath.Dir(ssh.SourcePath), true, false},
+		{"dot", filepath.Join(targetDir, ".config", "git"), ".", false, true},
+		{"middle fragment", t.TempDir(), "git", false, true},
+		{"fragment run", t.TempDir(), ".config/git", false, true},
+	}
+	for _, c := range cases {
+		if c.cwd != "" {
+			if err := os.Chdir(c.cwd); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := matchesManagedFilter(ssh, "ssh/.ssh/config#enc", c.filter); got != c.wantSSH {
+			t.Errorf("%s: ssh match = %v, want %v", c.name, got, c.wantSSH)
+		}
+		if got := matchesManagedFilter(git, "git/.config/git/config#tmpl", c.filter); got != c.wantGit {
+			t.Errorf("%s: git match = %v, want %v", c.name, got, c.wantGit)
+		}
+	}
+}
+
 // formatAttrs is the only place the ATTRIBUTES column is built, and #import was
 // missing from it while every other attribute was listed -- which reads as the
 // attribute having been ignored entirely.
