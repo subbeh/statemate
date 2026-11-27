@@ -13,8 +13,11 @@ With no argument, lists every managed file. With an argument, filters the list:
 
 - A path to an existing file (absolute, or relative to the current directory)
   matches only that file, whether you give its target or its source path.
+- A path to an existing directory lists every managed file under it, whether
+  you give a target or a source directory ('.' is the current directory).
 - Anything else is treated as a name fragment, so 'mate managed nvim' lists
-  every file in the nvim source.
+  every file in the nvim source, and 'mate managed profile.d' every file in
+  any directory of that name.
 
 ```
 mate managed [path] [flags]
@@ -25,6 +28,8 @@ mate managed [path] [flags]
 ```
   mate managed                    # all managed files
   mate managed ~/.ssh/config      # just that file
+  mate managed .                  # managed files under the current directory
+  mate managed profile.d          # files in any directory named profile.d
   mate managed config             # that file if it exists here, else all matches
   mate managed nvim               # everything in the nvim source
 ```
