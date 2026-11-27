@@ -14,6 +14,8 @@ func TestUnqualifiedName(t *testing.T) {
 		// Managers with no tap concept must be unaffected.
 		{"base-devel", "base-devel"},
 		{"node@20", "node@20"},
+		// An npm scope is part of the name.
+		{"@anthropic-ai/claude-code", "@anthropic-ai/claude-code"},
 	}
 
 	for _, tc := range tests {

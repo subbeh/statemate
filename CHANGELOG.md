@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `npm` package manager for Node CLI tools: `- claude-code: [npm: "@anthropic-ai/claude-code"]` in `packages:` installs it with `npm install -g`, and `mate packages list` shows its version and, with `-v`, its description. `--prune` lists undeclared global npm packages but never npm or corepack. A bare name never goes to npm
 - `mate audit` lists what recent runs changed, newest first: files written, moved or removed, source edits, forgets, scripts, hooks, packages and the error a run ended with. Every run that changes something is recorded in the state database, with no log file needed; the newest 100 runs are kept. `-n` sets how many runs to list (default 10)
 - `uv` package manager for Python CLI tools: `- ruff: uv` in `packages:` installs ruff with `uv tool install`, and `mate packages list` and `--prune` see what `uv tool list` reports. A bare name never goes to uv
 - `mate apply` confirmation offers `[d]iff`: it shows the diff of the listed files through `$PAGER` (`less` by default), using `diff_tool` when set, then asks again. Enter still applies

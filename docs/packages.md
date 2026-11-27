@@ -6,6 +6,7 @@ sorted by name:
 
 ```yaml
 packages:
+  - claude-code: [npm: "@anthropic-ai/claude-code"]  # npm install -g @anthropic-ai/claude-code
   - gh: [brew, pacman: github-cli]   # brew gh, pacman github-cli
   - gnu-sed: brew                    # brew only
   - paru: aur                        # the AUR only
@@ -15,7 +16,7 @@ packages:
 ```
 
 - **A bare name** goes to the system manager: brew if it is present, otherwise
-  pacman. It never goes to the AUR or uv.
+  pacman. It never goes to the AUR, uv or npm.
 - **A name followed by managers** is installed with exactly those managers: one
   (`gnu-sed: brew`) or a list (`[brew, aur]`). An entry of the list can rename
   the package for that manager (`pacman: github-cli`).
@@ -46,6 +47,11 @@ hint showing the list form.
 | `pacman` | Arch's pacman | `pacman` on `$PATH` |
 | `aur` | An AUR helper (`yay` or `paru`) | the helper on `$PATH` |
 | `uv` | `uv tool`, for Python CLI tools | `uv` on `$PATH` |
+| `npm` | `npm install -g`, for Node CLI tools | `npm` on `$PATH` |
+
+An npm package keeps its scope: `@a/x` and `@b/x` are different packages. npm's
+own globals (`npm`, `corepack`) are never listed as extras, so `--prune` never
+removes them. `npx` runs a package without installing it, so it is not a manager.
 
 Homebrew casks are `brew` packages too; there is no separate `cask` manager.
 

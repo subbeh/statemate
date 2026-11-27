@@ -42,6 +42,11 @@ func TestPackageList(t *testing.T) {
 			yaml: "\n  - ruff: uv", toml: `packages = [{ruff = "uv"}]`,
 			want: PackageList{{Name: "ruff", Managers: map[string]string{"uv": "ruff"}}},
 		},
+		{
+			name: "npm scoped rename",
+			yaml: "\n  - claude-code: [npm: \"@anthropic-ai/claude-code\"]", toml: `packages = [{claude-code = [{npm = "@anthropic-ai/claude-code"}]}]`,
+			want: PackageList{{Name: "claude-code", Managers: map[string]string{"npm": "@anthropic-ai/claude-code"}}},
+		},
 		{name: "empty", yaml: "", want: nil},
 		{
 			name: "old format",

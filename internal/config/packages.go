@@ -12,7 +12,7 @@ import (
 
 // PackageManagers are the manager names a package may list. The packages package
 // implements them; they are named here so a typo fails while parsing.
-var PackageManagers = []string{"brew", "pacman", "aur", "uv"}
+var PackageManagers = []string{"brew", "pacman", "aur", "uv", "npm"}
 
 // PackageList declares packages, one per item: a bare name for the system
 // manager (brew, else pacman), or a name with exactly the managers it is

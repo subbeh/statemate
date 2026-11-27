@@ -50,8 +50,12 @@ func (d Descriptions) Lookup(name string) (desc string, resolved bool) {
 //
 // Homebrew is inconsistent about which form it prints -- `brew list --formula`
 // gives the bare name while `brew leaves` gives the qualified one -- so both
-// spellings have to compare equal.
+// spellings have to compare equal. An npm scoped name (@scope/name) is kept
+// whole: its scope is part of the name, so @a/x and @b/x are different packages.
 func unqualifiedName(name string) string {
+	if strings.HasPrefix(name, "@") {
+		return name
+	}
 	if i := strings.LastIndex(name, "/"); i != -1 {
 		return name[i+1:]
 	}
@@ -115,6 +119,8 @@ func GetManager(name string, aurHelper string) (Manager, error) {
 		return NewAURManager(aurHelper), nil
 	case "uv":
 		return NewUVManager(), nil
+	case "npm":
+		return NewNPMManager(), nil
 	default:
 		return nil, fmt.Errorf("unknown package manager: %s", name)
 	}
@@ -126,6 +132,7 @@ func GetAvailableManagersWithHelper(aurHelper string) []Manager {
 		NewPacmanManager(),
 		NewAURManager(aurHelper),
 		NewUVManager(),
+		NewNPMManager(),
 	}
 
 	var available []Manager

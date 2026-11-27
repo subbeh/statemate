@@ -26,7 +26,7 @@ See the [comparison](docs/comparison.md) with chezmoi, yadm, GNU Stow and dotbot
 - **Templates** — Go templates with the sprig function library
 - **Encryption** — age encryption for sensitive files
 - **Secrets** — Bitwarden references resolved from an encrypted cache
-- **Packages** — declarative package management (brew, pacman, AUR, uv tools)
+- **Packages** — declarative package management (brew, pacman, AUR, uv tools, npm globals)
 - **Scripts and hooks** — run setup once, on a schedule, or when matching files change
 - **System files** — manage `/etc` with ownership and sudo handled for you
 
