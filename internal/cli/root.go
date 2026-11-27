@@ -76,7 +76,7 @@ func Execute() error {
 // errorMessage shortens errors whose wrapping only buries the fix. A missing
 // secret is reported from deep inside template rendering, behind the file, the
 // template line and the function call, when all that matters is which secret it
-// is and that 'mate secrets fetch' caches it. A missing identity likewise only needs
+// is and that 'mate secrets update' caches it. A missing identity likewise only needs
 // its own message.
 func errorMessage(err error) string {
 	var notCached *secrets.NotCachedError

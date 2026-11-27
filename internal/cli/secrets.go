@@ -22,12 +22,15 @@ import (
 var secretsCmd = &cobra.Command{
 	Use:   "secrets",
 	Short: "Manage secrets",
-	Long:  "Fetch and inspect secrets referenced in templates",
+	Long:  "Update and inspect secrets referenced in templates",
+	// Runnable with NoArgs so a removed subcommand such as 'fetch' fails instead of printing help and exiting 0.
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error { return cmd.Help() },
 }
 
-var secretsFetchCmd = &cobra.Command{
-	Use:   "fetch [pattern]",
-	Short: "Fetch secrets from providers",
+var secretsUpdateCmd = &cobra.Command{
+	Use:   "update [pattern]",
+	Short: "Update the secrets cache from providers",
 	Long: `Find every secret reference in templates, fetch the values from Bitwarden, and
 store them in the encrypted cache.
 
@@ -37,10 +40,10 @@ with a prefix ending in '*'.
 
 Needs the bw CLI, logged in, and an age identity to encrypt the cache with. A
 locked vault is unlocked for you.`,
-	Example: `  mate secrets fetch
-  mate secrets fetch 'github*'`,
+	Example: `  mate secrets update
+  mate secrets update 'github*'`,
 	Args: cobra.MaximumNArgs(1),
-	RunE: runSecretsFetch,
+	RunE: runSecretsUpdate,
 }
 
 var secretsListCmd = &cobra.Command{
@@ -59,12 +62,12 @@ var secretsStatusCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(secretsCmd)
-	secretsCmd.AddCommand(secretsFetchCmd)
+	secretsCmd.AddCommand(secretsUpdateCmd)
 	secretsCmd.AddCommand(secretsListCmd)
 	secretsCmd.AddCommand(secretsStatusCmd)
 }
 
-func runSecretsFetch(cmd *cobra.Command, args []string) error {
+func runSecretsUpdate(cmd *cobra.Command, args []string) error {
 	mgr, items, err := setupSecrets(cmd)
 	if err != nil {
 		return err
@@ -207,7 +210,7 @@ func runSecretsStatus(cmd *cobra.Command, args []string) error {
 	for _, item := range missing {
 		fmt.Printf("  %s/%s/%s\n", item.Item, item.Type, item.Field)
 	}
-	fmt.Printf("\nRun 'mate secrets fetch' to fetch %d secrets\n", len(missing))
+	fmt.Printf("\nRun 'mate secrets update' to fetch %d secrets\n", len(missing))
 
 	return nil
 }

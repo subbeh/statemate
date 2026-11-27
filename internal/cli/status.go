@@ -252,7 +252,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if pendingSecrets > 0 {
-		fmt.Printf("\n%s\n  %d secrets need refresh (run 'mate secrets fetch')\n", bold("Secrets:"), pendingSecrets)
+		fmt.Printf("\n%s\n  %d secrets need refresh (run 'mate secrets update')\n", bold("Secrets:"), pendingSecrets)
 	}
 
 	if len(result.Skipped) > 0 {

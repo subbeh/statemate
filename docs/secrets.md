@@ -14,15 +14,15 @@ config — a reference in a template is the declaration.
 means `apply`, `status` and `diff` work without unlocking your vault, and without
 a network round trip per secret.
 
-Two commands talk to Bitwarden: `mate secrets fetch`, which re-reads every
+Two commands talk to Bitwarden: `mate secrets update`, which re-reads every
 reference, and `mate apply`, which fetches only references missing from the cache
 before it reads or deploys anything. `mate status`, `diff` and `eval` only read
-the cache, so on a new machine run `mate apply` or `mate secrets fetch` before
+the cache, so on a new machine run `mate apply` or `mate secrets update` before
 them. If that fetch fails, the apply stops. `mate apply
 <path>` skips it, and `--dry-run` only reports how many it would fetch.
 
 Because values are cached, a changed secret in the vault is not picked up until
-the next `mate secrets fetch`.
+the next `mate secrets update`.
 
 The cache lives at `~/.local/state/statemate/secrets.age` (or
 `$XDG_STATE_HOME/statemate/secrets.age`), encrypted to your **local age identity
@@ -106,9 +106,9 @@ sshKey: |
 ## Commands
 
 ```bash
-mate secrets fetch             # fetch every discovered secret
-mate secrets fetch "github*"   # only items whose name starts with "github"
-mate secrets fetch github.com  # only the item named exactly "github.com"
+mate secrets update             # fetch every discovered secret
+mate secrets update "github*"   # only items whose name starts with "github"
+mate secrets update github.com  # only the item named exactly "github.com"
 mate secrets list              # every reference, with cache status
 mate secrets status            # only those needing a fetch
 ```
@@ -117,14 +117,14 @@ The pattern is an exact item name, or a prefix ending in `*`; other glob
 characters are not supported.
 
 A fetch is all or nothing. If one reference names an item or field that does not
-exist, nothing is saved, and `mate secrets fetch` offers to carry on with the
+exist, nothing is saved, and `mate secrets update` offers to carry on with the
 existing cache.
 
 `mate status` counts secrets needing a fetch as `sN` in `--short`.
 
 ## Discovery
 
-`mate secrets fetch` finds references by **rendering every template** with the
+`mate secrets update` finds references by **rendering every template** with the
 `bitwarden` function replaced by a recorder: `#tmpl` files in active sources,
 `#tmpl` scripts in any `.matescripts/`, and every source's `.mate.yaml`. This means a reference inside a
 conditional is only discovered when that branch is taken under the current

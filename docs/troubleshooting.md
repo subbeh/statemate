@@ -115,10 +115,10 @@ the problem: a missing `match`, an empty `do`, a step with both or neither of
 `run` and `script`, a `script:` that matches no script, or a `run:` template
 that does not parse.
 
-### `secrets not configured (run 'mate secrets fetch')` / `secret not cached`
+### `secrets not configured (run 'mate secrets update')` / `secret not cached`
 
 A template uses `bitwarden`, and the cache does not have the value yet. The error
-names the secret as `bitwarden:<item>:<type>:<field>`. Run `mate secrets fetch`. `mate apply` fetches missing secrets itself, but `mate
+names the secret as `bitwarden:<item>:<type>:<field>`. Run `mate secrets update`. `mate apply` fetches missing secrets itself, but `mate
 eval`, `status` and `diff` only read the cache.
 
 ### `not logged in to Bitwarden. Run: bw login`
@@ -200,7 +200,7 @@ The file is appended to, so it keeps earlier runs. The levels are:
 - `info` (the default): an audit log of what changed -- each target file
   written (`wrote`), moved or removed, each change to the source tree (`source`,
   with `action=add`, `edit`, `rename`, `encrypt`, `decrypt`, `import` or
-  `delete`), each `forget`, each secrets fetch that changed a secret, each
+  `delete`), each `forget`, each secrets update that changed a secret, each
   script and hook that ran, each package installed or uninstalled, and the
   error a run ended with. A
   `--dry-run` changes nothing, so it records nothing. Each run's records follow

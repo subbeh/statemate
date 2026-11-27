@@ -4,7 +4,11 @@ Manage secrets
 
 ## Synopsis
 
-Fetch and inspect secrets referenced in templates
+Update and inspect secrets referenced in templates
+
+```
+mate secrets [flags]
+```
 
 ## Options
 
@@ -26,7 +30,7 @@ Fetch and inspect secrets referenced in templates
 ## SEE ALSO
 
 * [mate](mate.md)	 - Statemate - system configuration management
-* [mate secrets fetch](mate_secrets_fetch.md)	 - Fetch secrets from providers
 * [mate secrets list](mate_secrets_list.md)	 - List secrets referenced in templates and cache status
 * [mate secrets status](mate_secrets_status.md)	 - Show secrets that need fetching
+* [mate secrets update](mate_secrets_update.md)	 - Update the secrets cache from providers
 

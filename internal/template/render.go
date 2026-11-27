@@ -99,13 +99,13 @@ func mateFuncs(ctx *Context) template.FuncMap {
 		},
 		"bitwarden": func(item, typ, field string) (string, error) {
 			if ctx.SecretLookup == nil {
-				return "", fmt.Errorf("secrets not configured (run 'mate secrets fetch')")
+				return "", fmt.Errorf("secrets not configured (run 'mate secrets update')")
 			}
 			return ctx.SecretLookup(item, typ, field)
 		},
 		"bitwardenAttachment": func(item, filename string) (string, error) {
 			if ctx.SecretLookup == nil {
-				return "", fmt.Errorf("secrets not configured (run 'mate secrets fetch')")
+				return "", fmt.Errorf("secrets not configured (run 'mate secrets update')")
 			}
 			return ctx.SecretLookup(item, "attachment", filename)
 		},

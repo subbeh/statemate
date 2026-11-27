@@ -24,7 +24,7 @@ var auditCmd = &cobra.Command{
 
 Every run that changes something records its changes in the state database:
 each target file written, moved or removed, each change to the source tree,
-each forget, script, hook and package install, each secrets fetch that changed
+each forget, script, hook and package install, each secrets update that changed
 a secret, and the error the run ended with. These are the info-level records
 of the log file, kept whether or not a log file is set. A --dry-run, and a run
 that only reads, records nothing. The newest 100 runs are kept.`,

@@ -126,10 +126,10 @@ once:
 
 ```bash
 bw login
-mate secrets fetch
+mate secrets update
 ```
 
-`mate secrets fetch` finds every reference, asks for your master password if the
+`mate secrets update` finds every reference, asks for your master password if the
 vault is locked, and stores the values in a local cache encrypted with your age
 identity. From then on `mate apply`, `status` and `diff` read the cache and never
 touch the vault, and `mate apply` fetches only references it has not seen before.
@@ -170,7 +170,7 @@ the YAML block scalar. See [`generate`](configuration.md#generate).
 | `mate encrypt`, `mate add --encrypt` | `recipients` |
 | Deploying, `mate cat`, `mate eval` on an `#enc` file | `identity` or `identity_command` |
 | `mate edit` on an `#enc` file | both |
-| `mate secrets fetch`, and the secrets cache in general | `identity` or `identity_command`, plus `bw` |
+| `mate secrets update`, and the secrets cache in general | `identity` or `identity_command`, plus `bw` |
 | Importing into an `#enc` source ([`#import`](attributes.md#import)) | `recipients` |
 
 Without the identity, statemate stops with an error instead of deploying

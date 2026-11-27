@@ -91,7 +91,7 @@ func TestErrorMessageShortensMissingSecret(t *testing.T) {
 	}
 	err = fmt.Errorf("scanning sources: infra/.mate.yaml: rendering dir config template: %w", err)
 
-	want := "secret not cached: bitwarden:vps:ssh:private (run 'mate secrets fetch')"
+	want := "secret not cached: bitwarden:vps:ssh:private (run 'mate secrets update')"
 	if got := errorMessage(err); got != want {
 		t.Errorf("errorMessage = %q, want %q", got, want)
 	}

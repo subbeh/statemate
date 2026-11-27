@@ -22,10 +22,10 @@ var ErrNoIdentity = errors.New("the secrets cache is encrypted with your age ide
 
 // errUnencryptedCache marks a cache written in the clear by an older mate. Its
 // contents are never parsed or echoed; the next fetch replaces it.
-var errUnencryptedCache = errors.New("secrets cache is not encrypted (written by an older mate); run 'mate secrets fetch' to replace it")
+var errUnencryptedCache = errors.New("secrets cache is not encrypted (written by an older mate); run 'mate secrets update' to replace it")
 
-// errNoCache means mate secrets fetch has never run on this machine.
-var errNoCache = errors.New("no secrets cache found (run 'mate secrets fetch')")
+// errNoCache means mate secrets update has never run on this machine.
+var errNoCache = errors.New("no secrets cache found (run 'mate secrets update')")
 
 type CacheKey struct {
 	Provider string `json:"provider"`
@@ -178,14 +178,14 @@ func (m *Manager) Fetch(items []FetchItem) (*FetchResult, error) {
 }
 
 // NotCachedError reports a secret missing from the cache. The fix is always
-// 'mate secrets fetch', so the CLI recognises it and prints that instead of the
+// 'mate secrets update', so the CLI recognises it and prints that instead of the
 // template and scanning context it was wrapped in.
 type NotCachedError struct {
 	Key string
 }
 
 func (e *NotCachedError) Error() string {
-	return fmt.Sprintf("secret not cached: %s (run 'mate secrets fetch')", e.Key)
+	return fmt.Sprintf("secret not cached: %s (run 'mate secrets update')", e.Key)
 }
 
 func (m *Manager) Get(key CacheKey) (string, error) {

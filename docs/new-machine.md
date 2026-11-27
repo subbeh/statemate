@@ -23,7 +23,7 @@ cd ~/dotfiles && mate init
 
 # 4. Fetch secrets, check, then apply
 mate profile
-mate secrets fetch          # skip if you don't use Bitwarden references
+mate secrets update          # skip if you don't use Bitwarden references
 mate status
 mate apply
 ```

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A leading `_` is stripped from a source's name, so a source can hide from tools that load files from whichever directory holds them: `_mise.toml` deploys as `mise.toml`, so mise no longer loads it inside the repository. Directories work too. `mate add` writes a target that starts with `_` as `__name`
 
 ### Changed
+- **Breaking:** `mate secrets fetch` is now `mate secrets update`, with no `fetch` alias: it still re-reads every reference and rewrites the cache. Update scripts that call it; errors and `mate status` now say `mate secrets update`
 - The log file records a secrets fetch that changed no secret at `debug`, not `info`, so an `info` log and `mate audit` list only fetches that changed something
 - **Breaking:** a source whose name starts with `_` now deploys without it, so `_mate` deploys as `mate` and `__script` as `_script`. To keep a target's name, add one `_` to its source: rename `_mate` to `__mate` and `__script` to `___script`. Find them with `find <source_dir> -name '_*'`
 - `mate apply`'s conflict prompt says why `[i]mport` is missing for a `#tmpl` or `#link` source, and where to make the change instead: `mate edit <target>` for a template, the source link for a `#link`

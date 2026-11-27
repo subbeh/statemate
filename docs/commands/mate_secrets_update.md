@@ -1,6 +1,6 @@
-# mate secrets fetch
+# mate secrets update
 
-Fetch secrets from providers
+Update the secrets cache from providers
 
 ## Synopsis
 
@@ -15,20 +15,20 @@ Needs the bw CLI, logged in, and an age identity to encrypt the cache with. A
 locked vault is unlocked for you.
 
 ```
-mate secrets fetch [pattern] [flags]
+mate secrets update [pattern] [flags]
 ```
 
 ## Examples
 
 ```
-  mate secrets fetch
-  mate secrets fetch 'github*'
+  mate secrets update
+  mate secrets update 'github*'
 ```
 
 ## Options
 
 ```
-  -h, --help   help for fetch
+  -h, --help   help for update
 ```
 
 ## Options inherited from parent commands
